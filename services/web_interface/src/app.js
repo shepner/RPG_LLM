@@ -32,6 +32,9 @@ document.getElementById('login-btn').addEventListener('click', async () => {
             
             // Connect WebSockets
             connectWebSockets();
+            
+            // Load initial game state
+            await loadGameState();
         } else {
             alert('Login failed');
         }
