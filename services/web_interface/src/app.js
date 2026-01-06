@@ -209,6 +209,136 @@ document.getElementById('submit-action').addEventListener('click', async () => {
     alert('Action submitted! (Full integration with being service coming soon)');
 });
 
+// Game session management
+document.getElementById('create-session-btn').addEventListener('click', async () => {
+    const sessionName = prompt('Enter a name for your game session:');
+    if (!sessionName) return;
+    
+    try {
+        // Get current user to determine if they're GM
+        const userResponse = await fetch(`${AUTH_URL}/me`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!userResponse.ok) {
+            alert('Could not get user info. Please log in again.');
+            return;
+        }
+        
+        const user = await userResponse.json();
+        const isGM = user.role === 'gm';
+        
+        if (!isGM) {
+            alert('Only Game Masters can create sessions. Your role is: ' + user.role);
+            return;
+        }
+        
+        const response = await fetch(`${GAME_SESSION_URL}/sessions?gm_user_id=${user.user_id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+                name: sessionName,
+                description: `Game session: ${sessionName}`,
+                game_system_type: 'custom',
+                time_mode_preference: 'real-time'
+            })
+        });
+        
+        if (response.ok) {
+            const session = await response.json();
+            addNarrative({
+                text: `Created game session: ${session.name} (ID: ${session.session_id})`
+            });
+            addEvent({
+                event_type: 'session_created',
+                description: `New game session "${session.name}" created`,
+                game_time: Date.now()
+            });
+            await refreshSessions();
+        } else {
+            const error = await response.text();
+            alert('Failed to create session: ' + error);
+        }
+    } catch (error) {
+        console.error('Error creating session:', error);
+        alert('Error creating session: ' + error.message);
+    }
+});
+
+document.getElementById('refresh-sessions-btn').addEventListener('click', async () => {
+    await refreshSessions();
+});
+
+async function refreshSessions() {
+    try {
+        const response = await fetch(`${GAME_SESSION_URL}/sessions`);
+        const sessionsList = document.getElementById('sessions-list');
+        
+        if (response.ok) {
+            const sessions = await response.json();
+            sessionsList.innerHTML = '';
+            
+            if (sessions.length === 0) {
+                sessionsList.innerHTML = '<p style="color: #888;">No game sessions available.</p>';
+                return;
+            }
+            
+            sessions.forEach(session => {
+                const div = document.createElement('div');
+                div.style.marginBottom = '10px';
+                div.style.padding = '10px';
+                div.style.backgroundColor = '#2a2a2a';
+                div.style.borderRadius = '4px';
+                div.innerHTML = `
+                    <strong style="color: #4a9eff;">${session.name}</strong>
+                    <br><span style="color: #888; font-size: 0.9em;">Status: ${session.status} | Players: ${session.player_user_ids?.length || 0}</span>
+                    <br><button onclick="joinSession('${session.session_id}')" style="margin-top: 5px; padding: 5px 10px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">Join Session</button>
+                `;
+                sessionsList.appendChild(div);
+            });
+        } else {
+            sessionsList.innerHTML = '<p style="color: #f44;">Could not load sessions.</p>';
+        }
+    } catch (error) {
+        console.error('Error refreshing sessions:', error);
+    }
+}
+
+// Make joinSession available globally
+window.joinSession = async function(sessionId) {
+    try {
+        const userResponse = await fetch(`${AUTH_URL}/me`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const user = await userResponse.json();
+        
+        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}/join?user_id=${user.user_id}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (response.ok) {
+            addNarrative({
+                text: `Joined game session!`
+            });
+            addEvent({
+                event_type: 'session_joined',
+                description: `You joined session ${sessionId}`,
+                game_time: Date.now()
+            });
+            await refreshSessions();
+        } else {
+            alert('Failed to join session');
+        }
+    } catch (error) {
+        console.error('Error joining session:', error);
+        alert('Error joining session: ' + error.message);
+    }
+};
+
 // Load initial game state
 async function loadGameState() {
     try {
