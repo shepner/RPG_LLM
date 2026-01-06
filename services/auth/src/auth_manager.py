@@ -11,7 +11,17 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy import Column, String, DateTime, Enum as SQLEnum
 import sqlalchemy as sa
 
-from .models import User, UserRole, TokenData, BeingOwnership
+# Handle imports for both package and standalone usage
+try:
+    from .models import User, UserRole, TokenData, BeingOwnership
+except ImportError:
+    # When imported from outside the package, use absolute import
+    import sys
+    import os
+    auth_src = os.path.dirname(__file__)
+    if auth_src not in sys.path:
+        sys.path.insert(0, auth_src)
+    from models import User, UserRole, TokenData, BeingOwnership
 
 logger = logging.getLogger(__name__)
 
