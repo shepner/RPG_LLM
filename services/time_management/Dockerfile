@@ -2,6 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Copy shared modules first
+COPY shared/ ./shared/
+
 # Copy service-specific files
 COPY services/time_management/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
