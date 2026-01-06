@@ -89,7 +89,6 @@ document.getElementById('register-btn').addEventListener('click', async () => {
     
     // Note: First user automatically becomes GM, others default to player
     // Role can be changed later by a GM
-    const role = 'player'; // Default role (first user will be auto-upgraded to GM)
     
     try {
         const response = await fetch(`${AUTH_URL}/register`, {
