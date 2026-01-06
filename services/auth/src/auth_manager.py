@@ -27,7 +27,7 @@ class UserDB(Base):
     username = Column(String, unique=True, nullable=False)
     email = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    role = Column(SQLEnum(UserRole), default=UserRole.PLAYER)
+    role = Column(String(20), nullable=False, default=UserRole.PLAYER.value)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
