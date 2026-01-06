@@ -50,7 +50,9 @@ services:
       - redis
 
   worlds:
-    build: ./services/worlds
+    build:
+      context: .
+      dockerfile: ./services/worlds/Dockerfile
     ports:
       - "8004:8004"
     environment:
@@ -63,7 +65,9 @@ services:
       - redis
 
   game_master:
-    build: ./services/game_master
+    build:
+      context: .
+      dockerfile: ./services/game_master/Dockerfile
     ports:
       - "8005:8005"
     environment:
@@ -74,7 +78,9 @@ services:
       - redis
 
   being:
-    build: ./services/being
+    build:
+      context: .
+      dockerfile: ./services/being/Dockerfile
     ports:
       - "8006:8006"
     environment:

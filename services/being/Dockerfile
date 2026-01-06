@@ -2,11 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+# Copy shared modules first
+COPY shared/ ./shared/
+
+# Copy service-specific files
+COPY services/being/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/ ./src/
-COPY ../../shared/ ./shared/
+COPY services/being/src/ ./src/
 
 ENV PYTHONPATH=/app
 
