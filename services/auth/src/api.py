@@ -156,6 +156,36 @@ async def update_user_role(
         return {"message": "Role updated", "user_id": user_id, "new_role": role}
 
 
+@app.post("/users/fix-first-user")
+async def fix_first_user(token_data: TokenData = Depends(require_auth)):
+    """Fix first user to be GM if no GM exists (self-service)."""
+    import sqlalchemy as sa
+    from .models import UserRole
+    
+    async with auth_manager.SessionLocal() as session:
+        # Check if any GM exists
+        gm_result = await session.execute(
+            sa.select(auth_manager.UserDB).where(auth_manager.UserDB.role == UserRole.GM)
+        )
+        gms = gm_result.scalars().all()
+        
+        # If no GM exists, make the requesting user GM
+        if len(gms) == 0:
+            result = await session.execute(
+                sa.select(auth_manager.UserDB).where(auth_manager.UserDB.user_id == token_data.user_id)
+            )
+            user_db = result.scalar_one_or_none()
+            if user_db:
+                user_db.role = UserRole.GM
+                await session.commit()
+                logger.info(f"Fixed first user - assigned GM role to: {user_db.username}")
+                return {"message": "You have been assigned GM role (no GM existed)", "user_id": token_data.user_id, "role": "gm"}
+            else:
+                raise HTTPException(status_code=404, detail="User not found")
+        else:
+            raise HTTPException(status_code=403, detail="A GM already exists. Please ask them to upgrade your account.")
+
+
 @app.get("/beings/owned", response_model=List[str])
 async def get_owned_beings(token_data: TokenData = Depends(require_auth)):
     """Get beings owned by current user."""
