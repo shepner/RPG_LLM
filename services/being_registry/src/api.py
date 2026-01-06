@@ -35,7 +35,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-registry = Registry()
+# Initialize registry lazily to avoid Docker connection errors
+def get_registry():
+    """Get registry instance."""
+    from .registry import Registry
+    try:
+        return Registry(use_docker=True)
+    except Exception:
+        # Docker not available, use minimal registry
+        return Registry(use_docker=False)
+
+registry = None  # Will be initialized on first use
 character_creator = CharacterCreator()
 
 
@@ -53,6 +63,9 @@ class CharacterCreateRequest(BaseModel):
 @app.post("/beings/register", response_model=BeingRegistry)
 async def register_being(being_id: str, owner_id: str, session_id: str = None):
     """Register a being."""
+    global registry
+    if registry is None:
+        registry = get_registry()
     entry = registry.register_being(being_id, owner_id, session_id)
     return entry
 
@@ -60,6 +73,9 @@ async def register_being(being_id: str, owner_id: str, session_id: str = None):
 @app.get("/beings/{being_id}", response_model=BeingRegistry)
 async def get_being(being_id: str):
     """Get being registry entry."""
+    global registry
+    if registry is None:
+        registry = get_registry()
     entry = registry.get_being(being_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Being not found")
@@ -103,6 +119,9 @@ async def create_character(
             )
         
         # Register the being
+        global registry
+        if registry is None:
+            registry = get_registry()
         registry_entry = registry.register_being(being_id, owner_id, request.session_id)
         
         return {
