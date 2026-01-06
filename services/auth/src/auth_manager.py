@@ -116,6 +116,15 @@ class AuthManager:
             if existing:
                 raise ValueError("User already exists")
             
+            # Check if this is the first user - make them GM automatically
+            user_count_result = await session.execute(sa.select(UserDB))
+            user_count = len(user_count_result.scalars().all())
+            
+            # First user becomes GM automatically
+            if user_count == 0:
+                role = UserRole.GM
+                logger.info(f"First user registered - automatically assigned GM role: {username}")
+            
             # Create user
             user_id = str(uuid.uuid4())
             password_hash = self.get_password_hash(password)
