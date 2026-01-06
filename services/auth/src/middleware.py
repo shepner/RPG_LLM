@@ -1,19 +1,24 @@
 """Authentication middleware."""
 
 from typing import Optional, Callable
-from fastapi import Request, HTTPException, status
+from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from .auth_manager import AuthManager
 from .models import TokenData, UserRole
 
 
 security = HTTPBearer()
 
 
+def get_auth_manager():
+    """Get auth manager instance (dependency)."""
+    from .api import auth_manager
+    return auth_manager
+
+
 async def get_current_user(
     request: Request,
-    auth_manager: AuthManager
+    auth_manager = Depends(get_auth_manager)
 ) -> Optional[TokenData]:
     """
     Get current user from request token.
@@ -36,7 +41,7 @@ async def get_current_user(
 
 async def require_auth(
     request: Request,
-    auth_manager: AuthManager
+    auth_manager = Depends(get_auth_manager)
 ) -> TokenData:
     """
     Require authentication (raises exception if not authenticated).
@@ -65,7 +70,7 @@ async def require_auth(
 
 async def require_gm(
     request: Request,
-    auth_manager: AuthManager
+    auth_manager = Depends(get_auth_manager)
 ) -> TokenData:
     """
     Require GM role.
@@ -93,8 +98,8 @@ async def require_gm(
 
 async def require_being_access(
     request: Request,
-    auth_manager: AuthManager,
-    being_id: str
+    being_id: str,
+    auth_manager = Depends(get_auth_manager)
 ) -> TokenData:
     """
     Require access to a being (owner, assigned user, or GM).

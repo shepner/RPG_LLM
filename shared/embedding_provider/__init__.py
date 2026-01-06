@@ -2,7 +2,10 @@
 
 from .base import BaseEmbeddingProvider, EmbeddingResponse
 from .gemini import GeminiEmbeddingProvider
-from .openai import OpenAIEmbeddingProvider
+try:
+    from .openai import OpenAIEmbeddingProvider
+except ImportError:
+    OpenAIEmbeddingProvider = None
 
 __all__ = [
     "BaseEmbeddingProvider",
