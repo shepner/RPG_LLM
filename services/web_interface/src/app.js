@@ -67,13 +67,19 @@ document.getElementById('register-btn').addEventListener('click', async () => {
             alert('Registration successful! Please login.');
             console.log('Registered user:', data);
         } else {
-            const errorText = await response.text();
-            let errorDetail = 'Unknown error';
+            let errorDetail = `HTTP ${response.status}: ${response.statusText}`;
             try {
-                const errorJson = JSON.parse(errorText);
-                errorDetail = errorJson.detail || errorText;
-            } catch {
-                errorDetail = errorText || `HTTP ${response.status}`;
+                const errorText = await response.text();
+                if (errorText) {
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorDetail = errorJson.detail || errorJson.message || errorText;
+                    } catch {
+                        errorDetail = errorText;
+                    }
+                }
+            } catch (e) {
+                errorDetail = `Failed to parse error: ${e.message}`;
             }
             alert('Registration failed: ' + errorDetail);
             console.error('Registration failed:', response.status, errorDetail);
