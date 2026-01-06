@@ -101,8 +101,8 @@ document.getElementById('register-btn').addEventListener('click', async () => {
             body: JSON.stringify({ 
                 username: username, 
                 email: email, 
-                password: password,
-                role: role
+                password: password
+                // Role not specified - backend will auto-assign GM to first user
             })
         });
         
