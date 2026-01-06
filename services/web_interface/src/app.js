@@ -337,126 +337,68 @@ async function refreshSessions() {
     }
 }
 
-// User management for GMs
-const manageUsersBtn = document.getElementById('manage-users-btn');
-if (manageUsersBtn) {
-    manageUsersBtn.addEventListener('click', async () => {
-        try {
-            const usersResponse = await fetch(`${AUTH_URL}/users`, {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            });
-            
-            if (!usersResponse.ok) {
-                alert('Could not load users. You must be a GM to manage users.');
-                return;
-            }
-            
-            const users = await usersResponse.json();
-            
-            // Create user list dialog
-            let userList = 'Users:\n\n';
-            users.forEach((user, index) => {
-                userList += `${index + 1}. ${user.username} (${user.email}) - Role: ${user.role}\n`;
-            });
-            
-            const selected = prompt(userList + '\n\nEnter user number to change role (or cancel):');
-            if (!selected) return;
-            
-            const userIndex = parseInt(selected) - 1;
-            if (userIndex < 0 || userIndex >= users.length) {
-                alert('Invalid user number');
-                return;
-            }
-            
-            const selectedUser = users[userIndex];
-            const newRole = prompt(`Change role for ${selectedUser.username}?\n\nCurrent: ${selectedUser.role}\n\nEnter new role (gm or player):`);
-            
-            if (!newRole || (newRole !== 'gm' && newRole !== 'player')) {
-                alert('Invalid role. Must be "gm" or "player"');
-                return;
-            }
-            
-            const updateResponse = await fetch(`${AUTH_URL}/users/${selectedUser.user_id}/role?role=${newRole}`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            });
-            
-            if (updateResponse.ok) {
-                alert(`User ${selectedUser.username} role updated to ${newRole}!`);
-                if (selectedUser.user_id === window.currentUser?.user_id) {
-                    alert('Your role was changed. Please refresh the page.');
-                    window.location.reload();
+// User management for GMs - set up event listener when button is available
+function setupManageUsersButton() {
+    const manageUsersBtn = document.getElementById('manage-users-btn');
+    if (manageUsersBtn && !manageUsersBtn.hasAttribute('data-listener-attached')) {
+        manageUsersBtn.setAttribute('data-listener-attached', 'true');
+        manageUsersBtn.addEventListener('click', async () => {
+            try {
+                const usersResponse = await fetch(`${AUTH_URL}/users`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!usersResponse.ok) {
+                    alert('Could not load users. You must be a GM to manage users.');
+                    return;
                 }
-            } else {
-                const error = await updateResponse.text();
-                alert('Failed to update role: ' + error);
-            }
-        } catch (error) {
-            console.error('Error managing users:', error);
-            alert('Error managing users: ' + error.message);
-        }
-    });
-}
-
-// User management for GMs
-const manageUsersBtn = document.getElementById('manage-users-btn');
-if (manageUsersBtn) {
-    manageUsersBtn.addEventListener('click', async () => {
-        try {
-            const usersResponse = await fetch(`${AUTH_URL}/users`, {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            });
-            
-            if (!usersResponse.ok) {
-                alert('Could not load users. You must be a GM to manage users.');
-                return;
-            }
-            
-            const users = await usersResponse.json();
-            
-            // Create user list dialog
-            let userList = 'Users:\n\n';
-            users.forEach((user, index) => {
-                userList += `${index + 1}. ${user.username} (${user.email}) - Role: ${user.role}\n`;
-            });
-            
-            const selected = prompt(userList + '\n\nEnter user number to change role (or cancel):');
-            if (!selected) return;
-            
-            const userIndex = parseInt(selected) - 1;
-            if (userIndex < 0 || userIndex >= users.length) {
-                alert('Invalid user number');
-                return;
-            }
-            
-            const selectedUser = users[userIndex];
-            const newRole = prompt(`Change role for ${selectedUser.username}?\n\nCurrent: ${selectedUser.role}\n\nEnter new role (gm or player):`);
-            
-            if (!newRole || (newRole !== 'gm' && newRole !== 'player')) {
-                alert('Invalid role. Must be "gm" or "player"');
-                return;
-            }
-            
-            const updateResponse = await fetch(`${AUTH_URL}/users/${selectedUser.user_id}/role?role=${newRole}`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            });
-            
-            if (updateResponse.ok) {
-                alert(`User ${selectedUser.username} role updated to ${newRole}!`);
-                if (selectedUser.user_id === window.currentUser?.user_id) {
-                    alert('Your role was changed. Please refresh the page.');
-                    window.location.reload();
+                
+                const users = await usersResponse.json();
+                
+                // Create user list dialog
+                let userList = 'Users:\n\n';
+                users.forEach((user, index) => {
+                    userList += `${index + 1}. ${user.username} (${user.email}) - Role: ${user.role}\n`;
+                });
+                
+                const selected = prompt(userList + '\n\nEnter user number to change role (or cancel):');
+                if (!selected) return;
+                
+                const userIndex = parseInt(selected) - 1;
+                if (userIndex < 0 || userIndex >= users.length) {
+                    alert('Invalid user number');
+                    return;
                 }
-            } else {
-                const error = await updateResponse.text();
-                alert('Failed to update role: ' + error);
+                
+                const selectedUser = users[userIndex];
+                const newRole = prompt(`Change role for ${selectedUser.username}?\n\nCurrent: ${selectedUser.role}\n\nEnter new role (gm or player):`);
+                
+                if (!newRole || (newRole !== 'gm' && newRole !== 'player')) {
+                    alert('Invalid role. Must be "gm" or "player"');
+                    return;
+                }
+                
+                const updateResponse = await fetch(`${AUTH_URL}/users/${selectedUser.user_id}/role?role=${newRole}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (updateResponse.ok) {
+                    alert(`User ${selectedUser.username} role updated to ${newRole}!`);
+                    if (selectedUser.user_id === window.currentUser?.user_id) {
+                        alert('Your role was changed. Please refresh the page.');
+                        window.location.reload();
+                    }
+                } else {
+                    const error = await updateResponse.text();
+                    alert('Failed to update role: ' + error);
+                }
+            } catch (error) {
+                console.error('Error managing users:', error);
+                alert('Error managing users: ' + error.message);
             }
-        } catch (error) {
-            console.error('Error managing users:', error);
-            alert('Error managing users: ' + error.message);
-        }
-    });
+        });
+    }
 }
 
 // Make joinSession available globally
@@ -510,6 +452,8 @@ async function loadUserInfo() {
             // Show "Manage Users" button for GMs
             if (manageUsersBtn && user.role === 'gm') {
                 manageUsersBtn.style.display = 'inline-block';
+                // Set up event listener when button becomes visible
+                setupManageUsersButton();
             }
             
             // Store user info globally
