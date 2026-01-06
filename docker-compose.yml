@@ -65,8 +65,10 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:///./RPG_LLM_DATA/databases/worlds.db
       - CHROMA_DB_PATH=./RPG_LLM_DATA/vector_stores/worlds
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-./credentials.json}
     volumes:
       - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+      - ./credentials.json:/app/credentials.json:ro
     depends_on:
       - redis
 
