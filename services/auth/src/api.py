@@ -161,18 +161,19 @@ async def fix_first_user(token_data: TokenData = Depends(require_auth)):
     """Fix first user to be GM if no GM exists (self-service)."""
     import sqlalchemy as sa
     from .models import UserRole
+    from .auth_manager import UserDB
     
     async with auth_manager.SessionLocal() as session:
         # Check if any GM exists
         gm_result = await session.execute(
-            sa.select(auth_manager.UserDB).where(auth_manager.UserDB.role == UserRole.GM)
+            sa.select(UserDB).where(UserDB.role == UserRole.GM)
         )
         gms = gm_result.scalars().all()
         
         # If no GM exists, make the requesting user GM
         if len(gms) == 0:
             result = await session.execute(
-                sa.select(auth_manager.UserDB).where(auth_manager.UserDB.user_id == token_data.user_id)
+                sa.select(UserDB).where(UserDB.user_id == token_data.user_id)
             )
             user_db = result.scalar_one_or_none()
             if user_db:
@@ -190,11 +191,12 @@ async def fix_first_user(token_data: TokenData = Depends(require_auth)):
 async def get_owned_beings(token_data: TokenData = Depends(require_auth)):
     """Get beings owned by current user."""
     import sqlalchemy as sa
+    from .auth_manager import BeingOwnershipDB
     
     async with auth_manager.SessionLocal() as session:
         result = await session.execute(
-            sa.select(auth_manager.BeingOwnershipDB).where(
-                auth_manager.BeingOwnershipDB.owner_id == token_data.user_id
+            sa.select(BeingOwnershipDB).where(
+                BeingOwnershipDB.owner_id == token_data.user_id
             )
         )
         ownerships = result.scalars().all()
@@ -207,10 +209,11 @@ async def get_assigned_beings(token_data: TokenData = Depends(require_auth)):
     """Get beings assigned to current user."""
     import json
     import sqlalchemy as sa
+    from .auth_manager import BeingOwnershipDB
     
     async with auth_manager.SessionLocal() as session:
         result = await session.execute(
-            sa.select(auth_manager.BeingOwnershipDB)
+            sa.select(BeingOwnershipDB)
         )
         ownerships = result.scalars().all()
         
@@ -232,19 +235,20 @@ async def assign_being(
     """Assign being to user (GM only)."""
     import json
     import sqlalchemy as sa
+    from .auth_manager import UserDB, BeingOwnershipDB
     
     # Verify user exists
     async with auth_manager.SessionLocal() as session:
         user_result = await session.execute(
-            sa.select(auth_manager.UserDB).where(auth_manager.UserDB.user_id == user_id)
+            sa.select(UserDB).where(UserDB.user_id == user_id)
         )
         if not user_result.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="User not found")
         
         # Get or create ownership
         ownership_result = await session.execute(
-            sa.select(auth_manager.BeingOwnershipDB).where(
-                auth_manager.BeingOwnershipDB.being_id == being_id
+            sa.select(BeingOwnershipDB).where(
+                BeingOwnershipDB.being_id == being_id
             )
         )
         ownership_db = ownership_result.scalar_one_or_none()
@@ -271,11 +275,12 @@ async def unassign_being(
     """Unassign being from user (GM only)."""
     import json
     import sqlalchemy as sa
+    from .auth_manager import BeingOwnershipDB
     
     async with auth_manager.SessionLocal() as session:
         ownership_result = await session.execute(
-            sa.select(auth_manager.BeingOwnershipDB).where(
-                auth_manager.BeingOwnershipDB.being_id == being_id
+            sa.select(BeingOwnershipDB).where(
+                BeingOwnershipDB.being_id == being_id
             )
         )
         ownership_db = ownership_result.scalar_one_or_none()
