@@ -5,6 +5,7 @@ import logging
 from typing import List
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth_manager import AuthManager
@@ -20,6 +21,15 @@ logging.basicConfig(
 )
 
 app = FastAPI(title="Authentication Service")
+
+# Add CORS middleware to allow web interface to access this service
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8081", "http://127.0.0.1:8081"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Initialize auth manager
 auth_manager = AuthManager(
