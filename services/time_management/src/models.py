@@ -31,6 +31,6 @@ class HistoricalEvent(BaseModel):
     event_type: str
     description: str
     created_by: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    event_metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.now)
 

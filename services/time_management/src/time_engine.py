@@ -39,7 +39,7 @@ class HistoricalEventDB(Base):
     event_type = Column(String, nullable=False)
     description = Column(String)
     created_by = Column(String, nullable=False)
-    metadata = Column(JSON, default={})
+    event_metadata = Column(JSON, default={})
     created_at = Column(DateTime, default=datetime.now)
 
 

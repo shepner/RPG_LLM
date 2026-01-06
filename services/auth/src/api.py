@@ -6,7 +6,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .auth_manager import AuthManager, SessionLocal
+from .auth_manager import AuthManager
 from .models import User, UserCreate, UserLogin, Token, BeingOwnership, BeingAssignment
 from .middleware import require_auth, require_gm, require_being_access, get_current_user
 from .models import TokenData

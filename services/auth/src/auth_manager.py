@@ -72,6 +72,10 @@ class AuthManager:
             self.engine, class_=AsyncSession, expire_on_commit=False
         )
     
+    def get_session(self):
+        """Get a database session."""
+        return self.SessionLocal()
+    
     async def init_db(self):
         """Initialize database tables."""
         async with self.engine.begin() as conn:
