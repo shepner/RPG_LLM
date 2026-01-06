@@ -11,10 +11,24 @@ from .character_creator import CharacterCreator
 # Import auth middleware (optional)
 try:
     import sys
-    sys.path.insert(0, '/app/services/auth/src')
+    import os
+    # Try multiple paths for auth middleware
+    auth_paths = [
+        '/app/services/auth/src',
+        '/app/src/services/auth/src',
+        os.path.join(os.path.dirname(__file__), '../../auth/src')
+    ]
+    for path in auth_paths:
+        if os.path.exists(path):
+            sys.path.insert(0, path)
+            break
+    
     from middleware import require_auth, require_gm, get_current_user, TokenData
     AUTH_AVAILABLE = True
-except ImportError:
+except (ImportError, Exception) as e:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Auth middleware not available: {e}")
     AUTH_AVAILABLE = False
     def require_auth():
         return None

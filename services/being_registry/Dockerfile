@@ -6,6 +6,9 @@ WORKDIR /app
 COPY services/being_registry/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy shared modules and auth service for middleware access
+COPY shared/ ./shared/
+COPY services/auth/src/ ./services/auth/src/
 COPY services/being_registry/src/ ./src/
 
 ENV PYTHONPATH=/app
