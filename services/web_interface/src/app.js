@@ -1,8 +1,10 @@
 // TTRPG LLM System Web Interface
 
 const AUTH_URL = 'http://localhost:8000';
+const GAME_SESSION_URL = 'http://localhost:8001';
 const WORLDS_URL = 'http://localhost:8004';
 const GM_URL = 'http://localhost:8005';
+const BEING_REGISTRY_URL = 'http://localhost:8007';
 
 let authToken = null;
 let worldsWS = null;
@@ -185,10 +187,76 @@ function addNarrative(narrative) {
 // Action submission
 document.getElementById('submit-action').addEventListener('click', async () => {
     const action = document.getElementById('action-input').value;
-    if (!action) return;
+    if (!action) {
+        alert('Please describe an action');
+        return;
+    }
+    
+    addEvent({
+        event_type: 'player_action',
+        description: `You: ${action}`,
+        game_time: Date.now()
+    });
     
     // TODO: Submit action to being service
     console.log('Action:', action);
     document.getElementById('action-input').value = '';
+    
+    // Show feedback
+    alert('Action submitted! (Full integration with being service coming soon)');
 });
+
+// Load initial game state
+async function loadGameState() {
+    try {
+        // Get user info
+        const userResponse = await fetch(`${AUTH_URL}/me`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (userResponse.ok) {
+            const user = await userResponse.json();
+            addNarrative({
+                text: `Welcome, ${user.username}! You are logged in as a ${user.role}.`
+            });
+        }
+        
+        // List game sessions
+        const sessionsResponse = await fetch(`${GAME_SESSION_URL}/sessions`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (sessionsResponse.ok) {
+            const sessions = await sessionsResponse.json();
+            if (sessions.length > 0) {
+                addNarrative({
+                    text: `Found ${sessions.length} game session(s). Select one to join or create a new one.`
+                });
+            } else {
+                addNarrative({
+                    text: 'No active game sessions. Create a new session to start playing!'
+                });
+            }
+        }
+        
+        // Add welcome message
+        addEvent({
+            event_type: 'system',
+            description: 'System initialized. Ready to play!',
+            game_time: Date.now()
+        });
+        
+    } catch (error) {
+        console.error('Error loading game state:', error);
+        addEvent({
+            event_type: 'error',
+            description: 'Could not load game state. Some features may not work.',
+            game_time: Date.now()
+        });
+    }
+}
 
