@@ -1,6 +1,7 @@
 """Authentication and authorization manager."""
 
 import os
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -11,6 +12,8 @@ from sqlalchemy import Column, String, DateTime, Enum as SQLEnum
 import sqlalchemy as sa
 
 from .models import User, UserRole, TokenData, BeingOwnership
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 

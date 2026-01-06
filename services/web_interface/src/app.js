@@ -84,9 +84,9 @@ document.getElementById('register-btn').addEventListener('click', async () => {
         email = `${username}@example.com`;
     }
     
-    // Ask if user wants to register as GM
-    const wantGM = confirm('Do you want to register as a Game Master?\n\n(Game Masters can create game sessions)');
-    const role = wantGM ? 'gm' : 'player';
+    // Note: First user automatically becomes GM, others default to player
+    // Role can be changed later by a GM
+    const role = 'player'; // Default role (first user will be auto-upgraded to GM)
     
     try {
         const response = await fetch(`${AUTH_URL}/register`, {
@@ -387,6 +387,35 @@ window.joinSession = async function(sessionId) {
         alert('Error joining session: ' + error.message);
     }
 };
+
+// Load user info and set up UI
+async function loadUserInfo() {
+    try {
+        const userResponse = await fetch(`${AUTH_URL}/me`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (userResponse.ok) {
+            const user = await userResponse.json();
+            const roleDisplay = document.getElementById('user-role');
+            const manageUsersBtn = document.getElementById('manage-users-btn');
+            
+            if (roleDisplay) {
+                roleDisplay.textContent = `(${user.role})`;
+            }
+            
+            // Show "Manage Users" button for GMs
+            if (manageUsersBtn && user.role === 'gm') {
+                manageUsersBtn.style.display = 'inline-block';
+            }
+            
+            // Store user info globally
+            window.currentUser = user;
+        }
+    } catch (error) {
+        console.error('Error loading user info:', error);
+    }
+}
 
 // Load initial game state
 async function loadGameState() {
