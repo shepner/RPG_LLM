@@ -25,6 +25,13 @@ async def narrate(context: str, game_time: float, scene_id: str = None):
         logger.info(f"Generating narrative for scene {scene_id} at game time {game_time}")
         narrative = await gm_engine.generate_narrative(context, game_time, scene_id)
         logger.info(f"Narrative generated: {narrative.narrative_id}")
+        
+        # Broadcast narrative to WebSocket subscribers
+        await ws_manager.broadcast({
+            "type": "narrative",
+            "narrative": narrative.dict()
+        }, "narrative")
+        
         return narrative
     except Exception as e:
         logger.error(f"Error generating narrative: {e}", exc_info=True)
@@ -39,6 +46,22 @@ async def narrate_stream(context: str, game_time: float):
             yield f"data: {chunk.text}\n\n"
     
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time narrative updates."""
+    await ws_manager.connect(websocket, "narrative")
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await ws_manager.send_personal_message(
+                {"type": "echo", "message": data},
+                websocket
+            )
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket, "narrative")
+        logger.info("WebSocket disconnected")
 
 
 @app.get("/health")
