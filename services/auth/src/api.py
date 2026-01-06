@@ -23,12 +23,14 @@ logging.basicConfig(
 app = FastAPI(title="Authentication Service")
 
 # Add CORS middleware to allow web interface to access this service
+# IMPORTANT: Must be added before routes are defined
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8081", "http://127.0.0.1:8081"],
+    allow_origins=["http://localhost:8081", "http://127.0.0.1:8081", "*"],  # Allow all for development
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Initialize auth manager
