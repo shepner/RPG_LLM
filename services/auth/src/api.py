@@ -1,6 +1,7 @@
 """Authentication service API."""
 
 import os
+import logging
 from typing import List
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer
@@ -10,6 +11,13 @@ from .auth_manager import AuthManager
 from .models import User, UserCreate, UserLogin, Token, BeingOwnership, BeingAssignment
 from .middleware import require_auth, require_gm, require_being_access, get_current_user
 from .models import TokenData
+
+# Set up logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 app = FastAPI(title="Authentication Service")
 
