@@ -259,7 +259,28 @@ document.getElementById('create-session-btn').addEventListener('click', async ()
         const isGM = user.role === 'gm';
         
         if (!isGM) {
-            alert('Only Game Masters can create sessions. Your role is: ' + user.role + '\n\nPlease ask an existing Game Master to upgrade your account using the "Manage Users" button, or if you are the first user, you will automatically be assigned GM role.');
+            const fixFirst = confirm('Only Game Masters can create sessions. Your role is: ' + user.role + '\n\nWould you like to check if you should be the first GM?');
+            if (fixFirst) {
+                try {
+                    const fixResponse = await fetch(`${AUTH_URL}/users/fix-first-user`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+                    
+                    if (fixResponse.ok) {
+                        const result = await fixResponse.json();
+                        alert(result.message + '\n\nPlease refresh the page and try again.');
+                        window.location.reload();
+                        return;
+                    } else {
+                        const error = await fixResponse.text();
+                        alert('Could not auto-upgrade: ' + error + '\n\nPlease ask an existing Game Master to upgrade your account.');
+                    }
+                } catch (e) {
+                    console.error('Fix first user error:', e);
+                    alert('Error checking GM status. Please ask an existing Game Master to upgrade your account.');
+                }
+            }
             return;
         }
         
