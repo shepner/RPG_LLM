@@ -1,9 +1,17 @@
 """Game master service API."""
 
+import logging
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from .gm_engine import GMEngine
 from .models import Narrative
+
+# Set up logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 app = FastAPI(title="Game Master Service")
 

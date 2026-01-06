@@ -32,28 +32,34 @@ async def startup():
 async def register(user_data: UserCreate):
     """Register a new user."""
     try:
+        logger.info(f"Registering new user: {user_data.username}")
         user = await auth_manager.create_user(
             username=user_data.username,
             email=user_data.email,
             password=user_data.password,
             role=user_data.role
         )
+        logger.info(f"User registered successfully: {user.user_id}")
         return user
     except ValueError as e:
+        logger.warning(f"Registration failed for {user_data.username}: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @app.post("/login", response_model=Token)
 async def login(credentials: UserLogin):
     """Authenticate user and return JWT token."""
+    logger.info(f"Login attempt for user: {credentials.username}")
     user = await auth_manager.authenticate_user(credentials.username, credentials.password)
     if not user:
+        logger.warning(f"Failed login attempt for: {credentials.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    logger.info(f"Successful login for user: {user.user_id}")
     access_token = auth_manager.create_access_token(user)
     return Token(
         access_token=access_token,

@@ -1,11 +1,19 @@
 """Being service API."""
 
 import os
+import logging
 from typing import Dict
 from fastapi import FastAPI, HTTPException
 from .being_agent import BeingAgent
 from .memory import MemoryManager
 from .models import Thought, BeingAction
+
+# Set up logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 app = FastAPI(title="Being Service")
 
