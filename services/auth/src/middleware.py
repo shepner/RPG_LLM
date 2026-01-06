@@ -4,7 +4,17 @@ from typing import Optional, Callable
 from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from .models import TokenData, UserRole
+# Handle imports for both package and standalone usage
+try:
+    from .models import TokenData, UserRole
+except ImportError:
+    # When imported from outside the package, use absolute import
+    import sys
+    import os
+    auth_src = os.path.dirname(__file__)
+    if auth_src not in sys.path:
+        sys.path.insert(0, auth_src)
+    from models import TokenData, UserRole
 
 
 security = HTTPBearer()
