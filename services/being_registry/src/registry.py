@@ -9,10 +9,17 @@ from .models import BeingRegistry, ContainerStatus
 class Registry:
     """Manages being container registry."""
     
-    def __init__(self):
+    def __init__(self, use_docker: bool = True):
         """Initialize registry."""
-        self.docker_client = docker.from_env()
         self._registry: Dict[str, BeingRegistry] = {}
+        if use_docker:
+            try:
+                self.docker_client = docker.from_env()
+            except Exception:
+                # Docker not available, continue without it
+                self.docker_client = None
+        else:
+            self.docker_client = None
     
     def register_being(
         self,
