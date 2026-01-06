@@ -1,7 +1,7 @@
 FROM nginx:alpine
 
 # Copy web interface files
-COPY src/ /usr/share/nginx/html/
+COPY services/web_interface/src/ /usr/share/nginx/html/
 
 # Expose port
 EXPOSE 80

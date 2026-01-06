@@ -10,7 +10,13 @@ class ContainerOrchestrator:
     
     def __init__(self):
         """Initialize orchestrator."""
-        self.docker_client = docker.from_env()
+        try:
+            self.docker_client = docker.from_env()
+        except Exception as e:
+            # Docker may not be available in all environments
+            self.docker_client = None
+            import logging
+            logging.warning(f"Docker client initialization failed: {e}")
     
     async def create_container(
         self,
@@ -29,6 +35,8 @@ class ContainerOrchestrator:
         Returns:
             Container ID if successful, None otherwise
         """
+        if not self.docker_client:
+            return None
         try:
             container = self.docker_client.containers.create(
                 image=image,
@@ -43,6 +51,8 @@ class ContainerOrchestrator:
     
     async def start_container(self, container_id: str) -> bool:
         """Start a container."""
+        if not self.docker_client:
+            return False
         try:
             container = self.docker_client.containers.get(container_id)
             container.start()
@@ -53,6 +63,8 @@ class ContainerOrchestrator:
     
     async def stop_container(self, container_id: str) -> bool:
         """Stop a container."""
+        if not self.docker_client:
+            return False
         try:
             container = self.docker_client.containers.get(container_id)
             container.stop()
@@ -63,6 +75,8 @@ class ContainerOrchestrator:
     
     async def delete_container(self, container_id: str) -> bool:
         """Delete a container."""
+        if not self.docker_client:
+            return False
         try:
             container = self.docker_client.containers.get(container_id)
             container.remove(force=True)
@@ -73,6 +87,8 @@ class ContainerOrchestrator:
     
     async def get_container_status(self, container_id: str) -> Optional[ContainerStatus]:
         """Get container status."""
+        if not self.docker_client:
+            return None
         try:
             container = self.docker_client.containers.get(container_id)
             status = container.status
