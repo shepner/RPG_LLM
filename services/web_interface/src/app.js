@@ -221,23 +221,77 @@ function addNarrative(narrative) {
 // Action submission
 document.getElementById('submit-action').addEventListener('click', async () => {
     const action = document.getElementById('action-input').value;
+    const characterId = document.getElementById('character-select').value;
+    
     if (!action) {
         alert('Please describe an action');
         return;
     }
     
-    addEvent({
-        event_type: 'player_action',
-        description: `You: ${action}`,
-        game_time: Date.now()
-    });
+    if (!characterId) {
+        alert('Please select a character first');
+        return;
+    }
     
-    // TODO: Submit action to being service
-    console.log('Action:', action);
-    document.getElementById('action-input').value = '';
-    
-    // Show feedback
-    alert('Action submitted! (Full integration with being service coming soon)');
+    try {
+        // Get current game time
+        const currentSession = window.currentSession;
+        if (!currentSession) {
+            alert('Please join a game session first');
+            return;
+        }
+        
+        // TODO: Get actual game time from time management service
+        const gameTime = Date.now() / 1000; // Temporary - should use actual game time
+        
+        // Submit action to being service
+        // First, get the being service endpoint from registry
+        const registryResponse = await fetch(`${BEING_REGISTRY_URL}/beings/${characterId}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (!registryResponse.ok) {
+            throw new Error('Could not find character');
+        }
+        
+        const registry = await registryResponse.json();
+        const beingServiceUrl = registry.service_endpoint || `http://localhost:8006`; // Default being service port
+        
+        // Submit action to being service
+        const actionResponse = await fetch(`${beingServiceUrl}/decide`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                being_id: characterId,
+                context: action,
+                game_time: gameTime
+            })
+        });
+        
+        if (actionResponse.ok) {
+            const actionResult = await actionResponse.json();
+            addEvent({
+                event_type: 'player_action',
+                description: `Character action: ${action}`,
+                game_time: gameTime
+            });
+            document.getElementById('action-input').value = '';
+            addNarrative({
+                text: `Action submitted: ${action}`
+            });
+        } else {
+            const error = await actionResponse.text();
+            throw new Error(`Failed to submit action: ${error}`);
+        }
+    } catch (error) {
+        console.error('Error submitting action:', error);
+        alert('Error submitting action: ' + error.message);
+    }
 });
 
 // Game session management
@@ -452,6 +506,16 @@ window.joinSession = async function(sessionId) {
         });
         
         if (response.ok) {
+            // Find the session in the list to store it
+            const sessionsResponse = await fetch(`${GAME_SESSION_URL}/sessions`);
+            if (sessionsResponse.ok) {
+                const sessions = await sessionsResponse.json();
+                const session = sessions.find(s => s.session_id === sessionId);
+                if (session) {
+                    window.currentSession = session;
+                }
+            }
+            
             addNarrative({
                 text: `Joined game session!`
             });
@@ -461,6 +525,8 @@ window.joinSession = async function(sessionId) {
                 game_time: Date.now()
             });
             await refreshSessions();
+            // Reload characters for this session
+            await loadUserCharacters();
         } else {
             alert('Failed to join session');
         }
@@ -486,11 +552,22 @@ async function loadUserInfo() {
                 roleDisplay.textContent = `(${user.role})`;
             }
             
-            // Show "Manage Users" button for GMs
-            if (manageUsersBtn && user.role === 'gm') {
-                manageUsersBtn.style.display = 'inline-block';
-                // Set up event listener when button becomes visible
-                setupManageUsersButton();
+            // Show "Manage Users" and "Manage Rules" buttons for GMs
+            if (user.role === 'gm') {
+                if (manageUsersBtn) {
+                    manageUsersBtn.style.display = 'inline-block';
+                    // Set up event listener when button becomes visible
+                    setupManageUsersButton();
+                }
+                const manageRulesBtn = document.getElementById('manage-rules-btn');
+                if (manageRulesBtn) {
+                    manageRulesBtn.style.display = 'inline-block';
+                }
+            } else {
+                const manageRulesBtn = document.getElementById('manage-rules-btn');
+                if (manageRulesBtn) {
+                    manageRulesBtn.style.display = 'none';
+                }
             }
             
             // Store user info globally
