@@ -41,6 +41,8 @@ services:
       - "8002:8002"
     volumes:
       - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+    environment:
+      - RULES_DIR=./RPG_LLM_DATA/rules
 
   time_management:
     build:
