@@ -123,7 +123,7 @@ services:
       context: .
       dockerfile: ./services/web_interface/Dockerfile
     ports:
-      - "8080:80"
+      - "8081:80"
     depends_on:
       - auth
       - worlds
