@@ -1,11 +1,36 @@
 """Time management service API."""
 
 import os
-from fastapi import FastAPI, HTTPException
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from .time_engine import TimeEngine
 from .models import GameTime, HistoricalEvent
 
+# Import auth middleware (optional)
+try:
+    import sys
+    sys.path.insert(0, '/app/services/auth/src')
+    from middleware import require_auth, get_current_user, TokenData
+    AUTH_AVAILABLE = True
+except ImportError:
+    AUTH_AVAILABLE = False
+    def require_auth():
+        return None
+    def get_current_user():
+        return None
+    TokenData = None
+
 app = FastAPI(title="Time Management Service")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 time_engine = TimeEngine(
     database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./RPG_LLM_DATA/databases/time_management.db")

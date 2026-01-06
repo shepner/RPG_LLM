@@ -1,12 +1,36 @@
 """Rules engine service API."""
 
 import os
-from typing import List
-from fastapi import FastAPI, HTTPException
+from typing import List, Optional
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from .rule_resolver import RuleResolver
 from .models import RollResult, Resolution
 
+# Import auth middleware (optional)
+try:
+    import sys
+    sys.path.insert(0, '/app/services/auth/src')
+    from middleware import require_auth, get_current_user, TokenData
+    AUTH_AVAILABLE = True
+except ImportError:
+    AUTH_AVAILABLE = False
+    def require_auth():
+        return None
+    def get_current_user():
+        return None
+    TokenData = None
+
 app = FastAPI(title="Rules Engine Service")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 resolver = RuleResolver()
 

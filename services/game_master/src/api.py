@@ -1,11 +1,27 @@
 """Game master service API."""
 
 import logging
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from typing import Optional
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from .gm_engine import GMEngine
 from .models import Narrative
 from shared.websocket.manager import WebSocketManager
+
+# Import auth middleware (optional)
+try:
+    import sys
+    sys.path.insert(0, '/app/services/auth/src')
+    from middleware import require_auth, get_current_user, TokenData
+    AUTH_AVAILABLE = True
+except ImportError:
+    AUTH_AVAILABLE = False
+    def require_auth():
+        return None
+    def get_current_user():
+        return None
+    TokenData = None
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -16,12 +32,26 @@ logging.basicConfig(
 
 app = FastAPI(title="Game Master Service")
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 gm_engine = GMEngine()
 ws_manager = WebSocketManager()
 
 
 @app.post("/narrate", response_model=Narrative)
-async def narrate(context: str, game_time: float, scene_id: str = None):
+async def narrate(
+    context: str, 
+    game_time: float, 
+    scene_id: str = None,
+    token_data: Optional[TokenData] = Depends(get_current_user) if AUTH_AVAILABLE else None
+):
     """Generate narrative."""
     try:
         logger.info(f"Generating narrative for scene {scene_id} at game time {game_time}")

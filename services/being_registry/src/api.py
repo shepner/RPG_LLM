@@ -1,10 +1,37 @@
 """Being registry service API."""
 
-from fastapi import FastAPI, HTTPException
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from .registry import Registry
 from .models import BeingRegistry
 
+# Import auth middleware (optional)
+try:
+    import sys
+    sys.path.insert(0, '/app/services/auth/src')
+    from middleware import require_auth, require_gm, get_current_user, TokenData
+    AUTH_AVAILABLE = True
+except ImportError:
+    AUTH_AVAILABLE = False
+    def require_auth():
+        return None
+    def require_gm():
+        return None
+    def get_current_user():
+        return None
+    TokenData = None
+
 app = FastAPI(title="Being Registry Service")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 registry = Registry()
 

@@ -2,11 +2,28 @@
 
 import os
 import logging
-from typing import Dict
-from fastapi import FastAPI, HTTPException
+from typing import Dict, Optional
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from .being_agent import BeingAgent
 from .memory import MemoryManager
 from .models import Thought, BeingAction
+
+# Import auth middleware (optional)
+try:
+    import sys
+    sys.path.insert(0, '/app/services/auth/src')
+    from middleware import require_auth, require_being_access, get_current_user, TokenData
+    AUTH_AVAILABLE = True
+except ImportError:
+    AUTH_AVAILABLE = False
+    def require_auth():
+        return None
+    def require_being_access(being_id: str):
+        return None
+    def get_current_user():
+        return None
+    TokenData = None
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -16,6 +33,15 @@ logging.basicConfig(
 )
 
 app = FastAPI(title="Being Service")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Store agents and memory managers per being
 _agents: Dict[str, BeingAgent] = {}
@@ -38,7 +64,12 @@ def get_memory_manager(being_id: str) -> MemoryManager:
 
 
 @app.post("/think", response_model=Thought)
-async def think(being_id: str, context: str, game_time: float):
+async def think(
+    being_id: str, 
+    context: str, 
+    game_time: float,
+    token_data: Optional[TokenData] = Depends(lambda: require_being_access(being_id) if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
+):
     """Generate thoughts."""
     try:
         logger.info(f"Generating thoughts for being {being_id}")
@@ -52,7 +83,12 @@ async def think(being_id: str, context: str, game_time: float):
 
 
 @app.post("/decide", response_model=BeingAction)
-async def decide(being_id: str, context: str, game_time: float):
+async def decide(
+    being_id: str, 
+    context: str, 
+    game_time: float,
+    token_data: Optional[TokenData] = Depends(lambda: require_being_access(being_id) if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
+):
     """Make a decision."""
     try:
         logger.info(f"Making decision for being {being_id}")
