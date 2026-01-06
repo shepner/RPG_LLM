@@ -1,0 +1,32 @@
+# Cursor AI Assistant Workflow Rules
+
+## Git Workflow
+1. **ALWAYS commit changes** after making modifications to files
+2. **ALWAYS push to repository** after committing (unless explicitly told not to)
+3. Use descriptive commit messages that explain what was changed
+4. Commit related changes together in logical groups
+5. If multiple services are modified, commit them together with a summary message
+
+## Docker Workflow
+1. **ALWAYS rebuild containers** after code changes:
+   - Use `docker compose build <service>` for individual services
+   - Use `docker compose build` for all services
+   - Use `docker compose up -d --build` to rebuild and restart
+2. **ALWAYS restart services** after rebuilding to ensure new code is running
+3. Check container logs if services fail after rebuild
+4. Verify services are healthy after rebuild
+
+## Code Changes Workflow
+1. Make code changes
+2. Test locally if possible
+3. **Commit changes** with descriptive message
+4. **Push to repository**
+5. **Rebuild affected containers**
+6. **Restart services**
+7. Verify services are working
+
+## Exception Cases
+- If user explicitly says "don't commit" or "don't push", skip those steps
+- If rebuilding would take too long and user needs quick testing, mention it but still rebuild
+- Always inform user when committing/pushing/rebuilding
+
