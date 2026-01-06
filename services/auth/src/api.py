@@ -166,9 +166,11 @@ async def fix_first_user(token_data: TokenData = Depends(require_auth)):
     from .auth_manager import UserDB
     
     async with auth_manager.SessionLocal() as session:
-        # Check if any GM exists
+        # Check if any GM exists (case-insensitive check)
         gm_result = await session.execute(
-            sa.select(UserDB).where(UserDB.role == UserRole.GM)
+            sa.select(UserDB).where(
+                sa.func.lower(UserDB.role) == UserRole.GM.value.lower()
+            )
         )
         gms = gm_result.scalars().all()
         
