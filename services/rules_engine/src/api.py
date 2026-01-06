@@ -95,61 +95,90 @@ async def upload_rules(
     token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
 ):
     """
-    Upload rules file (Markdown, YAML, or JSON).
+    Upload rules file or image.
+    
+    Supported formats:
+    - Text: Markdown (.md, .markdown) - PREFERRED for rules
+    - Text: YAML (.yaml, .yml), JSON (.json), Text (.txt)
+    - Documents: PDF (.pdf) - Common for game modules
+    - Images: PNG (.png), JPEG (.jpg, .jpeg), GIF (.gif), WebP (.webp), SVG (.svg)
     
     You can upload unlimited files. Each file is stored with its original filename.
     If a file with the same name already exists, it will be overwritten.
     """
     try:
-        # Validate file type
-        allowed_extensions = {'.md', '.markdown', '.yaml', '.yml', '.json', '.txt'}
+        # Define allowed file types
+        text_extensions = {'.md', '.markdown', '.yaml', '.yml', '.json', '.txt'}
+        document_extensions = {'.pdf'}
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
+        all_allowed = text_extensions | document_extensions | image_extensions
+        
         file_ext = Path(file.filename).suffix.lower() if file.filename else ''
-        if file_ext not in allowed_extensions:
+        if file_ext not in all_allowed:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+                detail=f"Invalid file type. Allowed: Markdown (.md), PDF (.pdf), Images (.png, .jpg, .gif, .webp, .svg), YAML (.yaml), JSON (.json), Text (.txt)"
             )
         
-        # Read file content
+        # Read file content (binary for images/PDFs, text for others)
         content = await file.read()
-        content_str = content.decode('utf-8')
+        
+        # Determine file category
+        is_text = file_ext in text_extensions
+        is_image = file_ext in image_extensions
+        is_pdf = file_ext in document_extensions
         
         # Generate file hash for deduplication/versioning
         file_hash = hashlib.sha256(content).hexdigest()[:16]
         
-        # Save file to disk
+        # Save file to disk (binary mode for images/PDFs, text mode for text files)
         safe_filename = file.filename or f"rules_{file_hash}{file_ext}"
         file_path = RULES_DIR / safe_filename
         
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content_str)
+        if is_text:
+            # Save as text
+            content_str = content.decode('utf-8')
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content_str)
+            file_size = len(content_str)
+        else:
+            # Save as binary (PDFs, images)
+            with open(file_path, 'wb') as f:
+                f.write(content)
+            file_size = len(content)
         
         # Update metadata
         file_id = file_hash
+        file_category = "text" if is_text else ("image" if is_image else "document")
         _rules_metadata[file_id] = {
             "file_id": file_id,
             "filename": safe_filename,
             "original_filename": file.filename,
-            "size": len(content_str),
+            "size": file_size,
             "type": file.content_type or "application/octet-stream",
             "extension": file_ext,
+            "category": file_category,
+            "is_text": is_text,
+            "is_image": is_image,
+            "is_pdf": is_pdf,
             "uploaded_at": datetime.now().isoformat(),
             "uploaded_by": token_data.user_id if token_data else None
         }
         save_rules_metadata()
         
         return {
-            "message": "Rules uploaded successfully",
+            "message": "File uploaded successfully",
             "file_id": file_id,
             "filename": safe_filename,
-            "size": len(content_str),
+            "size": file_size,
             "type": file.content_type,
+            "category": file_category,
             "uploaded_at": _rules_metadata[file_id]["uploaded_at"]
         }
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload rules: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
 
 
 @app.get("/rules/list")
@@ -169,7 +198,9 @@ async def get_rule(
     file_id: str,
     token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
 ):
-    """Get a specific rules file by ID."""
+    """Get a specific rules file by ID. Returns content for text files, download URL for binary files."""
+    from fastapi.responses import FileResponse
+    
     load_rules_metadata()
     if file_id not in _rules_metadata:
         raise HTTPException(status_code=404, detail="Rules file not found")
@@ -180,14 +211,47 @@ async def get_rule(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Rules file not found on disk")
     
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
+    # For text files, return content as JSON
+    if metadata.get("is_text", False):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return {
+            "file_id": file_id,
+            "metadata": metadata,
+            "content": content
+        }
+    else:
+        # For binary files (PDFs, images), return file for download/viewing
+        return FileResponse(
+            path=str(file_path),
+            filename=metadata["filename"],
+            media_type=metadata["type"]
+        )
+
+
+@app.get("/rules/{file_id}/download")
+async def download_rule(
+    file_id: str,
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
+    """Download a rules file (useful for PDFs and images)."""
+    from fastapi.responses import FileResponse
     
-    return {
-        "file_id": file_id,
-        "metadata": metadata,
-        "content": content
-    }
+    load_rules_metadata()
+    if file_id not in _rules_metadata:
+        raise HTTPException(status_code=404, detail="Rules file not found")
+    
+    metadata = _rules_metadata[file_id]
+    file_path = RULES_DIR / metadata["filename"]
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Rules file not found on disk")
+    
+    return FileResponse(
+        path=str(file_path),
+        filename=metadata["original_filename"] or metadata["filename"],
+        media_type=metadata["type"]
+    )
 
 
 @app.delete("/rules/{file_id}")

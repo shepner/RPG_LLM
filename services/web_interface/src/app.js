@@ -726,20 +726,127 @@ async function listRules() {
             const data = await response.json();
             const rulesList = document.getElementById('rules-list');
             if (data.rules && data.rules.length > 0) {
-                rulesList.innerHTML = data.rules.map(rule => 
-                    `<div style="padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px;">
-                        <strong>${rule.name || rule.filename}</strong>
-                        <span style="color: #888; margin-left: 10px;">${rule.size || 0} bytes</span>
-                    </div>`
-                ).join('');
+                rulesList.innerHTML = data.rules.map(rule => {
+                    const sizeKB = ((rule.size || 0) / 1024).toFixed(1);
+                    const category = rule.category || 'unknown';
+                    const categoryIcon = category === 'image' ? '🖼️' : category === 'document' ? '📄' : '📝';
+                    const categoryColor = category === 'image' ? '#4a9eff' : category === 'document' ? '#f59e0b' : '#10b981';
+                    
+                    return `
+                        <div style="padding: 10px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${categoryColor};">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong style="color: ${categoryColor};">${categoryIcon} ${rule.filename || rule.original_filename}</strong>
+                                    <span style="color: #888; margin-left: 10px; font-size: 0.9em;">${sizeKB} KB</span>
+                                    <span style="color: #666; margin-left: 10px; font-size: 0.85em;">(${category})</span>
+                                </div>
+                                <div>
+                                    ${rule.is_text ? `<button onclick="viewRule('${rule.file_id}')" style="padding: 4px 8px; margin-right: 5px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">View</button>` : ''}
+                                    <button onclick="downloadRule('${rule.file_id}')" style="padding: 4px 8px; margin-right: 5px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Download</button>
+                                    <button onclick="deleteRule('${rule.file_id}')" style="padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Delete</button>
+                                </div>
+                            </div>
+                            ${rule.is_image ? `<div style="margin-top: 8px;"><img src="${RULES_ENGINE_URL}/rules/${rule.file_id}" style="max-width: 100%; max-height: 200px; border-radius: 4px;" alt="${rule.filename}"></div>` : ''}
+                            <div style="color: #888; font-size: 0.8em; margin-top: 5px;">Uploaded: ${new Date(rule.uploaded_at).toLocaleString()}</div>
+                        </div>
+                    `;
+                }).join('');
             } else {
-                rulesList.innerHTML = '<div style="color: #888; padding: 10px;">No rules files uploaded yet.</div>';
+                rulesList.innerHTML = '<div style="color: #888; padding: 10px;">No files uploaded yet.</div>';
             }
         }
     } catch (error) {
         console.error('Error listing rules:', error);
     }
 }
+
+// View rule (for text files)
+window.viewRule = async function(fileId) {
+    try {
+        const response = await fetch(`${RULES_ENGINE_URL}/rules/${fileId}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const content = data.content || '';
+            const filename = data.metadata?.filename || 'Unknown';
+            
+            // Show in a modal or new window
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center;';
+            modal.innerHTML = `
+                <div style="background: #1a1a1a; padding: 20px; border-radius: 8px; max-width: 80%; max-height: 80%; overflow: auto; position: relative;">
+                    <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: 10px; right: 10px; background: #ef4444; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer;">Close</button>
+                    <h3 style="margin-top: 0;">${filename}</h3>
+                    <pre style="background: #0a0a0a; padding: 15px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;">${content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+    } catch (error) {
+        console.error('Error viewing rule:', error);
+        alert('Error viewing file: ' + error.message);
+    }
+};
+
+// Download rule
+window.downloadRule = async function(fileId) {
+    try {
+        const url = `${RULES_ENGINE_URL}/rules/${fileId}/download`;
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = fileId;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(downloadUrl);
+        } else {
+            alert('Failed to download file');
+        }
+    } catch (error) {
+        console.error('Error downloading rule:', error);
+        alert('Error downloading file: ' + error.message);
+    }
+};
+
+// Delete rule
+window.deleteRule = async function(fileId) {
+    if (!confirm('Are you sure you want to delete this file?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${RULES_ENGINE_URL}/rules/${fileId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.ok) {
+            alert('File deleted successfully');
+            await listRules();
+        } else {
+            const error = await response.text();
+            alert('Failed to delete file: ' + error);
+        }
+    } catch (error) {
+        console.error('Error deleting rule:', error);
+        alert('Error deleting file: ' + error.message);
+    }
+};
 
 // Character creation
 document.getElementById('create-character-btn')?.addEventListener('click', () => {
