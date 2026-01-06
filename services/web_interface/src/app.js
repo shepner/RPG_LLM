@@ -2,6 +2,7 @@
 
 const AUTH_URL = 'http://localhost:8000';
 const GAME_SESSION_URL = 'http://localhost:8001';
+const RULES_ENGINE_URL = 'http://localhost:8002';
 const WORLDS_URL = 'http://localhost:8004';
 const GM_URL = 'http://localhost:8005';
 const BEING_REGISTRY_URL = 'http://localhost:8007';
@@ -555,5 +556,183 @@ async function loadGameState() {
             game_time: Date.now()
         });
     }
+    
+    // Load user's characters
+    await loadUserCharacters();
 }
+
+// Load user's characters
+async function loadUserCharacters() {
+    try {
+        const response = await fetch(`${BEING_REGISTRY_URL}/beings/my-characters`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const select = document.getElementById('character-select');
+            // Clear existing options except the first one
+            while (select.options.length > 1) {
+                select.remove(1);
+            }
+            
+            // Add characters to select
+            data.characters.forEach(char => {
+                const option = document.createElement('option');
+                option.value = char.being_id;
+                option.textContent = char.name || char.being_id;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading characters:', error);
+    }
+}
+
+// Rules management (GM only)
+document.getElementById('manage-rules-btn')?.addEventListener('click', () => {
+    const panel = document.getElementById('rules-management');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+});
+
+document.getElementById('upload-rules-btn')?.addEventListener('click', async () => {
+    const fileInput = document.getElementById('rules-file-input');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Please select a rules file');
+        return;
+    }
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch(`${RULES_ENGINE_URL}/rules/upload`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: formData
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            alert(`Rules uploaded successfully: ${result.filename}`);
+            fileInput.value = '';
+            await listRules();
+        } else {
+            const error = await response.text();
+            alert('Failed to upload rules: ' + error);
+        }
+    } catch (error) {
+        console.error('Error uploading rules:', error);
+        alert('Error uploading rules: ' + error.message);
+    }
+});
+
+document.getElementById('list-rules-btn')?.addEventListener('click', async () => {
+    await listRules();
+});
+
+async function listRules() {
+    try {
+        const response = await fetch(`${RULES_ENGINE_URL}/rules/list`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const rulesList = document.getElementById('rules-list');
+            if (data.rules && data.rules.length > 0) {
+                rulesList.innerHTML = data.rules.map(rule => 
+                    `<div style="padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px;">
+                        <strong>${rule.name || rule.filename}</strong>
+                        <span style="color: #888; margin-left: 10px;">${rule.size || 0} bytes</span>
+                    </div>`
+                ).join('');
+            } else {
+                rulesList.innerHTML = '<div style="color: #888; padding: 10px;">No rules files uploaded yet.</div>';
+            }
+        }
+    } catch (error) {
+        console.error('Error listing rules:', error);
+    }
+}
+
+// Character creation
+document.getElementById('create-character-btn')?.addEventListener('click', () => {
+    const panel = document.getElementById('character-creation');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+});
+
+document.getElementById('cancel-character-btn')?.addEventListener('click', () => {
+    document.getElementById('character-creation').style.display = 'none';
+    // Clear form
+    document.getElementById('character-name').value = '';
+    document.getElementById('character-backstory').value = '';
+    document.getElementById('character-personality').value = '';
+    document.getElementById('character-appearance').value = '';
+    document.getElementById('auto-generate-character').checked = false;
+});
+
+document.getElementById('submit-character-btn')?.addEventListener('click', async () => {
+    const name = document.getElementById('character-name').value;
+    const autoGenerate = document.getElementById('auto-generate-character').checked;
+    
+    if (!autoGenerate && !name) {
+        alert('Please enter a character name or enable auto-generation');
+        return;
+    }
+    
+    try {
+        const requestData = {
+            name: name || '',
+            backstory: document.getElementById('character-backstory').value || null,
+            personality: document.getElementById('character-personality').value || null,
+            appearance: document.getElementById('character-appearance').value || null,
+            session_id: window.currentSession?.session_id || null,
+            automatic: autoGenerate
+        };
+        
+        const response = await fetch(`${BEING_REGISTRY_URL}/beings/create`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            alert(`Character created successfully! ID: ${result.being_id}`);
+            document.getElementById('character-creation').style.display = 'none';
+            
+            // Clear form
+            document.getElementById('character-name').value = '';
+            document.getElementById('character-backstory').value = '';
+            document.getElementById('character-personality').value = '';
+            document.getElementById('character-appearance').value = '';
+            document.getElementById('auto-generate-character').checked = false;
+            
+            // Reload characters
+            await loadUserCharacters();
+            
+            addNarrative({
+                text: `Character "${name || 'Auto-generated'}" created successfully!`
+            });
+        } else {
+            const error = await response.text();
+            alert('Failed to create character: ' + error);
+        }
+    } catch (error) {
+        console.error('Error creating character:', error);
+        alert('Error creating character: ' + error.message);
+    }
+});
 

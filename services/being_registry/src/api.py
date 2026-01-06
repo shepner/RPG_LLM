@@ -1,10 +1,12 @@
 """Being registry service API."""
 
-from typing import Optional
-from fastapi import FastAPI, HTTPException, Depends
+from typing import Optional, Dict, Any
+from fastapi import FastAPI, HTTPException, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from .registry import Registry
 from .models import BeingRegistry
+from .character_creator import CharacterCreator
 
 # Import auth middleware (optional)
 try:
@@ -34,6 +36,18 @@ app.add_middleware(
 )
 
 registry = Registry()
+character_creator = CharacterCreator()
+
+
+class CharacterCreateRequest(BaseModel):
+    """Character creation request."""
+    name: str
+    backstory: Optional[str] = None
+    personality: Optional[str] = None
+    appearance: Optional[str] = None
+    game_system: Optional[str] = None
+    session_id: Optional[str] = None
+    automatic: bool = False  # If True, auto-generate everything
 
 
 @app.post("/beings/register", response_model=BeingRegistry)
@@ -50,6 +64,68 @@ async def get_being(being_id: str):
     if not entry:
         raise HTTPException(status_code=404, detail="Being not found")
     return entry
+
+
+@app.post("/beings/create")
+async def create_character(
+    request: CharacterCreateRequest,
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
+    """Create a new character/being."""
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        import uuid
+        being_id = str(uuid.uuid4())
+        owner_id = token_data.user_id
+        
+        if request.automatic:
+            # Auto-generate character
+            character_data = await character_creator.create_automatic(
+                owner_id=owner_id,
+                context={"session_id": request.session_id},
+                game_system=request.game_system
+            )
+        else:
+            # Manual creation with player-provided flavor
+            flavor_data = {
+                "name": request.name,
+                "backstory": request.backstory,
+                "personality": request.personality,
+                "appearance": request.appearance
+            }
+            character_data = await character_creator.create_manual(
+                being_id=being_id,
+                owner_id=owner_id,
+                flavor_data=flavor_data,
+                game_system=request.game_system
+            )
+        
+        # Register the being
+        registry_entry = registry.register_being(being_id, owner_id, request.session_id)
+        
+        return {
+            "being_id": being_id,
+            "registry": registry_entry,
+            "character_data": character_data,
+            "message": "Character created successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create character: {str(e)}")
+
+
+@app.get("/beings/my-characters")
+async def get_my_characters(
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
+    """Get all characters owned or assigned to the current user."""
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # TODO: Query actual characters from registry
+    # For now, return empty list
+    return {"characters": []}
 
 
 @app.get("/health")
