@@ -108,9 +108,10 @@ async def get_current_user_info(token_data: TokenData = Depends(require_auth)):
 async def list_users(token_data: TokenData = Depends(require_gm)):
     """List all users (GM only)."""
     import sqlalchemy as sa
+    from .auth_manager import UserDB
     
     async with auth_manager.SessionLocal() as session:
-        result = await session.execute(sa.select(auth_manager.UserDB))
+        result = await session.execute(sa.select(UserDB))
         users_db = result.scalars().all()
         
         return [
@@ -135,6 +136,7 @@ async def update_user_role(
     """Update user role (GM only)."""
     import sqlalchemy as sa
     from .models import UserRole
+    from .auth_manager import UserDB
     
     try:
         user_role = UserRole(role)
@@ -143,7 +145,7 @@ async def update_user_role(
     
     async with auth_manager.SessionLocal() as session:
         result = await session.execute(
-            sa.select(auth_manager.UserDB).where(auth_manager.UserDB.user_id == user_id)
+            sa.select(UserDB).where(UserDB.user_id == user_id)
         )
         user_db = result.scalar_one_or_none()
         
