@@ -40,12 +40,20 @@ document.getElementById('login-btn').addEventListener('click', async () => {
 });
 
 document.getElementById('register-btn').addEventListener('click', async () => {
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const username = usernameInput ? usernameInput.value.trim() : '';
+    const password = passwordInput ? passwordInput.value : '';
     
     if (!username || !password) {
         alert('Please enter both username and password');
         return;
+    }
+    
+    // Generate email from username if it doesn't look like an email
+    let email = username;
+    if (!email.includes('@')) {
+        email = `${username}@example.com`;
     }
     
     try {
@@ -56,8 +64,8 @@ document.getElementById('register-btn').addEventListener('click', async () => {
                 'Accept': 'application/json'
             },
             body: JSON.stringify({ 
-                username: username.trim(), 
-                email: `${username.trim()}@example.com`, 
+                username: username, 
+                email: email, 
                 password: password 
             })
         });
