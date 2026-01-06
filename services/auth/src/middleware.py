@@ -30,7 +30,17 @@ def get_auth_manager():
         # If that fails, create a new instance directly
         # This handles the case when middleware is imported by other services
         import os
-        from .auth_manager import AuthManager
+        import sys
+        
+        # Try relative import first
+        try:
+            from .auth_manager import AuthManager
+        except ImportError:
+            # If relative import fails, use absolute path
+            auth_src_path = os.path.join(os.path.dirname(__file__))
+            if auth_src_path not in sys.path:
+                sys.path.insert(0, auth_src_path)
+            from auth_manager import AuthManager
         
         # Create a singleton instance if it doesn't exist
         if not hasattr(get_auth_manager, '_instance'):
