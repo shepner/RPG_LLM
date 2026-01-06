@@ -12,19 +12,28 @@ from .character_creator import CharacterCreator
 try:
     import sys
     import os
-    # Try multiple paths for auth middleware
-    auth_paths = [
-        '/app/services/auth/src',
-        '/app/src/services/auth/src',
-        os.path.join(os.path.dirname(__file__), '../../auth/src')
-    ]
-    for path in auth_paths:
-        if os.path.exists(path):
-            sys.path.insert(0, path)
-            break
+    # Add auth service to path
+    auth_src_path = '/app/services/auth/src'
+    if os.path.exists(auth_src_path):
+        sys.path.insert(0, auth_src_path)
+        # Also add parent directory so relative imports work
+        sys.path.insert(0, '/app/services/auth')
     
-    from middleware import require_auth, require_gm, get_current_user, TokenData
-    AUTH_AVAILABLE = True
+    # Import with absolute path to avoid relative import issues
+    import importlib.util
+    middleware_path = os.path.join(auth_src_path, 'middleware.py')
+    if os.path.exists(middleware_path):
+        spec = importlib.util.spec_from_file_location("auth_middleware", middleware_path)
+        auth_middleware = importlib.util.module_from_spec(spec)
+        # Set up the module's __package__ to help with relative imports
+        auth_middleware.__package__ = 'src'
+        sys.modules['auth_middleware'] = auth_middleware
+        spec.loader.exec_module(auth_middleware)
+        
+        from auth_middleware import require_auth, require_gm, get_current_user, TokenData
+        AUTH_AVAILABLE = True
+    else:
+        raise ImportError(f"Middleware file not found at {middleware_path}")
 except (ImportError, Exception) as e:
     import logging
     logger = logging.getLogger(__name__)
