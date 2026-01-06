@@ -110,6 +110,17 @@ services:
     depends_on:
       - being
 
+  web_interface:
+    build:
+      context: .
+      dockerfile: ./services/web_interface/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - auth
+      - worlds
+      - game_master
+
 volumes:
   redis_data:
 
