@@ -81,9 +81,18 @@ document.getElementById('register-btn').addEventListener('click', async () => {
                 if (errorText) {
                     try {
                         const errorJson = JSON.parse(errorText);
-                        errorDetail = errorJson.detail || errorJson.message || errorText;
+                        // Handle FastAPI validation errors (array format)
+                        if (Array.isArray(errorJson.detail)) {
+                            errorDetail = errorJson.detail.map(e => e.msg || e.message || JSON.stringify(e)).join(', ');
+                        } else if (typeof errorJson.detail === 'string') {
+                            errorDetail = errorJson.detail;
+                        } else if (errorJson.message) {
+                            errorDetail = errorJson.message;
+                        } else {
+                            errorDetail = JSON.stringify(errorJson);
+                        }
                     } catch {
-                        errorDetail = errorText;
+                        errorDetail = errorText || `HTTP ${response.status}`;
                     }
                 }
             } catch (e) {
