@@ -80,8 +80,12 @@ services:
       - "8005:8005"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-./credentials.json}
       - LLM_MODEL=${LLM_MODEL:-gemini-pro}
       - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+      - ./credentials.json:/app/credentials.json:ro
     depends_on:
       - redis
 
