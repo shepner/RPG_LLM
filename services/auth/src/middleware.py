@@ -22,8 +22,25 @@ security = HTTPBearer()
 
 def get_auth_manager():
     """Get auth manager instance (dependency)."""
-    from .api import auth_manager
-    return auth_manager
+    # Try to import from api first (when running as part of auth service)
+    try:
+        from .api import auth_manager
+        return auth_manager
+    except ImportError:
+        # If that fails, create a new instance directly
+        # This handles the case when middleware is imported by other services
+        import os
+        from .auth_manager import AuthManager
+        
+        # Create a singleton instance if it doesn't exist
+        if not hasattr(get_auth_manager, '_instance'):
+            get_auth_manager._instance = AuthManager(
+                database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./RPG_LLM_DATA/databases/auth.db"),
+                jwt_secret_key=os.getenv("JWT_SECRET_KEY", "change-me-in-production"),
+                jwt_algorithm=os.getenv("JWT_ALGORITHM", "HS256"),
+                jwt_expiration_hours=int(os.getenv("JWT_EXPIRATION", "24").replace("h", ""))
+            )
+        return get_auth_manager._instance
 
 
 async def get_current_user(
