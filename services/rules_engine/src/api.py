@@ -100,7 +100,7 @@ async def upload_rules(
     Supported formats:
     - Text: Markdown (.md, .markdown) - PREFERRED for rules
     - Text: YAML (.yaml, .yml), JSON (.json), Text (.txt)
-    - Documents: PDF (.pdf) - Common for game modules
+    - Documents: PDF (.pdf), EPUB (.epub) - Common for game modules
     - Images: PNG (.png), JPEG (.jpg, .jpeg), GIF (.gif), WebP (.webp), SVG (.svg)
     
     You can upload unlimited files. Each file is stored with its original filename.
@@ -109,7 +109,7 @@ async def upload_rules(
     try:
         # Define allowed file types
         text_extensions = {'.md', '.markdown', '.yaml', '.yml', '.json', '.txt'}
-        document_extensions = {'.pdf'}
+        document_extensions = {'.pdf', '.epub'}
         image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
         all_allowed = text_extensions | document_extensions | image_extensions
         
@@ -117,7 +117,7 @@ async def upload_rules(
         if file_ext not in all_allowed:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Invalid file type. Allowed: Markdown (.md), PDF (.pdf), Images (.png, .jpg, .gif, .webp, .svg), YAML (.yaml), JSON (.json), Text (.txt)"
+                detail=f"Invalid file type. Allowed: Markdown (.md), PDF (.pdf), EPUB (.epub), Images (.png, .jpg, .gif, .webp, .svg), YAML (.yaml), JSON (.json), Text (.txt)"
             )
         
         # Read file content (binary for images/PDFs, text for others)
@@ -126,7 +126,9 @@ async def upload_rules(
         # Determine file category
         is_text = file_ext in text_extensions
         is_image = file_ext in image_extensions
-        is_pdf = file_ext in document_extensions
+        is_pdf = file_ext == '.pdf'
+        is_epub = file_ext == '.epub'
+        is_document = file_ext in document_extensions
         
         # Generate file hash for deduplication/versioning
         file_hash = hashlib.sha256(content).hexdigest()[:16]
@@ -142,7 +144,7 @@ async def upload_rules(
                 f.write(content_str)
             file_size = len(content_str)
         else:
-            # Save as binary (PDFs, images)
+            # Save as binary (PDFs, EPUBs, images)
             with open(file_path, 'wb') as f:
                 f.write(content)
             file_size = len(content)
@@ -161,6 +163,8 @@ async def upload_rules(
             "is_text": is_text,
             "is_image": is_image,
             "is_pdf": is_pdf,
+            "is_epub": is_epub,
+            "is_document": is_document,
             "uploaded_at": datetime.now().isoformat(),
             "uploaded_by": token_data.user_id if token_data else None
         }

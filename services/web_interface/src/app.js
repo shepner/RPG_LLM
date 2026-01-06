@@ -729,7 +729,7 @@ async function listRules() {
                 rulesList.innerHTML = data.rules.map(rule => {
                     const sizeKB = ((rule.size || 0) / 1024).toFixed(1);
                     const category = rule.category || 'unknown';
-                    const categoryIcon = category === 'image' ? '🖼️' : category === 'document' ? '📄' : '📝';
+                    const categoryIcon = category === 'image' ? '🖼️' : category === 'document' ? (rule.is_epub ? '📚' : '📄') : '📝';
                     const categoryColor = category === 'image' ? '#4a9eff' : category === 'document' ? '#f59e0b' : '#10b981';
                     
                     return `
