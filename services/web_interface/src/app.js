@@ -264,7 +264,10 @@ document.getElementById('create-session-btn').addEventListener('click', async ()
                 try {
                     const fixResponse = await fetch(`${AUTH_URL}/users/fix-first-user`, {
                         method: 'POST',
-                        headers: { 'Authorization': `Bearer ${authToken}` }
+                        headers: { 
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        }
                     });
                     
                     if (fixResponse.ok) {
@@ -273,12 +276,24 @@ document.getElementById('create-session-btn').addEventListener('click', async ()
                         window.location.reload();
                         return;
                     } else {
-                        const error = await fixResponse.text();
-                        alert('Could not auto-upgrade: ' + error + '\n\nPlease ask an existing Game Master to upgrade your account.');
+                        let errorMsg = 'Could not auto-upgrade';
+                        try {
+                            const errorText = await fixResponse.text();
+                            const errorJson = JSON.parse(errorText);
+                            errorMsg = errorJson.detail || errorJson.message || errorText;
+                        } catch {
+                            errorMsg = await fixResponse.text() || 'Unknown error';
+                        }
+                        alert('Could not auto-upgrade: ' + errorMsg + '\n\nPlease ask an existing Game Master to upgrade your account.');
                     }
                 } catch (e) {
                     console.error('Fix first user error:', e);
-                    alert('Error checking GM status. Please ask an existing Game Master to upgrade your account.');
+                    const errorMsg = e.message || String(e);
+                    if (errorMsg.includes('CORS') || errorMsg.includes('fetch')) {
+                        alert('Network error: Could not connect to server. Please check that all services are running.');
+                    } else {
+                        alert('Error checking GM status: ' + errorMsg + '\n\nPlease ask an existing Game Master to upgrade your account.');
+                    }
                 }
             }
             return;
