@@ -43,22 +43,44 @@ document.getElementById('register-btn').addEventListener('click', async () => {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     
+    if (!username || !password) {
+        alert('Please enter both username and password');
+        return;
+    }
+    
     try {
         const response = await fetch(`${AUTH_URL}/register`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, email: `${username}@example.com`, password })
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+                username: username.trim(), 
+                email: `${username.trim()}@example.com`, 
+                password: password 
+            })
         });
         
         if (response.ok) {
+            const data = await response.json();
             alert('Registration successful! Please login.');
+            console.log('Registered user:', data);
         } else {
-            const error = await response.json();
-            alert('Registration failed: ' + error.detail);
+            const errorText = await response.text();
+            let errorDetail = 'Unknown error';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorDetail = errorJson.detail || errorText;
+            } catch {
+                errorDetail = errorText || `HTTP ${response.status}`;
+            }
+            alert('Registration failed: ' + errorDetail);
+            console.error('Registration failed:', response.status, errorDetail);
         }
     } catch (error) {
         console.error('Registration error:', error);
-        alert('Registration error: ' + error.message);
+        alert('Registration error: ' + error.message + '\n\nMake sure the auth service is running on port 8000.');
     }
 });
 
