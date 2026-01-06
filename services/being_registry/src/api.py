@@ -70,16 +70,17 @@ async def register_being(being_id: str, owner_id: str, session_id: str = None):
     return entry
 
 
-@app.get("/beings/{being_id}", response_model=BeingRegistry)
-async def get_being(being_id: str):
-    """Get being registry entry."""
-    global registry
-    if registry is None:
-        registry = get_registry()
-    entry = registry.get_being(being_id)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Being not found")
-    return entry
+@app.get("/beings/my-characters")
+async def get_my_characters(
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
+    """Get all characters owned or assigned to the current user."""
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # TODO: Query actual characters from registry
+    # For now, return empty list
+    return {"characters": []}
 
 
 @app.post("/beings/create")
@@ -134,17 +135,16 @@ async def create_character(
         raise HTTPException(status_code=500, detail=f"Failed to create character: {str(e)}")
 
 
-@app.get("/beings/my-characters")
-async def get_my_characters(
-    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
-):
-    """Get all characters owned or assigned to the current user."""
-    if not token_data:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    # TODO: Query actual characters from registry
-    # For now, return empty list
-    return {"characters": []}
+@app.get("/beings/{being_id}", response_model=BeingRegistry)
+async def get_being(being_id: str):
+    """Get being registry entry."""
+    global registry
+    if registry is None:
+        registry = get_registry()
+    entry = registry.get_being(being_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Being not found")
+    return entry
 
 
 @app.get("/health")
