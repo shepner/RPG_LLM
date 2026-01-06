@@ -84,6 +84,10 @@ document.getElementById('register-btn').addEventListener('click', async () => {
         email = `${username}@example.com`;
     }
     
+    // Ask if user wants to register as GM
+    const wantGM = confirm('Do you want to register as a Game Master?\n\n(Game Masters can create game sessions)');
+    const role = wantGM ? 'gm' : 'player';
+    
     try {
         const response = await fetch(`${AUTH_URL}/register`, {
             method: 'POST',
@@ -94,7 +98,8 @@ document.getElementById('register-btn').addEventListener('click', async () => {
             body: JSON.stringify({ 
                 username: username, 
                 email: email, 
-                password: password 
+                password: password,
+                role: role
             })
         });
         
@@ -252,7 +257,28 @@ document.getElementById('create-session-btn').addEventListener('click', async ()
         const isGM = user.role === 'gm';
         
         if (!isGM) {
-            alert('Only Game Masters can create sessions. Your role is: ' + user.role);
+            const upgrade = confirm('Only Game Masters can create sessions. Your role is: ' + user.role + '\n\nWould you like to upgrade your account to Game Master?');
+            if (upgrade) {
+                try {
+                    // Try to upgrade role (requires GM or admin)
+                    const upgradeResponse = await fetch(`${AUTH_URL}/users/${user.user_id}/role?role=gm`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        }
+                    });
+                    
+                    if (upgradeResponse.ok) {
+                        alert('Account upgraded to Game Master! Please refresh the page and try again.');
+                        window.location.reload();
+                    } else {
+                        alert('Could not upgrade account. You may need an existing GM to upgrade you, or register a new account.');
+                    }
+                } catch (e) {
+                    console.error('Upgrade error:', e);
+                    alert('Error upgrading account. You may need to register a new account with GM role or have an existing GM upgrade you.');
+                }
+            }
             return;
         }
         
