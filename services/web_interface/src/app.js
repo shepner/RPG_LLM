@@ -103,7 +103,23 @@ document.getElementById('register-btn').addEventListener('click', async () => {
         }
     } catch (error) {
         console.error('Registration error:', error);
-        alert('Registration error: ' + error.message + '\n\nMake sure the auth service is running on port 8000.');
+        // Handle network errors and other exceptions
+        let errorMessage = 'Unknown error occurred';
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+            errorMessage = 'Network error: Could not connect to server. Make sure the auth service is running on port 8000.';
+        } else if (error.message) {
+            errorMessage = error.message;
+        } else if (typeof error === 'string') {
+            errorMessage = error;
+        } else {
+            // Convert error object to string safely
+            try {
+                errorMessage = JSON.stringify(error);
+            } catch {
+                errorMessage = String(error);
+            }
+        }
+        alert('Registration error: ' + errorMessage);
     }
 });
 
