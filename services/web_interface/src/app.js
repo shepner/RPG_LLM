@@ -260,28 +260,7 @@ document.getElementById('create-session-btn').addEventListener('click', async ()
         const isGM = user.role === 'gm';
         
         if (!isGM) {
-            const upgrade = confirm('Only Game Masters can create sessions. Your role is: ' + user.role + '\n\nWould you like to upgrade your account to Game Master?');
-            if (upgrade) {
-                try {
-                    // Try to upgrade role (requires GM or admin)
-                    const upgradeResponse = await fetch(`${AUTH_URL}/users/${user.user_id}/role?role=gm`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${authToken}`
-                        }
-                    });
-                    
-                    if (upgradeResponse.ok) {
-                        alert('Account upgraded to Game Master! Please refresh the page and try again.');
-                        window.location.reload();
-                    } else {
-                        alert('Could not upgrade account. You may need an existing GM to upgrade you, or register a new account.');
-                    }
-                } catch (e) {
-                    console.error('Upgrade error:', e);
-                    alert('Error upgrading account. You may need to register a new account with GM role or have an existing GM upgrade you.');
-                }
-            }
+            alert('Only Game Masters can create sessions. Your role is: ' + user.role + '\n\nPlease ask an existing Game Master to upgrade your account using the "Manage Users" button, or if you are the first user, you will automatically be assigned GM role.');
             return;
         }
         
@@ -357,6 +336,67 @@ async function refreshSessions() {
     } catch (error) {
         console.error('Error refreshing sessions:', error);
     }
+}
+
+// User management for GMs
+const manageUsersBtn = document.getElementById('manage-users-btn');
+if (manageUsersBtn) {
+    manageUsersBtn.addEventListener('click', async () => {
+        try {
+            const usersResponse = await fetch(`${AUTH_URL}/users`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            
+            if (!usersResponse.ok) {
+                alert('Could not load users. You must be a GM to manage users.');
+                return;
+            }
+            
+            const users = await usersResponse.json();
+            
+            // Create user list dialog
+            let userList = 'Users:\n\n';
+            users.forEach((user, index) => {
+                userList += `${index + 1}. ${user.username} (${user.email}) - Role: ${user.role}\n`;
+            });
+            
+            const selected = prompt(userList + '\n\nEnter user number to change role (or cancel):');
+            if (!selected) return;
+            
+            const userIndex = parseInt(selected) - 1;
+            if (userIndex < 0 || userIndex >= users.length) {
+                alert('Invalid user number');
+                return;
+            }
+            
+            const selectedUser = users[userIndex];
+            const newRole = prompt(`Change role for ${selectedUser.username}?\n\nCurrent: ${selectedUser.role}\n\nEnter new role (gm or player):`);
+            
+            if (!newRole || (newRole !== 'gm' && newRole !== 'player')) {
+                alert('Invalid role. Must be "gm" or "player"');
+                return;
+            }
+            
+            const updateResponse = await fetch(`${AUTH_URL}/users/${selectedUser.user_id}/role?role=${newRole}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            
+            if (updateResponse.ok) {
+                alert(`User ${selectedUser.username} role updated to ${newRole}!`);
+                if (selectedUser.user_id === window.currentUser?.user_id) {
+                    alert('Your role was changed. Please refresh the page.');
+                    window.location.reload();
+                }
+            } else {
+                const error = await updateResponse.text();
+                alert('Failed to update role: ' + error);
+            }
+        } catch (error) {
+            console.error('Error managing users:', error);
+            alert('Error managing users: ' + error.message);
+        }
+    });
 }
 
 // User management for GMs
