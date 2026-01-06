@@ -75,8 +75,13 @@ async def get_my_characters(
     token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
 ):
     """Get all characters owned or assigned to the current user."""
-    if not token_data:
-        raise HTTPException(status_code=401, detail="Authentication required")
+    # Check authentication
+    if AUTH_AVAILABLE:
+        if not token_data:
+            raise HTTPException(status_code=401, detail="Authentication required")
+    else:
+        # If auth is not available, allow access (for development)
+        token_data = None
     
     # TODO: Query actual characters from registry
     # For now, return empty list
