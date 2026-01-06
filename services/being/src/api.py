@@ -40,17 +40,29 @@ def get_memory_manager(being_id: str) -> MemoryManager:
 @app.post("/think", response_model=Thought)
 async def think(being_id: str, context: str, game_time: float):
     """Generate thoughts."""
-    agent = get_agent(being_id)
-    thought = await agent.think(context, game_time)
-    return thought
+    try:
+        logger.info(f"Generating thoughts for being {being_id}")
+        agent = get_agent(being_id)
+        thought = await agent.think(context, game_time)
+        logger.info(f"Thought generated: {thought.thought_id}")
+        return thought
+    except Exception as e:
+        logger.error(f"Error generating thoughts: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate thoughts")
 
 
 @app.post("/decide", response_model=BeingAction)
 async def decide(being_id: str, context: str, game_time: float):
     """Make a decision."""
-    agent = get_agent(being_id)
-    action = await agent.decide(context, game_time)
-    return action
+    try:
+        logger.info(f"Making decision for being {being_id}")
+        agent = get_agent(being_id)
+        action = await agent.decide(context, game_time)
+        logger.info(f"Decision made: {action.action_id}")
+        return action
+    except Exception as e:
+        logger.error(f"Error making decision: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to make decision")
 
 
 @app.post("/memory/add")

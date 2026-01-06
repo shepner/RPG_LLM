@@ -71,10 +71,17 @@ async def login(credentials: UserLogin):
 @app.get("/me", response_model=User)
 async def get_current_user_info(token_data: TokenData = Depends(require_auth)):
     """Get current user information."""
-    user = await auth_manager.get_user(token_data.user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return user
+    try:
+        user = await auth_manager.get_user(token_data.user_id)
+        if not user:
+            logger.warning(f"User not found: {token_data.user_id}")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting user info: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/users", response_model=List[User])
