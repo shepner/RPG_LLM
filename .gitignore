@@ -1,0 +1,109 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+secrets/.env
+secrets/*.env
+*.env
+!*.env.example
+!.env.example
+
+# Configuration files with actual values
+config/config.yaml
+!config/config.yaml.example
+
+# API Keys and credentials
+**/api_keys.txt
+**/credentials.json
+**/service-account*.json
+**/*credentials*.json
+**/*secret*.json
+**/*key*.json
+!**/*example*.json
+!**/*template*.json
+
+# GCP Service Account files
+**/gcp-*.json
+**/google-*.json
+**/*service-account*.json
+
+# JWT secrets
+**/jwt_secret.txt
+**/jwt_key.pem
+
+# Database credentials
+**/db_password.txt
+**/database.credentials
+
+# Docker secrets
+**/docker-secrets/
+**/*.secret
+
+# Game Data (ALL game data excluded from repo)
+# Databases
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+databases/
+**/databases/
+
+# Vector stores (ChromaDB)
+**/chroma/
+**/vector_stores/
+**/*.chroma
+
+# Game rules (user-provided rules, not template rules)
+# Note: Template/example rules in services/rules_engine/rules/example/ can be committed
+services/rules_engine/rules/*.md
+services/rules_engine/rules/*.yaml
+services/rules_engine/rules/*.json
+!services/rules_engine/rules/example/
+!services/rules_engine/rules/*.example.*
+
+# Game sessions and world state
+**/sessions/
+**/worlds/
+**/game_data/
+
+# Being instances data
+**/beings/
+**/characters/
+
+# Logs (may contain sensitive data)
+logs/
+*.log
+*.log.*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker volumes and data
+docker-data/
+volumes/
+data/
+

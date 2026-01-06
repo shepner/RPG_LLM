@@ -1,0 +1,48 @@
+"""Being registry for container management."""
+
+import os
+import docker
+from typing import Dict, Optional
+from .models import BeingRegistry, ContainerStatus
+
+
+class Registry:
+    """Manages being container registry."""
+    
+    def __init__(self):
+        """Initialize registry."""
+        self.docker_client = docker.from_env()
+        self._registry: Dict[str, BeingRegistry] = {}
+    
+    def register_being(
+        self,
+        being_id: str,
+        owner_id: str,
+        session_id: Optional[str] = None
+    ) -> BeingRegistry:
+        """Register a being."""
+        registry_entry = BeingRegistry(
+            being_id=being_id,
+            owner_id=owner_id,
+            session_id=session_id,
+            container_status=ContainerStatus.CREATED
+        )
+        self._registry[being_id] = registry_entry
+        return registry_entry
+    
+    def get_being(self, being_id: str) -> Optional[BeingRegistry]:
+        """Get being registry entry."""
+        return self._registry.get(being_id)
+    
+    def update_status(
+        self,
+        being_id: str,
+        status: ContainerStatus,
+        container_id: Optional[str] = None
+    ):
+        """Update container status."""
+        if being_id in self._registry:
+            self._registry[being_id].container_status = status
+            if container_id:
+                self._registry[being_id].container_id = container_id
+

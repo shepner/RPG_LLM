@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  auth:
+    build: ./services/auth
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./RPG_LLM_DATA/databases/auth.db
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-24h}
+    volumes:
+      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+
+  game_session:
+    build: ./services/game_session
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./RPG_LLM_DATA/databases/game_session.db
+    volumes:
+      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+    depends_on:
+      - redis
+
+  rules_engine:
+    build: ./services/rules_engine
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+
+  time_management:
+    build: ./services/time_management
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./RPG_LLM_DATA/databases/time_management.db
+    volumes:
+      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+    depends_on:
+      - redis
+
+  worlds:
+    build: ./services/worlds
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./RPG_LLM_DATA/databases/worlds.db
+      - CHROMA_DB_PATH=./RPG_LLM_DATA/vector_stores/worlds
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+    depends_on:
+      - redis
+
+  game_master:
+    build: ./services/game_master
+    ports:
+      - "8005:8005"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-gemini-pro}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+
+  being:
+    build: ./services/being
+    ports:
+      - "8006:8006"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./RPG_LLM_DATA/databases/being.db
+      - CHROMA_DB_PATH=./RPG_LLM_DATA/vector_stores/beings
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+    depends_on:
+      - redis
+
+  being_registry:
+    build: ./services/being_registry
+    ports:
+      - "8007:8007"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - being
+
+volumes:
+  redis_data:
+

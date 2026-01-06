@@ -1,0 +1,57 @@
+# TTRPG LLM System Configuration
+# Copy this file to config.yaml and fill in your actual values
+
+# LLM Provider Settings
+llm:
+  provider: gemini  # gemini, openai, anthropic
+  model: gemini-pro  # Model name for the selected provider
+  temperature: 0.7
+  max_tokens: 2000
+  streaming: true
+
+# Embedding Provider Settings
+embedding:
+  provider: gemini  # gemini, openai (defaults to LLM provider if not set)
+  model: embedding-001  # Model name for embeddings
+  batch_size: 100
+  chunk_size: 512
+  chunk_overlap: 50
+
+# Vector Store Settings
+vector_store:
+  provider: chromadb
+  path: ./RPG_LLM_DATA/vector_stores
+  collection_prefix: rpg_llm_
+
+# Service Discovery
+services:
+  auth: http://auth:8000
+  game_session: http://game_session:8000
+  being_registry: http://being_registry:8000
+  time_management: http://time_management:8000
+  worlds: http://worlds:8000
+  rules_engine: http://rules_engine:8000
+  game_master: http://game_master:8000
+  being: http://being:8000
+
+# Caching
+cache:
+  enabled: true
+  ttl: 3600  # seconds
+  redis_url: redis://redis:6379
+
+# Background Tasks
+background_tasks:
+  provider: fastapi  # fastapi, celery
+  celery_broker_url: redis://redis:6379/0
+
+# Data Directory
+data_dir: ./RPG_LLM_DATA
+
+# Performance Settings
+performance:
+  embedding_batch_size: 100
+  memory_search_limit: 50
+  memory_time_window_hours: 24
+  cache_enabled: true
+
