@@ -226,24 +226,27 @@ async function loadGameState() {
             });
         }
         
-        // List game sessions
-        const sessionsResponse = await fetch(`${GAME_SESSION_URL}/sessions`, {
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
-        });
-        
-        if (sessionsResponse.ok) {
-            const sessions = await sessionsResponse.json();
-            if (sessions.length > 0) {
-                addNarrative({
-                    text: `Found ${sessions.length} game session(s). Select one to join or create a new one.`
-                });
+        // List game sessions (no auth required for listing)
+        try {
+            const sessionsResponse = await fetch(`${GAME_SESSION_URL}/sessions`);
+            
+            if (sessionsResponse.ok) {
+                const sessions = await sessionsResponse.json();
+                if (sessions.length > 0) {
+                    addNarrative({
+                        text: `Found ${sessions.length} game session(s). Select one to join or create a new one.`
+                    });
+                } else {
+                    addNarrative({
+                        text: 'No active game sessions. Create a new session to start playing!'
+                    });
+                }
             } else {
-                addNarrative({
-                    text: 'No active game sessions. Create a new session to start playing!'
-                });
+                console.warn('Could not list sessions:', sessionsResponse.status);
             }
+        } catch (e) {
+            console.warn('Error listing sessions:', e);
+            // Don't show error to user, just log it
         }
         
         // Add welcome message

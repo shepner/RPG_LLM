@@ -3,11 +3,22 @@
 import os
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 
 from .session_manager import SessionManager
 from .models import GameSession, SessionCreate, SessionState, SessionStatus
 
 app = FastAPI(title="Game Session Service")
+
+# Add CORS middleware to allow web interface to access this service
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8081", "http://127.0.0.1:8081", "*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 session_manager = SessionManager(
     database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./RPG_LLM_DATA/databases/game_session.db")
