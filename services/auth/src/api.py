@@ -167,9 +167,11 @@ async def fix_first_user(token_data: TokenData = Depends(require_auth)):
     
     async with auth_manager.SessionLocal() as session:
         # Check if any GM exists (case-insensitive check)
+        # Use SQLAlchemy's case-insensitive comparison
+        from sqlalchemy import func
         gm_result = await session.execute(
             sa.select(UserDB).where(
-                sa.func.lower(UserDB.role) == UserRole.GM.value.lower()
+                func.lower(UserDB.role) == UserRole.GM.value.lower()
             )
         )
         gms = gm_result.scalars().all()
