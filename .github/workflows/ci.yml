@@ -1,10 +1,12 @@
 name: CI
 
+# Disabled - using local Docker only
 on:
-  push:
-    branches: [ main, master, develop ]
-  pull_request:
-    branches: [ main, master, develop ]
+  workflow_dispatch:  # Only run manually if needed
+  # push:
+  #   branches: [ main, master, develop ]
+  # pull_request:
+  #   branches: [ main, master, develop ]
 
 jobs:
   lint:
