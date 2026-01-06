@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTRPG LLM System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>TTRPG LLM System</h1>
+            <div id="auth-section">
+                <div id="login-form">
+                    <input type="text" id="username" placeholder="Username">
+                    <input type="password" id="password" placeholder="Password">
+                    <button id="login-btn">Login</button>
+                    <button id="register-btn">Register</button>
+                </div>
+                <div id="user-info" style="display: none;">
+                    <span id="username-display"></span>
+                    <button id="logout-btn">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div id="game-section" style="display: none;">
+                <div class="panel">
+                    <h2>Game Events</h2>
+                    <div id="events-log"></div>
+                </div>
+
+                <div class="panel">
+                    <h2>Narrative</h2>
+                    <div id="narrative-log"></div>
+                </div>
+
+                <div class="panel">
+                    <h2>Actions</h2>
+                    <textarea id="action-input" placeholder="Describe your action..."></textarea>
+                    <button id="submit-action">Submit Action</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
