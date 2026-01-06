@@ -1,10 +1,11 @@
 """Game master service API."""
 
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from .gm_engine import GMEngine
 from .models import Narrative
+from shared.websocket.manager import WebSocketManager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ logging.basicConfig(
 app = FastAPI(title="Game Master Service")
 
 gm_engine = GMEngine()
+ws_manager = WebSocketManager()
 
 
 @app.post("/narrate", response_model=Narrative)
