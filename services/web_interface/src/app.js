@@ -10,10 +10,15 @@ let authToken = null;
 let worldsWS = null;
 let gmWS = null;
 
-// Authentication
-document.getElementById('login-btn').addEventListener('click', async () => {
+// Authentication - login function
+async function performLogin() {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
+    
+    if (!username || !password) {
+        alert('Please enter both username and password');
+        return;
+    }
     
     try {
         const response = await fetch(`${AUTH_URL}/login`, {
@@ -41,6 +46,24 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     } catch (error) {
         console.error('Login error:', error);
         alert('Login error: ' + error.message);
+    }
+}
+
+// Login button click
+document.getElementById('login-btn').addEventListener('click', performLogin);
+
+// Enter key support for login form
+document.getElementById('username').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        performLogin();
+    }
+});
+
+document.getElementById('password').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        performLogin();
     }
 });
 
