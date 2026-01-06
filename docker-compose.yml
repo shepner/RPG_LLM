@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine
@@ -9,7 +7,9 @@ services:
       - redis_data:/data
 
   auth:
-    build: ./services/auth
+    build:
+      context: .
+      dockerfile: ./services/auth/Dockerfile
     ports:
       - "8000:8000"
     environment:
@@ -21,7 +21,9 @@ services:
       - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
 
   game_session:
-    build: ./services/game_session
+    build:
+      context: .
+      dockerfile: ./services/game_session/Dockerfile
     ports:
       - "8001:8001"
     environment:
@@ -32,14 +34,18 @@ services:
       - redis
 
   rules_engine:
-    build: ./services/rules_engine
+    build:
+      context: .
+      dockerfile: ./services/rules_engine/Dockerfile
     ports:
       - "8002:8002"
     volumes:
       - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
 
   time_management:
-    build: ./services/time_management
+    build:
+      context: .
+      dockerfile: ./services/time_management/Dockerfile
     ports:
       - "8003:8003"
     environment:
@@ -94,7 +100,9 @@ services:
       - redis
 
   being_registry:
-    build: ./services/being_registry
+    build:
+      context: .
+      dockerfile: ./services/being_registry/Dockerfile
     ports:
       - "8007:8007"
     volumes:

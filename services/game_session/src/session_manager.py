@@ -138,6 +138,30 @@ class SessionManager:
             
             return True
     
+    async def list_sessions(
+        self,
+        user_id: Optional[str] = None,
+        status: Optional[SessionStatus] = None
+    ) -> List[GameSession]:
+        """List game sessions, optionally filtered by user or status."""
+        async with self.SessionLocal() as session:
+            query = sa.select(GameSessionDB)
+            
+            if user_id:
+                # Filter by user being GM or player
+                query = query.where(
+                    (GameSessionDB.gm_user_id == user_id) |
+                    (GameSessionDB.player_user_ids.contains(f'"{user_id}"'))
+                )
+            
+            if status:
+                query = query.where(GameSessionDB.status == status)
+            
+            result = await session.execute(query)
+            sessions_db = result.scalars().all()
+            
+            return [self._db_to_model(session_db) for session_db in sessions_db]
+    
     def _db_to_model(self, session_db: GameSessionDB) -> GameSession:
         """Convert database model to Pydantic model."""
         import json

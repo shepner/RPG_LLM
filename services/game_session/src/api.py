@@ -1,7 +1,7 @@
 """Game session service API."""
 
 import os
-from typing import List
+from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status
 
 from .session_manager import SessionManager
@@ -35,10 +35,22 @@ async def create_session(session_data: SessionCreate, gm_user_id: str):
 
 
 @app.get("/sessions", response_model=List[GameSession])
-async def list_sessions():
-    """List game sessions."""
-    # TODO: Implement filtering by user access
-    return []
+async def list_sessions(
+    user_id: Optional[str] = None,
+    status: Optional[str] = None
+):
+    """List game sessions, optionally filtered by user or status."""
+    from .models import SessionStatus
+    
+    session_status = None
+    if status:
+        try:
+            session_status = SessionStatus(status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+    
+    sessions = await session_manager.list_sessions(user_id, session_status)
+    return sessions
 
 
 @app.get("/sessions/{session_id}", response_model=GameSession)
