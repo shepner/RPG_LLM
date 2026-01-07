@@ -2,6 +2,7 @@
 
 import os
 import uuid
+import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -10,6 +11,8 @@ from sqlalchemy import Column, String, DateTime, JSON, Boolean, Enum as SQLEnum
 import sqlalchemy as sa
 
 from .models import SystemPrompt, SystemPromptCreate, SystemPromptUpdate, PromptScope
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
