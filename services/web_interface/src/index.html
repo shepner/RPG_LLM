@@ -13,12 +13,12 @@
         <header>
             <h1>TTRPG LLM System <span id="version-display" style="font-size: 0.5em; color: #666; font-weight: normal; cursor: help;" title="Build timestamp">loading...</span></h1>
             <div id="auth-section">
-                <div id="login-form">
-                    <input type="text" id="username" placeholder="Username">
-                    <input type="password" id="password" placeholder="Password">
-                    <button id="login-btn">Login</button>
-                    <button id="register-btn">Register</button>
-                </div>
+               <form id="login-form" onsubmit="event.preventDefault(); performLogin();">
+                   <input type="text" id="username" placeholder="Username" required>
+                   <input type="password" id="password" placeholder="Password" required>
+                   <button type="submit" id="login-btn">Login</button>
+                   <button type="button" id="register-btn">Register</button>
+               </form>
                 <div id="user-info" style="display: none;">
                     <span id="username-display"></span>
                     <span id="user-role" style="margin: 0 6px; color: #888; font-size: 0.85em;"></span>
