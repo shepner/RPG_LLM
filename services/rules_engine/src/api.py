@@ -453,6 +453,27 @@ async def delete_rule(
     }
 
 
+@app.get("/rules/{file_id}/indexing-progress")
+async def get_indexing_progress(
+    file_id: str,
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
+    """Get indexing progress for a specific file."""
+    load_rules_metadata()
+    if file_id not in _rules_metadata:
+        raise HTTPException(status_code=404, detail="Rules file not found")
+    
+    metadata = _rules_metadata[file_id]
+    
+    return {
+        "file_id": file_id,
+        "indexing_status": metadata.get("indexing_status", "pending"),
+        "indexing_progress": metadata.get("indexing_progress"),
+        "indexing_error": metadata.get("indexing_error"),
+        "indexed_at": metadata.get("indexed_at")
+    }
+
+
 @app.post("/rules/{file_id}/retry-indexing")
 async def retry_indexing(
     file_id: str,
