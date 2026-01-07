@@ -1288,6 +1288,10 @@ async function loadUserInfo() {
                 if (validateSystemBtn) {
                     validateSystemBtn.style.display = 'inline-block';
                 }
+                const systemPromptsBtn = document.getElementById('system-prompts-btn');
+                if (systemPromptsBtn) {
+                    systemPromptsBtn.style.display = 'inline-block';
+                }
             } else {
                 const manageRulesBtn = document.getElementById('manage-rules-btn');
                 if (manageRulesBtn) {
@@ -1300,6 +1304,10 @@ async function loadUserInfo() {
                 const validateSystemBtn = document.getElementById('validate-system-btn');
                 if (validateSystemBtn) {
                     validateSystemBtn.style.display = 'none';
+                }
+                const systemPromptsBtn = document.getElementById('system-prompts-btn');
+                if (systemPromptsBtn) {
+                    systemPromptsBtn.style.display = 'none';
                 }
             }
             
@@ -1680,6 +1688,29 @@ document.getElementById('llm-services-btn')?.addEventListener('click', () => {
     } else {
         panel.style.display = 'none';
     }
+});
+
+// System Prompts Management
+document.getElementById('system-prompts-btn')?.addEventListener('click', () => {
+    const panel = document.getElementById('system-prompts-panel');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        loadPrompts();
+    } else {
+        panel.style.display = 'none';
+    }
+});
+
+document.getElementById('refresh-prompts-btn')?.addEventListener('click', () => {
+    loadPrompts();
+});
+
+document.getElementById('prompt-service-select')?.addEventListener('change', () => {
+    loadPrompts();
+});
+
+document.getElementById('create-prompt-btn')?.addEventListener('click', () => {
+    showCreatePromptModal();
 });
 
 // Channel switching
@@ -2389,3 +2420,374 @@ document.getElementById('submit-character-btn')?.addEventListener('click', async
     }
 });
 
+
+// System Prompts Management Functions
+async function loadPrompts() {
+    const serviceSelect = document.getElementById('prompt-service-select');
+    const service = serviceSelect ? serviceSelect.value : 'rules_engine';
+    const serviceUrl = service === 'rules_engine' ? RULES_ENGINE_URL : GM_URL;
+    const promptsList = document.getElementById('prompts-list');
+    
+    if (!promptsList) return;
+    
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        if (!token) {
+            promptsList.innerHTML = '<div style="color: #888; padding: 20px; text-align: center;">Not authenticated</div>';
+            return;
+        }
+        
+        const response = await fetch(`${serviceUrl}/prompts`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 403) {
+                promptsList.innerHTML = '<div style="color: #f59e0b; padding: 20px; text-align: center;">GM role required</div>';
+                return;
+            }
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const prompts = await response.json();
+        
+        if (prompts.length === 0) {
+            promptsList.innerHTML = '<div style="color: #888; padding: 20px; text-align: center;">No prompts yet. Click "Create Prompt" to add one.</div>';
+            return;
+        }
+        
+        promptsList.innerHTML = prompts.map(prompt => {
+            const scopeBadge = prompt.scope === 'global' 
+                ? '<span style="background: #10b981; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; margin-left: 6px;">Global</span>'
+                : `<span style="background: #f59e0b; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; margin-left: 6px;">Session (${prompt.session_ids.length})</span>`;
+            const gameSystemBadge = prompt.game_system 
+                ? `<span style="background: #8b5cf6; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; margin-left: 6px;">${escapeHTML(prompt.game_system)}</span>`
+                : '';
+            
+            return `
+                <div style="background: #2a2a2a; padding: 10px; margin-bottom: 8px; border-radius: 4px; border: 1px solid #444;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: bold; color: #e0e0e0; margin-bottom: 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+                                ${escapeHTML(prompt.title)} ${scopeBadge} ${gameSystemBadge}
+                            </div>
+                            <div style="color: #888; font-size: 0.85em; margin-bottom: 4px;">
+                                ${escapeHTML(prompt.content.substring(0, 150))}${prompt.content.length > 150 ? '...' : ''}
+                            </div>
+                            <div style="color: #666; font-size: 0.75em;">
+                                Created: ${new Date(prompt.created_at).toLocaleString()}
+                                ${prompt.session_ids.length > 0 ? ` | Sessions: ${prompt.session_ids.join(', ')}` : ''}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                            <button onclick="editPrompt('${prompt.prompt_id}', '${service}')" style="padding: 4px 8px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Edit</button>
+                            <button onclick="deletePrompt('${prompt.prompt_id}', '${service}')" style="padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading prompts:', error);
+        promptsList.innerHTML = `<div style="color: #ef4444; padding: 20px; text-align: center;">Error loading prompts: ${escapeHTML(error.message)}</div>`;
+    }
+}
+
+async function showCreatePromptModal() {
+    const serviceSelect = document.getElementById('prompt-service-select');
+    const service = serviceSelect ? serviceSelect.value : 'rules_engine';
+    const serviceName = service === 'rules_engine' ? "Ma'at (Rules Engine)" : "Thoth (Game Master)";
+    
+    // Get available sessions for session-scoped prompts
+    let sessions = [];
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        const response = await fetch(`${GAME_SESSION_URL}/sessions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            sessions = await response.json();
+        }
+    } catch (error) {
+        console.error('Error loading sessions:', error);
+    }
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+    modal.innerHTML = `
+        <div style="background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 20px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+            <h3 style="color: #e0e0e0; margin: 0 0 16px 0; font-size: 1.1em; font-weight: 600;">Create System Prompt for ${serviceName}</h3>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Title:</label>
+                <input type="text" id="prompt-title-input" placeholder="Prompt title" style="width: 100%; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Content:</label>
+                <textarea id="prompt-content-input" placeholder="Enter the prompt content that will be embedded into the LLM's system prompt..." style="width: 100%; min-height: 150px; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Scope:</label>
+                <select id="prompt-scope-select" style="width: 100%; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+                    <option value="global">Global (applies to all sessions)</option>
+                    <option value="session">Session (applies to specific sessions)</option>
+                </select>
+            </div>
+            <div id="prompt-sessions-container" style="margin-bottom: 12px; display: none;">
+                <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Sessions (select multiple):</label>
+                <select id="prompt-sessions-select" multiple style="width: 100%; min-height: 100px; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+                    ${sessions.map(s => `<option value="${s.session_id}">${escapeHTML(s.name || s.session_id)}</option>`).join('')}
+                </select>
+                <div style="color: #888; font-size: 0.8em; margin-top: 4px;">Hold Ctrl/Cmd to select multiple sessions</div>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Game System (optional):</label>
+                <input type="text" id="prompt-game-system-input" placeholder="e.g., D&D 5e, Pathfinder" style="width: 100%; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button id="prompt-modal-cancel" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Cancel</button>
+                <button id="prompt-modal-save" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Create Prompt</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    // Show/hide sessions selector based on scope
+    const scopeSelect = document.getElementById('prompt-scope-select');
+    const sessionsContainer = document.getElementById('prompt-sessions-container');
+    scopeSelect.addEventListener('change', () => {
+        sessionsContainer.style.display = scopeSelect.value === 'session' ? 'block' : 'none';
+    });
+    
+    // Handle cancel
+    document.getElementById('prompt-modal-cancel').addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+    
+    // Handle save
+    document.getElementById('prompt-modal-save').addEventListener('click', async () => {
+        const title = document.getElementById('prompt-title-input').value.trim();
+        const content = document.getElementById('prompt-content-input').value.trim();
+        const scope = document.getElementById('prompt-scope-select').value;
+        const gameSystem = document.getElementById('prompt-game-system-input').value.trim() || null;
+        
+        if (!title || !content) {
+            addSystemMessage('Title and content are required');
+            return;
+        }
+        
+        const sessionIds = [];
+        if (scope === 'session') {
+            const sessionsSelect = document.getElementById('prompt-sessions-select');
+            for (const option of sessionsSelect.selectedOptions) {
+                sessionIds.push(option.value);
+            }
+            if (sessionIds.length === 0) {
+                addSystemMessage('Please select at least one session for session-scoped prompts');
+                return;
+            }
+        }
+        
+        try {
+            const token = authToken || localStorage.getItem('authToken');
+            const serviceUrl = service === 'rules_engine' ? RULES_ENGINE_URL : GM_URL;
+            
+            const response = await fetch(`${serviceUrl}/prompts`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title,
+                    content,
+                    scope,
+                    session_ids: sessionIds,
+                    game_system: gameSystem
+                })
+            });
+            
+            if (response.ok) {
+                addSystemMessage(`Prompt "${title}" created successfully`);
+                document.body.removeChild(modal);
+                await loadPrompts();
+            } else {
+                const error = await response.text();
+                addSystemMessage(`Failed to create prompt: ${error}`);
+            }
+        } catch (error) {
+            console.error('Error creating prompt:', error);
+            addSystemMessage(`Error creating prompt: ${error.message}`);
+        }
+    });
+}
+
+window.editPrompt = async function(promptId, service) {
+    const serviceUrl = service === 'rules_engine' ? RULES_ENGINE_URL : GM_URL;
+    const serviceName = service === 'rules_engine' ? "Ma'at (Rules Engine)" : "Thoth (Game Master)";
+    
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        const response = await fetch(`${serviceUrl}/prompts/${promptId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            addSystemMessage('Failed to load prompt');
+            return;
+        }
+        
+        const prompt = await response.json();
+        
+        // Get available sessions
+        let sessions = [];
+        try {
+            const sessionsResponse = await fetch(`${GAME_SESSION_URL}/sessions`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (sessionsResponse.ok) {
+                sessions = await sessionsResponse.json();
+            }
+        } catch (error) {
+            console.error('Error loading sessions:', error);
+        }
+        
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+        modal.innerHTML = `
+            <div style="background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 20px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                <h3 style="color: #e0e0e0; margin: 0 0 16px 0; font-size: 1.1em; font-weight: 600;">Edit System Prompt for ${serviceName}</h3>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Title:</label>
+                    <input type="text" id="edit-prompt-title-input" value="${escapeHTML(prompt.title)}" style="width: 100%; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Content:</label>
+                    <textarea id="edit-prompt-content-input" style="width: 100%; min-height: 150px; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; font-family: inherit; resize: vertical; box-sizing: border-box;">${escapeHTML(prompt.content)}</textarea>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Scope:</label>
+                    <select id="edit-prompt-scope-select" style="width: 100%; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+                        <option value="global" ${prompt.scope === 'global' ? 'selected' : ''}>Global (applies to all sessions)</option>
+                        <option value="session" ${prompt.scope === 'session' ? 'selected' : ''}>Session (applies to specific sessions)</option>
+                    </select>
+                </div>
+                <div id="edit-prompt-sessions-container" style="margin-bottom: 12px; display: ${prompt.scope === 'session' ? 'block' : 'none'};">
+                    <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Sessions (select multiple):</label>
+                    <select id="edit-prompt-sessions-select" multiple style="width: 100%; min-height: 100px; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+                        ${sessions.map(s => `<option value="${s.session_id}" ${prompt.session_ids.includes(s.session_id) ? 'selected' : ''}>${escapeHTML(s.name || s.session_id)}</option>`).join('')}
+                    </select>
+                    <div style="color: #888; font-size: 0.8em; margin-top: 4px;">Hold Ctrl/Cmd to select multiple sessions</div>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Game System (optional):</label>
+                    <input type="text" id="edit-prompt-game-system-input" value="${escapeHTML(prompt.game_system || '')}" placeholder="e.g., D&D 5e, Pathfinder" style="width: 100%; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button id="edit-prompt-modal-cancel" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Cancel</button>
+                    <button id="edit-prompt-modal-save" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Save Changes</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Show/hide sessions selector based on scope
+        const scopeSelect = document.getElementById('edit-prompt-scope-select');
+        const sessionsContainer = document.getElementById('edit-prompt-sessions-container');
+        scopeSelect.addEventListener('change', () => {
+            sessionsContainer.style.display = scopeSelect.value === 'session' ? 'block' : 'none';
+        });
+        
+        // Handle cancel
+        document.getElementById('edit-prompt-modal-cancel').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        // Handle save
+        document.getElementById('edit-prompt-modal-save').addEventListener('click', async () => {
+            const title = document.getElementById('edit-prompt-title-input').value.trim();
+            const content = document.getElementById('edit-prompt-content-input').value.trim();
+            const scope = document.getElementById('edit-prompt-scope-select').value;
+            const gameSystem = document.getElementById('edit-prompt-game-system-input').value.trim() || null;
+            
+            if (!title || !content) {
+                addSystemMessage('Title and content are required');
+                return;
+            }
+            
+            const sessionIds = [];
+            if (scope === 'session') {
+                const sessionsSelect = document.getElementById('edit-prompt-sessions-select');
+                for (const option of sessionsSelect.selectedOptions) {
+                    sessionIds.push(option.value);
+                }
+                if (sessionIds.length === 0) {
+                    addSystemMessage('Please select at least one session for session-scoped prompts');
+                    return;
+                }
+            }
+            
+            try {
+                const token = authToken || localStorage.getItem('authToken');
+                
+                const response = await fetch(`${serviceUrl}/prompts/${promptId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        title,
+                        content,
+                        scope,
+                        session_ids: sessionIds,
+                        game_system: gameSystem
+                    })
+                });
+                
+                if (response.ok) {
+                    addSystemMessage(`Prompt "${title}" updated successfully`);
+                    document.body.removeChild(modal);
+                    await loadPrompts();
+                } else {
+                    const error = await response.text();
+                    addSystemMessage(`Failed to update prompt: ${error}`);
+                }
+            } catch (error) {
+                console.error('Error updating prompt:', error);
+                addSystemMessage(`Error updating prompt: ${error.message}`);
+            }
+        });
+    } catch (error) {
+        console.error('Error loading prompt for edit:', error);
+        addSystemMessage(`Error loading prompt: ${error.message}`);
+    }
+};
+
+window.deletePrompt = async function(promptId, service) {
+    const serviceUrl = service === 'rules_engine' ? RULES_ENGINE_URL : GM_URL;
+    const confirmed = await customConfirm(
+        'Are you sure you want to delete this system prompt? This action cannot be undone.',
+        'Delete System Prompt'
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        const response = await fetch(`${serviceUrl}/prompts/${promptId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            addSystemMessage('Prompt deleted successfully');
+            await loadPrompts();
+        } else {
+            const error = await response.text();
+            addSystemMessage(`Failed to delete prompt: ${error}`);
+        }
+    } catch (error) {
+        console.error('Error deleting prompt:', error);
+        addSystemMessage(`Error deleting prompt: ${error.message}`);
+    }
+};
