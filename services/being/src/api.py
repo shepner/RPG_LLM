@@ -138,6 +138,8 @@ async def health():
 class QueryRequest(BaseModel):
     """Request model for querying the being service."""
     query: str
+    being_id: Optional[str] = None  # Optional: specific being to query (stores conversation in memory)
+    target_being_id: Optional[str] = None  # Optional: if set, this is a being-to-being conversation
     context: Optional[Dict[str, Any]] = None
     session_id: Optional[str] = None  # For session-scoped prompts
     game_system: Optional[str] = None  # For game system filtering
