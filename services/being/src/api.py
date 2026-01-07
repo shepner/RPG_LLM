@@ -254,12 +254,12 @@ async def query_being_service(
                     logger.error(f"Error checking target being access: {e}")
                     raise HTTPException(status_code=403, detail="You do not have access to the target being")
             
-            target_agent = get_agent(target_being_id)
-            target_memory = get_memory_manager(target_being_id)
+            target_agent = get_agent(request.target_being_id)
+            target_memory = get_memory_manager(request.target_being_id)
             
             # This is a being-to-being conversation
             # The source being (being_id) is talking to the target being (target_being_id)
-            base_system_prompt = f"You are {target_being_id}, a thinking being in a Tabletop Role-Playing Game. Another being ({request.being_id}) is speaking to you. Respond naturally based on your character's personality, goals, and current situation."
+            base_system_prompt = f"You are {request.target_being_id}, a thinking being in a Tabletop Role-Playing Game. Another being ({request.being_id}) is speaking to you. Respond naturally based on your character's personality, goals, and current situation."
         else:
             # Regular query (human to being or GM query)
             base_system_prompt = "You are Atman, the Being Service. You represent individual consciousness and autonomous decision-making for thinking beings in a Tabletop Role-Playing Game. Answer questions about consciousness, decision-making, and autonomous behavior."
