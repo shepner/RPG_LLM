@@ -31,6 +31,10 @@ async function performLogin() {
         if (response.ok) {
             const data = await response.json();
             authToken = data.access_token;
+            // Persist token to localStorage
+            localStorage.setItem('authToken', authToken);
+            localStorage.setItem('username', username);
+            
             document.getElementById('username-display').textContent = username;
             document.getElementById('login-form').style.display = 'none';
             document.getElementById('user-info').style.display = 'block';
@@ -640,10 +644,17 @@ async function loadGameState() {
 
 // Load user's characters
 async function loadUserCharacters() {
+    // Get token from localStorage if not in memory
+    const token = authToken || localStorage.getItem('authToken');
+    if (!token) {
+        console.log('No auth token available, skipping character load');
+        return;
+    }
+    
     try {
         const response = await fetch(`${BEING_REGISTRY_URL}/beings/my-characters`, {
             headers: {
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
         
@@ -656,12 +667,20 @@ async function loadUserCharacters() {
             }
             
             // Add characters to select
-            data.characters.forEach(char => {
-                const option = document.createElement('option');
-                option.value = char.being_id;
-                option.textContent = char.name || char.being_id;
-                select.appendChild(option);
-            });
+            if (data.characters && data.characters.length > 0) {
+                data.characters.forEach(char => {
+                    const option = document.createElement('option');
+                    option.value = char.being_id;
+                    option.textContent = char.name || char.being_id;
+                    select.appendChild(option);
+                });
+            }
+        } else if (response.status === 401) {
+            // Token expired or invalid, clear it and show login
+            console.log('Authentication failed, clearing token');
+            authToken = null;
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('username');
         }
     } catch (error) {
         console.error('Error loading characters:', error);
