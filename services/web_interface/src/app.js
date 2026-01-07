@@ -1602,6 +1602,10 @@ async function loadGameState() {
     
     // Load user's characters
     await loadUserCharacters();
+    
+    // Load being chat characters and nearby beings
+    loadBeingChatCharacters();
+    loadNearbyBeings();
 }
 
 // Load user's characters
