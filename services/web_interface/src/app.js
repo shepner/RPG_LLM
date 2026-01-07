@@ -443,63 +443,320 @@ function setupManageUsersButton() {
     if (manageUsersBtn && !manageUsersBtn.hasAttribute('data-listener-attached')) {
         manageUsersBtn.setAttribute('data-listener-attached', 'true');
         manageUsersBtn.addEventListener('click', async () => {
-            try {
-                const usersResponse = await fetch(`${AUTH_URL}/users`, {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                
-                if (!usersResponse.ok) {
-                    alert('Could not load users. You must be a GM to manage users.');
-                    return;
-                }
-                
-                const users = await usersResponse.json();
-                
-                // Create user list dialog
-                let userList = 'Users:\n\n';
-                users.forEach((user, index) => {
-                    userList += `${index + 1}. ${user.username} (${user.email}) - Role: ${user.role}\n`;
-                });
-                
-                const selected = prompt(userList + '\n\nEnter user number to change role (or cancel):');
-                if (!selected) return;
-                
-                const userIndex = parseInt(selected) - 1;
-                if (userIndex < 0 || userIndex >= users.length) {
-                    alert('Invalid user number');
-                    return;
-                }
-                
-                const selectedUser = users[userIndex];
-                const newRole = prompt(`Change role for ${selectedUser.username}?\n\nCurrent: ${selectedUser.role}\n\nEnter new role (gm or player):`);
-                
-                if (!newRole || (newRole !== 'gm' && newRole !== 'player')) {
-                    alert('Invalid role. Must be "gm" or "player"');
-                    return;
-                }
-                
-                const updateResponse = await fetch(`${AUTH_URL}/users/${selectedUser.user_id}/role?role=${newRole}`, {
-                    method: 'PUT',
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                
-                if (updateResponse.ok) {
-                    alert(`User ${selectedUser.username} role updated to ${newRole}!`);
-                    if (selectedUser.user_id === window.currentUser?.user_id) {
-                        alert('Your role was changed. Please refresh the page.');
-                        window.location.reload();
-                    }
-                } else {
-                    const error = await updateResponse.text();
-                    alert('Failed to update role: ' + error);
-                }
-            } catch (error) {
-                console.error('Error managing users:', error);
-                alert('Error managing users: ' + error.message);
-            }
+            await showUserManagementModal();
         });
     }
 }
+
+async function showUserManagementModal() {
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        
+        // Load users
+        const usersResponse = await fetch(`${AUTH_URL}/users`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!usersResponse.ok) {
+            alert('Could not load users. You must be a GM to manage users.');
+            return;
+        }
+        
+        const users = await usersResponse.json();
+        
+        // Load all characters for assignment (from auth service)
+        let allCharacters = [];
+        try {
+            const charsResponse = await fetch(`${AUTH_URL}/beings/list`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (charsResponse.ok) {
+                const charsData = await charsResponse.json();
+                allCharacters = charsData.characters || [];
+            }
+        } catch (e) {
+            console.warn('Could not load characters:', e);
+        }
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center; overflow-y: auto;';
+        
+        const usersHtml = users.map(user => {
+            const isCurrentUser = user.user_id === window.currentUser?.user_id;
+            const roleColor = user.role === 'gm' ? '#f59e0b' : '#4a9eff';
+            const roleIcon = user.role === 'gm' ? '👑' : '👤';
+            
+            return `
+                <div id="user-${user.user_id}" style="padding: 15px; margin-bottom: 10px; background: #2a2a2a; border-radius: 6px; border-left: 4px solid ${roleColor};">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                                <strong style="color: ${roleColor}; font-size: 1.1em;">${roleIcon} ${user.username}</strong>
+                                ${isCurrentUser ? '<span style="color: #888; font-size: 0.85em;">(You)</span>' : ''}
+                            </div>
+                            <div style="color: #888; font-size: 0.9em; margin-bottom: 8px;">${user.email}</div>
+                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <select id="role-${user.user_id}" style="padding: 4px 8px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px; font-size: 0.9em;">
+                                    <option value="player" ${user.role === 'player' ? 'selected' : ''}>Player</option>
+                                    <option value="gm" ${user.role === 'gm' ? 'selected' : ''}>Game Master</option>
+                                </select>
+                                <button onclick="updateUserRole('${user.user_id}')" style="padding: 4px 12px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Update Role</button>
+                                <button onclick="manageUserCharacters('${user.user_id}', '${user.username}')" style="padding: 4px 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">📋 Manage Characters</button>
+                                ${!isCurrentUser ? `<button onclick="deleteUser('${user.user_id}', '${user.username}')" style="padding: 4px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">🗑️ Delete</button>` : '<span style="color: #888; font-size: 0.85em;">(Cannot delete yourself)</span>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="color: #666; font-size: 0.8em; margin-top: 8px;">
+                        Created: ${new Date(user.created_at).toLocaleString()}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        modal.innerHTML = `
+            <div style="background: #1a1a1a; padding: 25px; border-radius: 8px; max-width: 900px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
+                <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: 15px; right: 15px; background: #ef4444; color: white; border: none; border-radius: 4px; padding: 8px 15px; cursor: pointer; font-size: 0.9em;">✕ Close</button>
+                <h2 style="margin-top: 0; margin-bottom: 20px; color: #e0e0e0;">👥 User Management</h2>
+                <p style="color: #888; font-size: 0.9em; margin-bottom: 20px;">
+                    Manage user accounts: change roles, assign characters, and delete accounts. Only Game Masters can access this panel.
+                </p>
+                <div id="users-list" style="margin-bottom: 20px;">
+                    ${usersHtml}
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Store data for use by button handlers
+        window.userManagementData = { users, allCharacters, token };
+        
+    } catch (error) {
+        console.error('Error loading user management:', error);
+        alert('Error loading user management: ' + error.message);
+    }
+}
+
+// Update user role
+window.updateUserRole = async function(userId) {
+    try {
+        const roleSelect = document.getElementById(`role-${userId}`);
+        const newRole = roleSelect.value;
+        const token = window.userManagementData?.token || authToken || localStorage.getItem('authToken');
+        
+        const response = await fetch(`${AUTH_URL}/users/${userId}/role?role=${newRole}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            alert(`User role updated to ${newRole}!`);
+            
+            // If current user's role changed, reload page
+            if (userId === window.currentUser?.user_id) {
+                alert('Your role was changed. Refreshing page...');
+                window.location.reload();
+            } else {
+                // Refresh the modal
+                document.querySelector('div[style*="position: fixed"]')?.remove();
+                await showUserManagementModal();
+            }
+        } else {
+            const error = await response.text();
+            alert('Failed to update role: ' + error);
+        }
+    } catch (error) {
+        console.error('Error updating role:', error);
+        alert('Error updating role: ' + error.message);
+    }
+};
+
+// Delete user
+window.deleteUser = async function(userId, username) {
+    if (!confirm(`Are you sure you want to delete user "${username}"?\n\nThis will:\n- Delete their account permanently\n- Remove them from all character assignments\n- Cannot be undone!`)) {
+        return;
+    }
+    
+    try {
+        const token = window.userManagementData?.token || authToken || localStorage.getItem('authToken');
+        
+        const response = await fetch(`${AUTH_URL}/users/${userId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            alert(`User "${username}" deleted successfully!`);
+            // Refresh the modal
+            document.querySelector('div[style*="position: fixed"]')?.remove();
+            await showUserManagementModal();
+        } else {
+            const errorText = await response.text();
+            let errorMessage = 'Failed to delete user';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            alert(errorMessage);
+        }
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Error deleting user: ' + error.message);
+    }
+};
+
+// Manage user characters
+window.manageUserCharacters = async function(userId, username) {
+    try {
+        const token = window.userManagementData?.token || authToken || localStorage.getItem('authToken');
+        
+        // Get user's current characters
+        const userCharsResponse = await fetch(`${AUTH_URL}/users/${userId}/characters`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        let userCharacters = { owned: [], assigned: [] };
+        if (userCharsResponse.ok) {
+            userCharacters = await userCharsResponse.json();
+        }
+        
+        // Get all available characters
+        const allChars = window.userManagementData?.allCharacters || [];
+        
+        // Create character assignment modal
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: flex; align-items: center; justify-content: center; overflow-y: auto;';
+        
+        const ownedChars = userCharacters.owned || [];
+        const assignedChars = userCharacters.assigned || [];
+        const ownedIds = new Set(ownedChars.map(c => c.being_id));
+        const assignedIds = new Set(assignedChars.map(c => c.being_id));
+        
+        const availableChars = allChars.filter(c => !ownedIds.has(c.being_id));
+        
+        const ownedHtml = ownedChars.length > 0 
+            ? ownedChars.map(c => {
+                const char = allChars.find(ch => ch.being_id === c.being_id);
+                return `
+                    <div style="padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid #10b981;">
+                        <strong>${char?.name || c.being_id}</strong> <span style="color: #888; font-size: 0.85em;">(Owner)</span>
+                    </div>
+                `;
+            }).join('')
+            : '<div style="color: #888; font-style: italic;">No owned characters</div>';
+        
+        const assignedHtml = assignedChars.length > 0
+            ? assignedChars.map(c => {
+                const char = allChars.find(ch => ch.being_id === c.being_id);
+                return `
+                    <div style="padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid #4a9eff; display: flex; justify-content: space-between; align-items: center;">
+                        <div><strong>${char?.name || c.being_id}</strong> <span style="color: #888; font-size: 0.85em;">(Assigned)</span></div>
+                        <button onclick="unassignCharacter('${c.being_id}', '${userId}', '${username}')" style="padding: 3px 8px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em;">Remove</button>
+                    </div>
+                `;
+            }).join('')
+            : '<div style="color: #888; font-style: italic;">No assigned characters</div>';
+        
+        const availableHtml = availableChars.length > 0
+            ? availableChars.map(char => {
+                return `
+                    <div style="padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid #888; display: flex; justify-content: space-between; align-items: center;">
+                        <div><strong>${char.name || char.being_id}</strong> <span style="color: #666; font-size: 0.85em;">(Owner: ${char.owner_username || 'Unknown'})</span></div>
+                        <button onclick="assignCharacter('${char.being_id}', '${userId}', '${username}')" style="padding: 3px 8px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em;">Assign</button>
+                    </div>
+                `;
+            }).join('')
+            : '<div style="color: #888; font-style: italic;">No available characters to assign</div>';
+        
+        modal.innerHTML = `
+            <div style="background: #1a1a1a; padding: 25px; border-radius: 8px; max-width: 700px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
+                <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: 15px; right: 15px; background: #ef4444; color: white; border: none; border-radius: 4px; padding: 8px 15px; cursor: pointer; font-size: 0.9em;">✕ Close</button>
+                <h3 style="margin-top: 0; margin-bottom: 15px; color: #e0e0e0;">📋 Character Management: ${username}</h3>
+                
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #10b981; margin-bottom: 8px;">Owned Characters</h4>
+                    <div style="max-height: 150px; overflow-y: auto;">
+                        ${ownedHtml}
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #4a9eff; margin-bottom: 8px;">Assigned Characters</h4>
+                    <div style="max-height: 150px; overflow-y: auto;">
+                        ${assignedHtml}
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 style="color: #888; margin-bottom: 8px;">Available to Assign</h4>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        ${availableHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        console.error('Error loading character management:', error);
+        alert('Error loading character management: ' + error.message);
+    }
+};
+
+// Assign character to user
+window.assignCharacter = async function(beingId, userId, username) {
+    try {
+        const token = window.userManagementData?.token || authToken || localStorage.getItem('authToken');
+        
+        const response = await fetch(`${AUTH_URL}/beings/${beingId}/assign?user_id=${userId}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            alert(`Character assigned to ${username}!`);
+            // Refresh character management modal
+            document.querySelector('div[style*="z-index: 2000"]')?.remove();
+            await manageUserCharacters(userId, username);
+        } else {
+            const error = await response.text();
+            alert('Failed to assign character: ' + error);
+        }
+    } catch (error) {
+        console.error('Error assigning character:', error);
+        alert('Error assigning character: ' + error.message);
+    }
+};
+
+// Unassign character from user
+window.unassignCharacter = async function(beingId, userId, username) {
+    try {
+        const token = window.userManagementData?.token || authToken || localStorage.getItem('authToken');
+        
+        const response = await fetch(`${AUTH_URL}/beings/${beingId}/assign?user_id=${userId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            alert(`Character unassigned from ${username}!`);
+            // Refresh character management modal
+            document.querySelector('div[style*="z-index: 2000"]')?.remove();
+            await manageUserCharacters(userId, username);
+        } else {
+            const error = await response.text();
+            alert('Failed to unassign character: ' + error);
+        }
+    } catch (error) {
+        console.error('Error unassigning character:', error);
+        alert('Error unassigning character: ' + error.message);
+    }
+};
 
 // Setup validate system button (GM only)
 function setupValidateSystemButton() {

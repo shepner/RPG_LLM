@@ -177,6 +177,35 @@ async def get_being(being_id: str):
     return entry
 
 
+@app.get("/beings/list")
+async def list_all_beings(
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+):
+    """List all beings/characters (GM only)."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    global registry
+    if registry is None:
+        registry = get_registry()
+    
+    # Get all beings from registry
+    all_beings = []
+    if hasattr(registry, '_registry'):
+        for being_id, entry in registry._registry.items():
+            # Try to get character name from being service if available
+            # For now, just return the registry entry
+            all_beings.append({
+                "being_id": entry.being_id,
+                "owner_id": entry.owner_id,
+                "session_id": entry.session_id,
+                "container_status": entry.container_status.value if hasattr(entry.container_status, 'value') else str(entry.container_status),
+                "name": f"Character {being_id[:8]}"  # Placeholder name
+            })
+    
+    return {"characters": all_beings}
+
+
 @app.get("/health")
 async def health():
     """Health check."""

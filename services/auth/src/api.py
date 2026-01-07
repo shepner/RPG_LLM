@@ -304,6 +304,144 @@ async def unassign_being(
         return {"message": "Being unassigned", "being_id": being_id, "user_id": user_id}
 
 
+@app.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    token_data: TokenData = Depends(require_gm)
+):
+    """Delete a user account (GM only)."""
+    import sqlalchemy as sa
+    from .auth_manager import UserDB, BeingOwnershipDB
+    
+    async with auth_manager.SessionLocal() as session:
+        # Check if user exists
+        result = await session.execute(
+            sa.select(UserDB).where(UserDB.user_id == user_id)
+        )
+        user_db = result.scalar_one_or_none()
+        
+        if not user_db:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Prevent deleting yourself
+        if user_db.user_id == token_data.user_id:
+            raise HTTPException(status_code=400, detail="Cannot delete your own account")
+        
+        # Check if this is the last GM
+        if user_db.role == "gm":
+            gm_count_result = await session.execute(
+                sa.select(UserDB).where(UserDB.role == "gm")
+            )
+            gm_count = len(gm_count_result.scalars().all())
+            if gm_count <= 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot delete the last GM. Please assign GM role to another user first."
+                )
+        
+        # Remove user from being assignments
+        ownerships_result = await session.execute(
+            sa.select(BeingOwnershipDB)
+        )
+        ownerships = ownerships_result.scalars().all()
+        
+        import json
+        for ownership in ownerships:
+            assigned_ids = json.loads(ownership.assigned_user_ids or "[]")
+            if user_id in assigned_ids:
+                assigned_ids.remove(user_id)
+                ownership.assigned_user_ids = json.dumps(assigned_ids)
+        
+        # Delete the user
+        await session.delete(user_db)
+        await session.commit()
+        
+        logger.info(f"User {user_db.username} (ID: {user_db.user_id}) deleted by GM {token_data.username}")
+        return {"message": "User deleted successfully", "user_id": user_id, "username": user_db.username}
+
+
+@app.get("/users/{user_id}/characters")
+async def get_user_characters(
+    user_id: str,
+    token_data: TokenData = Depends(require_gm)
+):
+    """Get all characters owned or assigned to a user (GM only)."""
+    import sqlalchemy as sa
+    import json
+    from .auth_manager import BeingOwnershipDB, UserDB
+    
+    async with auth_manager.SessionLocal() as session:
+        # Get all beings owned by this user
+        owned_result = await session.execute(
+            sa.select(BeingOwnershipDB).where(BeingOwnershipDB.owner_id == user_id)
+        )
+        owned_beings = owned_result.scalars().all()
+        
+        # Get all beings assigned to this user
+        all_ownerships_result = await session.execute(sa.select(BeingOwnershipDB))
+        all_ownerships = all_ownerships_result.scalars().all()
+        
+        assigned_beings = []
+        for ownership in all_ownerships:
+            assigned_ids = json.loads(ownership.assigned_user_ids or "[]")
+            if user_id in assigned_ids:
+                assigned_beings.append(ownership)
+        
+        # Get owner usernames for display
+        owner_ids = set([b.owner_id for b in owned_beings] + [b.owner_id for b in assigned_beings])
+        owner_map = {}
+        if owner_ids:
+            owners_result = await session.execute(
+                sa.select(UserDB).where(UserDB.user_id.in_(owner_ids))
+            )
+            for owner in owners_result.scalars().all():
+                owner_map[owner.user_id] = owner.username
+        
+        return {
+            "owned": [{"being_id": b.being_id, "owner_id": b.owner_id, "owner_username": owner_map.get(b.owner_id, "Unknown")} for b in owned_beings],
+            "assigned": [{"being_id": b.being_id, "owner_id": b.owner_id, "owner_username": owner_map.get(b.owner_id, "Unknown")} for b in assigned_beings]
+        }
+
+
+@app.get("/beings/list")
+async def list_all_beings(
+    token_data: TokenData = Depends(require_gm)
+):
+    """List all beings/characters with ownership info (GM only)."""
+    import sqlalchemy as sa
+    import json
+    from .auth_manager import BeingOwnershipDB, UserDB
+    
+    async with auth_manager.SessionLocal() as session:
+        # Get all beings
+        all_ownerships_result = await session.execute(sa.select(BeingOwnershipDB))
+        all_ownerships = all_ownerships_result.scalars().all()
+        
+        # Get all owner usernames
+        owner_ids = set([o.owner_id for o in all_ownerships])
+        owner_map = {}
+        if owner_ids:
+            owners_result = await session.execute(
+                sa.select(UserDB).where(UserDB.user_id.in_(owner_ids))
+            )
+            for owner in owners_result.scalars().all():
+                owner_map[owner.user_id] = owner.username
+        
+        # Build character list
+        characters = []
+        for ownership in all_ownerships:
+            assigned_ids = json.loads(ownership.assigned_user_ids or "[]")
+            characters.append({
+                "being_id": ownership.being_id,
+                "owner_id": ownership.owner_id,
+                "owner_username": owner_map.get(ownership.owner_id, "Unknown"),
+                "assigned_user_ids": assigned_ids,
+                "name": f"Character {ownership.being_id[:8]}"  # Placeholder - could be enhanced with actual character data
+            })
+        
+        return {"characters": characters}
+
+
 @app.get("/health")
 async def health():
     """Health check endpoint."""
