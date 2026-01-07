@@ -540,7 +540,13 @@ async function refreshSessions() {
         console.error('Error refreshing sessions:', error);
         const sessionsList = document.getElementById('sessions-list');
         if (sessionsList) {
-            sessionsList.innerHTML = '<div style="color: #ef4444; padding: 8px; font-size: 0.85em;">Error loading sessions. Check console for details.</div>';
+            let errorMsg = 'Error loading sessions.';
+            if (error.name === 'AbortError') {
+                errorMsg = 'Request timed out. The server may be slow or unreachable.';
+            } else if (error.message) {
+                errorMsg = `Error: ${error.message}`;
+            }
+            sessionsList.innerHTML = `<div style="color: #ef4444; padding: 8px; font-size: 0.85em;">${errorMsg}</div>`;
         }
     }
 }
