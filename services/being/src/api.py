@@ -170,10 +170,14 @@ async def query_being_service(
         }
     
     try:
+        # Check if user is GM
+        user_is_gm = token_data.role == "gm" if token_data and hasattr(token_data, 'role') else False
+        
         # Load active system prompts
         active_prompts = await prompt_manager.get_active_prompts(
             session_id=request.session_id,
-            game_system=request.game_system
+            game_system=request.game_system,
+            user_is_gm=user_is_gm
         )
         
         # Combine base system prompt with active prompts
@@ -193,19 +197,35 @@ ADDITIONAL CONTEXT:
 
 Answer the GM's question about consciousness, decision-making, autonomous behavior, or being service responsibilities. Be helpful and provide insights into how you would handle the situation."""
         
-        response = await temp_agent.llm_provider.generate(
+        response = await agent.llm_provider.generate(
             prompt=prompt,
             system_prompt=system_prompt,
             temperature=0.7,
             max_tokens=1000
         )
         
+        # Store conversation in being's memory if being_id is provided
+        if request.being_id and memory_manager:
+            conversation_text = f"User: {request.query}\nBeing: {response.text}"
+            await memory_manager.add_memory(
+                conversation_text,
+                metadata={
+                    "type": "conversation",
+                    "session_id": request.session_id,
+                    "game_system": request.game_system,
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+            logger.info(f"Stored conversation in memory for being {request.being_id}")
+        
         return {
             "service": "Atman (Being Service)",
             "query": request.query,
             "response": response.text,
+            "being_id": request.being_id,
             "metadata": {
-                "context_provided": request.context is not None
+                "context_provided": request.context is not None,
+                "stored_in_memory": request.being_id is not None
             }
         }
     except Exception as e:
@@ -243,10 +263,12 @@ async def list_prompts(
     """List system prompts."""
     if AUTH_AVAILABLE and not token_data:
         raise HTTPException(status_code=403, detail="Authentication required")
+    user_is_gm = token_data.role == "gm" if token_data and hasattr(token_data, 'role') else False
     prompts = await prompt_manager.list_prompts(
         session_id=session_id,
         game_system=game_system,
-        include_global=include_global
+        include_global=include_global,
+        user_is_gm=user_is_gm
     )
     return prompts
 

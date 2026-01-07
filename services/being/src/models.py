@@ -46,6 +46,7 @@ class SystemPrompt(BaseModel):
     scope: PromptScope = PromptScope.GLOBAL
     session_ids: List[str] = Field(default_factory=list)  # Empty for global, populated for session-scoped
     game_system: Optional[str] = None  # Optional: tag with game system (D&D, Pathfinder, etc.)
+    gm_only: bool = Field(default=False)  # If True, only GMs can see/use this prompt
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -59,6 +60,7 @@ class SystemPromptCreate(BaseModel):
     scope: PromptScope = PromptScope.GLOBAL
     session_ids: List[str] = Field(default_factory=list)
     game_system: Optional[str] = None
+    gm_only: bool = Field(default=False)  # If True, only GMs can see/use this prompt
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -70,5 +72,6 @@ class SystemPromptUpdate(BaseModel):
     scope: Optional[PromptScope] = None
     session_ids: Optional[List[str]] = None
     game_system: Optional[str] = None
+    gm_only: Optional[bool] = None
     metadata: Optional[Dict[str, Any]] = None
 

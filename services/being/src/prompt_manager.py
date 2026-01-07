@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, String, DateTime, JSON, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, JSON, Boolean, Enum as SQLEnum
 import sqlalchemy as sa
 
 from .models import SystemPrompt, SystemPromptCreate, SystemPromptUpdate, PromptScope
@@ -26,6 +26,7 @@ class SystemPromptDB(Base):
     scope = Column(SQLEnum(PromptScope), default=PromptScope.GLOBAL)
     session_ids = Column(String)  # JSON array of session IDs
     game_system = Column(String)  # Optional game system tag
+    gm_only = Column(Boolean, default=False)  # If True, only GMs can see/use this prompt
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     prompt_metadata = Column(JSON, default={})  # Renamed from 'metadata' to avoid SQLAlchemy conflict
@@ -68,6 +69,7 @@ class PromptManager:
                 scope=prompt_data.scope,
                 session_ids=json.dumps(prompt_data.session_ids) if prompt_data.session_ids else "[]",
                 game_system=prompt_data.game_system,
+                gm_only=prompt_data.gm_only,
                 prompt_metadata=prompt_data.metadata
             )
             session.add(prompt_db)
@@ -94,7 +96,8 @@ class PromptManager:
         self,
         session_id: Optional[str] = None,
         game_system: Optional[str] = None,
-        include_global: bool = True
+        include_global: bool = True,
+        user_is_gm: bool = False  # Filter out GM-only prompts if user is not GM
     ) -> List[SystemPrompt]:
         """
         List system prompts.
@@ -133,8 +136,13 @@ class PromptManager:
             
             result = await session.execute(query.order_by(SystemPromptDB.created_at.desc()))
             prompts_db = result.scalars().all()
+            prompts = [self._db_to_model(p) for p in prompts_db]
             
-            return [self._db_to_model(p) for p in prompts_db]
+            # Filter out GM-only prompts if user is not GM
+            if not user_is_gm:
+                prompts = [p for p in prompts if not p.gm_only]
+            
+            return prompts
     
     async def update_prompt(self, prompt_id: str, prompt_data: SystemPromptUpdate) -> Optional[SystemPrompt]:
         """Update a system prompt."""
@@ -165,6 +173,8 @@ class PromptManager:
                 prompt_db.session_ids = json.dumps(prompt_data.session_ids) if prompt_data.session_ids else "[]"
             if prompt_data.game_system is not None:
                 prompt_db.game_system = prompt_data.game_system
+            if prompt_data.gm_only is not None:
+                prompt_db.gm_only = prompt_data.gm_only
             if prompt_data.metadata is not None:
                 prompt_db.prompt_metadata = prompt_data.metadata
             
@@ -198,7 +208,8 @@ class PromptManager:
     async def get_active_prompts(
         self,
         session_id: Optional[str] = None,
-        game_system: Optional[str] = None
+        game_system: Optional[str] = None,
+        user_is_gm: bool = False  # Filter out GM-only prompts if user is not GM
     ) -> str:
         """
         Get combined active system prompts as a single string.
@@ -214,7 +225,8 @@ class PromptManager:
         prompts = await self.list_prompts(
             session_id=session_id,
             game_system=game_system,
-            include_global=True
+            include_global=True,
+            user_is_gm=user_is_gm
         )
         
         if not prompts:
@@ -243,6 +255,7 @@ class PromptManager:
             scope=prompt_db.scope,
             session_ids=session_ids,
             game_system=prompt_db.game_system,
+            gm_only=prompt_db.gm_only if hasattr(prompt_db, 'gm_only') else False,
             created_at=prompt_db.created_at,
             updated_at=prompt_db.updated_at,
             metadata=prompt_db.prompt_metadata or {}
