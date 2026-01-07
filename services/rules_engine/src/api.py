@@ -466,6 +466,116 @@ async def get_indexing_progress(
     }
 
 
+@app.post("/rules/{file_id}/validate-indexing")
+async def validate_indexing(
+    file_id: str,
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
+    """Validate that a file is properly indexed by performing a test search."""
+    if AUTH_AVAILABLE:
+        await require_gm()(token_data)  # Ensure user is GM
+    
+    load_rules_metadata()
+    if file_id not in _rules_metadata:
+        raise HTTPException(status_code=404, detail="Rules file not found")
+    
+    metadata = _rules_metadata[file_id]
+    
+    # Only validate text/document files that should be indexed
+    if not (metadata.get("is_text") or metadata.get("is_pdf") or metadata.get("is_epub")):
+        return {
+            "valid": False,
+            "reason": "File type does not require indexing",
+            "file_id": file_id,
+            "indexing_status": metadata.get("indexing_status")
+        }
+    
+    # Check if indexing status says it's indexed
+    if metadata.get("indexing_status") != "indexed":
+        return {
+            "valid": False,
+            "reason": f"File indexing status is '{metadata.get('indexing_status')}', not 'indexed'",
+            "file_id": file_id,
+            "indexing_status": metadata.get("indexing_status")
+        }
+    
+    # Perform a test search to verify the index actually contains content
+    if not rules_indexer:
+        return {
+            "valid": False,
+            "reason": "Indexing service not available",
+            "file_id": file_id
+        }
+    
+    try:
+        # Get a sample of the file content to use as a search query
+        file_path = RULES_DIR / metadata["filename"]
+        if not file_path.exists():
+            return {
+                "valid": False,
+                "reason": "File not found on disk",
+                "file_id": file_id
+            }
+        
+        # Extract a small sample for testing
+        if metadata.get("is_text"):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                # Use first 100 characters as test query
+                test_query = content[:100].strip()
+        else:
+            # For PDFs/EPUBs, we can't easily extract a sample without parsing
+            # Use a generic query that should match if indexed
+            test_query = metadata.get("filename", "")[:50]
+        
+        if not test_query:
+            return {
+                "valid": False,
+                "reason": "Could not generate test query from file",
+                "file_id": file_id
+            }
+        
+        # Perform search
+        search_results = await rules_indexer.search(test_query, n_results=5)
+        
+        # Check if any results belong to this file
+        found_in_index = False
+        for result in search_results:
+            if result.get("metadata", {}).get("file_id") == file_id:
+                found_in_index = True
+                break
+        
+        if found_in_index:
+            return {
+                "valid": True,
+                "reason": "File content found in search index",
+                "file_id": file_id,
+                "indexing_status": metadata.get("indexing_status"),
+                "test_query": test_query[:50] + "..." if len(test_query) > 50 else test_query,
+                "search_results_count": len(search_results),
+                "chunks_found": sum(1 for r in search_results if r.get("metadata", {}).get("file_id") == file_id)
+            }
+        else:
+            return {
+                "valid": False,
+                "reason": "File marked as indexed but content not found in search results",
+                "file_id": file_id,
+                "indexing_status": metadata.get("indexing_status"),
+                "test_query": test_query[:50] + "..." if len(test_query) > 50 else test_query,
+                "search_results_count": len(search_results)
+            }
+    except Exception as e:
+        error_msg = str(e)
+        if "/Users/" in error_msg:
+            error_msg = error_msg.replace("/Users/shepner/", "/app/")
+        return {
+            "valid": False,
+            "reason": f"Error during validation: {error_msg}",
+            "file_id": file_id,
+            "indexing_status": metadata.get("indexing_status")
+        }
+
+
 @app.post("/rules/{file_id}/retry-indexing")
 async def retry_indexing(
     file_id: str,

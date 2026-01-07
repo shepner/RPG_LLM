@@ -1,1 +1,27 @@
-{}
+{
+  "29b10c72571ad12c": {
+    "file_id": "29b10c72571ad12c",
+    "filename": "Werewolf The Apocalypse 20th Anniversery.pdf",
+    "original_filename": "Werewolf The Apocalypse 20th Anniversery.pdf",
+    "size": 95246554,
+    "type": "application/pdf",
+    "extension": ".pdf",
+    "category": "document",
+    "is_text": false,
+    "is_image": false,
+    "is_pdf": true,
+    "is_epub": false,
+    "is_document": true,
+    "uploaded_at": "2026-01-07T12:58:14.201841",
+    "uploaded_by": null,
+    "indexing_status": "indexed",
+    "indexed_at": "2026-01-07T12:58:52.526467",
+    "indexing_error": null,
+    "indexing_progress": {
+      "current": 100,
+      "total": 100,
+      "percentage": 100,
+      "stage": "complete"
+    }
+  }
+}

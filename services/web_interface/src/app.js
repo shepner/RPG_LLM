@@ -1405,46 +1405,49 @@ document.getElementById('manage-rules-btn')?.addEventListener('click', () => {
     }
 });
 
-document.getElementById('upload-rules-btn')?.addEventListener('click', async () => {
-    const fileInput = document.getElementById('rules-file-input');
-    const file = fileInput.files[0];
-    
-    if (!file) {
-        alert('Please select a rules file');
-        return;
-    }
-    
-    try {
-        const formData = new FormData();
-        formData.append('file', file);
+document.getElementById('upload-rules-btn')?.addEventListener('click', () => {
+    // Defer async work to prevent blocking
+    setTimeout(async () => {
+        const fileInput = document.getElementById('rules-file-input');
+        const file = fileInput.files[0];
         
-        const response = await fetch(`${RULES_ENGINE_URL}/rules/upload`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: formData
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            alert(`Rules uploaded successfully: ${result.filename}`);
-            fileInput.value = '';
-            await listRules();
-            // Start polling for progress immediately if file needs indexing
-            if (result.file_id && (result.category === 'text' || result.category === 'document')) {
-                setTimeout(() => {
-                    startIndexingProgressPoll(result.file_id);
-                }, 500);
-            }
-        } else {
-            const error = await response.text();
-            alert('Failed to upload rules: ' + error);
+        if (!file) {
+            await customConfirm('Please select a rules file first.', 'No File Selected');
+            return;
         }
-    } catch (error) {
-        console.error('Error uploading rules:', error);
-        alert('Error uploading rules: ' + error.message);
-    }
+        
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await fetch(`${RULES_ENGINE_URL}/rules/upload`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: formData
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                addSystemMessage(`Rules uploaded successfully: ${result.filename}`);
+                fileInput.value = '';
+                await listRules();
+                // Start polling for progress immediately if file needs indexing
+                if (result.file_id && (result.category === 'text' || result.category === 'document')) {
+                    setTimeout(() => {
+                        startIndexingProgressPoll(result.file_id);
+                    }, 500);
+                }
+            } else {
+                const error = await response.text();
+                addSystemMessage(`Failed to upload rules: ${error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error uploading rules:', error);
+            addSystemMessage(`Error uploading rules: ${error.message}`, 'error');
+        }
+    }, 0);
 });
 
 document.getElementById('list-rules-btn')?.addEventListener('click', async () => {
@@ -1685,6 +1688,12 @@ async function listRules() {
                         }
                     }
                     
+                    // Add validate button for indexed files (GM only - will be checked server-side)
+                    let validateButton = '';
+                    if (indexingStatus === 'indexed' && (rule.is_text || rule.is_document || rule.is_pdf || rule.is_epub)) {
+                        validateButton = `<button onclick="validateIndexing('${rule.file_id}')" style="margin-left: 8px; padding: 4px 12px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em; font-weight: bold;" title="Test if file is actually searchable in the index (GM only)">✓ Validate</button>`;
+                    }
+                    
                     return `
                         <div data-file-id="${rule.file_id}" style="padding: 10px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${categoryColor};">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1693,6 +1702,7 @@ async function listRules() {
                                     <span style="color: #888; margin-left: 10px; font-size: 0.9em;">${sizeKB} KB</span>
                                     <span style="color: #666; margin-left: 10px; font-size: 0.85em;">(${category})</span>
                                     ${statusBadge}
+                                    ${validateButton}
                                 </div>
                                 <div>
                                     ${rule.is_text ? `<button onclick="viewRule('${rule.file_id}')" style="padding: 4px 8px; margin-right: 5px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">View</button>` : ''}
@@ -1788,6 +1798,57 @@ window.downloadRule = async function(fileId) {
     }
 };
 
+// Validate indexing for an indexed file
+window.validateIndexing = async function(fileId) {
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        addSystemMessage('Validating indexing...', 'info');
+        
+        const response = await fetch(`${RULES_ENGINE_URL}/rules/${fileId}/validate-indexing`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            if (result.valid) {
+                let message = `✅ Indexing validation passed!\n\n`;
+                message += `File content found in search index.\n`;
+                message += `Test query: "${result.test_query || 'N/A'}"\n`;
+                message += `Chunks found: ${result.chunks_found || 0}\n`;
+                message += `Total search results: ${result.search_results_count || 0}`;
+                await customConfirm(message, 'Validation Successful');
+            } else {
+                let message = `❌ Indexing validation failed!\n\n`;
+                message += `Reason: ${result.reason || 'Unknown error'}\n`;
+                if (result.test_query) {
+                    message += `Test query: "${result.test_query}"\n`;
+                }
+                if (result.search_results_count !== undefined) {
+                    message += `Search results: ${result.search_results_count}`;
+                }
+                await customConfirm(message, 'Validation Failed');
+            }
+        } else {
+            const errorText = await response.text();
+            let errorMessage = 'Failed to validate indexing';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            addSystemMessage(`Validation error: ${errorMessage}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error validating indexing:', error);
+        addSystemMessage(`Error validating indexing: ${error.message}`, 'error');
+    }
+};
+
 // Retry indexing for a failed file
 window.retryIndexing = async function(fileId) {
     const confirmed = await customConfirm('Retry indexing for this file? This will attempt to index the file again.', 'Retry Indexing');
@@ -1806,7 +1867,7 @@ window.retryIndexing = async function(fileId) {
         
         if (response.ok) {
             const result = await response.json();
-            alert('Indexing retry initiated! The file will be re-indexed in the background.');
+            addSystemMessage('Indexing retry initiated! The file will be re-indexed in the background.');
             // Refresh the list to show updated status
             await listRules();
             // Start polling for progress
