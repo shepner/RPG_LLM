@@ -146,10 +146,15 @@ async def roll_dice(dice: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class ResolveRequest(BaseModel):
+    """Request model for resolve endpoint."""
+    action: str
+    context: Optional[Dict[str, Any]] = None
+
 @app.post("/resolve", response_model=Resolution)
-async def resolve_action(action: str = Body(...), context: dict = Body(None)):
+async def resolve_action(request: ResolveRequest):
     """Resolve an action using rules and LLM."""
-    result = await resolver.resolve_action(action, context)
+    result = await resolver.resolve_action(request.action, request.context)
     return result
 
 
