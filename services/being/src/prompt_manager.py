@@ -247,6 +247,14 @@ class PromptManager:
             except:
                 session_ids = []
         
+        # Handle missing gm_only column (for existing databases)
+        gm_only = False
+        try:
+            gm_only = prompt_db.gm_only if hasattr(prompt_db, 'gm_only') else False
+        except AttributeError:
+            # Column doesn't exist yet - will be added on next migration
+            gm_only = False
+        
         return SystemPrompt(
             prompt_id=prompt_db.prompt_id,
             service_name=prompt_db.service_name,
@@ -255,7 +263,7 @@ class PromptManager:
             scope=prompt_db.scope,
             session_ids=session_ids,
             game_system=prompt_db.game_system,
-            gm_only=prompt_db.gm_only if hasattr(prompt_db, 'gm_only') else False,
+            gm_only=gm_only,
             created_at=prompt_db.created_at,
             updated_at=prompt_db.updated_at,
             metadata=prompt_db.prompt_metadata or {}
