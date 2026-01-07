@@ -2,7 +2,7 @@
 
 import os
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from .session_manager import SessionManager
