@@ -924,9 +924,10 @@ function stopIndexingProgressPoll(fileId) {
 
 async function listRules() {
     try {
+        const token = authToken || localStorage.getItem('authToken');
         const response = await fetch(`${RULES_ENGINE_URL}/rules/list`, {
             headers: {
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
         
