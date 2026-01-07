@@ -565,7 +565,7 @@ async function loadUserInfo() {
                 roleDisplay.textContent = `(${user.role})`;
             }
             
-            // Show "Manage Users" and "Manage Rules" buttons for GMs
+            // Show "Manage Users", "Manage Rules", and "Validate System" buttons for GMs
             if (user.role === 'gm') {
                 if (manageUsersBtn) {
                     manageUsersBtn.style.display = 'inline-block';
@@ -576,10 +576,18 @@ async function loadUserInfo() {
                 if (manageRulesBtn) {
                     manageRulesBtn.style.display = 'inline-block';
                 }
+                const validateSystemBtn = document.getElementById('validate-system-btn');
+                if (validateSystemBtn) {
+                    validateSystemBtn.style.display = 'inline-block';
+                }
             } else {
                 const manageRulesBtn = document.getElementById('manage-rules-btn');
                 if (manageRulesBtn) {
                     manageRulesBtn.style.display = 'none';
+                }
+                const validateSystemBtn = document.getElementById('validate-system-btn');
+                if (validateSystemBtn) {
+                    validateSystemBtn.style.display = 'none';
                 }
             }
             
