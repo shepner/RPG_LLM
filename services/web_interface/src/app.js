@@ -353,8 +353,8 @@ document.getElementById('submit-action').addEventListener('click', async () => {
 // Game session management - defer prompt and all async work to prevent blocking
 document.getElementById('create-session-btn').addEventListener('click', () => {
     // Return immediately from click handler, defer everything
-    setTimeout(() => {
-        const sessionName = prompt('Enter a name for your game session:');
+    setTimeout(async () => {
+        const sessionName = await customPrompt('Enter a name for your game session:', '', 'Session name');
         if (!sessionName) return;
         
         // Defer all async work using another setTimeout
