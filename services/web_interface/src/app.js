@@ -871,6 +871,31 @@ document.getElementById('list-rules-btn')?.addEventListener('click', async () =>
     await listRules();
 });
 
+// Auto-refresh rules list every 5 seconds when rules management panel is visible
+let rulesAutoRefreshInterval = null;
+
+function startRulesAutoRefresh() {
+    if (rulesAutoRefreshInterval) {
+        return; // Already running
+    }
+    rulesAutoRefreshInterval = setInterval(async () => {
+        const rulesPanel = document.getElementById('rules-management');
+        if (rulesPanel && rulesPanel.style.display !== 'none') {
+            await listRules();
+        } else {
+            // Panel is hidden, stop auto-refresh
+            stopRulesAutoRefresh();
+        }
+    }, 5000); // Refresh every 5 seconds
+}
+
+function stopRulesAutoRefresh() {
+    if (rulesAutoRefreshInterval) {
+        clearInterval(rulesAutoRefreshInterval);
+        rulesAutoRefreshInterval = null;
+    }
+}
+
 // Track active polling intervals for indexing progress
 const indexingProgressPollers = new Map();
 
