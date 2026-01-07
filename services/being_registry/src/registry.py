@@ -2,7 +2,7 @@
 
 import os
 import docker
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from .models import BeingRegistry, ContainerStatus
 
 
@@ -40,6 +40,22 @@ class Registry:
     def get_being(self, being_id: str) -> Optional[BeingRegistry]:
         """Get being registry entry."""
         return self._registry.get(being_id)
+    
+    def get_beings_by_session(self, session_id: str) -> List[BeingRegistry]:
+        """Get all beings in a session."""
+        return [entry for entry in self._registry.values() if entry.session_id == session_id]
+    
+    def get_entry(self, being_id: str) -> Optional[Dict[str, Any]]:
+        """Get being registry entry as dict."""
+        entry = self._registry.get(being_id)
+        if entry:
+            return {
+                "being_id": entry.being_id,
+                "name": getattr(entry, 'name', f"Character {being_id[:8]}"),
+                "owner_id": entry.owner_id,
+                "session_id": entry.session_id
+            }
+        return None
     
     def update_status(
         self,

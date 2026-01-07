@@ -201,6 +201,30 @@ async def get_being(being_id: str):
     return entry
 
 
+@app.get("/beings/vicinity/{session_id}")
+async def get_beings_in_vicinity(
+    session_id: str,
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
+    """Get all beings in the same session (vicinity)."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    registry = get_registry()
+    beings_in_session = []
+    
+    # Get all beings in this session from registry
+    for being_id, entry in registry._registry.items():
+        if entry.session_id == session_id:
+            beings_in_session.append({
+                "being_id": being_id,
+                "name": entry.get("name", f"Character {being_id[:8]}") if isinstance(entry, dict) else f"Character {being_id[:8]}",
+                "owner_id": entry.owner_id if hasattr(entry, 'owner_id') else None
+            })
+    
+    return {"beings": beings_in_session}
+
+
 @app.get("/beings/list")
 async def list_all_beings(
     token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None

@@ -199,32 +199,102 @@ async def query_being_service(
             user_is_gm=user_is_gm
         )
         
-        # Combine base system prompt with active prompts
-        base_system_prompt = "You are Atman, the Being Service. You represent individual consciousness and autonomous decision-making for thinking beings in a Tabletop Role-Playing Game. Answer GM questions about consciousness, decision-making, and autonomous behavior."
+        # Parse @mentions in the query
+        import re
+        mention_pattern = r'@(\w+)'
+        mentions = re.findall(mention_pattern, request.query)
+        
+        # If target_being_id is provided, this is a being-to-being conversation
+        if request.target_being_id:
+            # Verify access to target being
+            if AUTH_AVAILABLE:
+                try:
+                    await require_being_access(request.target_being_id)(None, None)
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.error(f"Error checking target being access: {e}")
+                    raise HTTPException(status_code=403, detail="You do not have access to the target being")
+            
+            target_agent = get_agent(request.target_being_id)
+            target_memory = get_memory_manager(request.target_being_id)
+            
+            # This is a being-to-being conversation
+            # The source being (being_id) is talking to the target being (target_being_id)
+            base_system_prompt = f"You are {request.target_being_id}, a thinking being in a Tabletop Role-Playing Game. Another being ({request.being_id}) is speaking to you. Respond naturally based on your character's personality, goals, and current situation."
+        else:
+            # Regular query (human to being or GM query)
+            base_system_prompt = "You are Atman, the Being Service. You represent individual consciousness and autonomous decision-making for thinking beings in a Tabletop Role-Playing Game. Answer questions about consciousness, decision-making, and autonomous behavior."
+        
         if active_prompts:
             system_prompt = f"{base_system_prompt}\n\n## Additional Context and Instructions\n{active_prompts}"
         else:
             system_prompt = base_system_prompt
         
-        prompt = f"""You are Atman, the Being Service for a Tabletop Role-Playing Game. Your role is to manage individual consciousness, decision-making, and autonomous behavior for thinking beings.
+        # Build prompt based on conversation type
+        if request.target_being_id:
+            # Being-to-being conversation
+            prompt = f"""Another being ({request.being_id}) is speaking to you:
 
-GM QUERY:
 {request.query}
 
 ADDITIONAL CONTEXT:
 {request.context or "None"}
 
-Answer the GM's question about consciousness, decision-making, autonomous behavior, or being service responsibilities. Be helpful and provide insights into how you would handle the situation."""
+Respond naturally as your character would. Consider your personality, goals, relationships, and current situation."""
+            # Use target being's agent for response
+            response_agent = target_agent
+        else:
+            # Regular query
+            prompt = f"""QUERY:
+{request.query}
+
+ADDITIONAL CONTEXT:
+{request.context or "None"}
+
+Answer the question about consciousness, decision-making, autonomous behavior, or being service responsibilities. Be helpful and provide insights."""
+            response_agent = agent
         
-        response = await agent.llm_provider.generate(
+        response = await response_agent.llm_provider.generate(
             prompt=prompt,
             system_prompt=system_prompt,
             temperature=0.7,
             max_tokens=1000
         )
         
-        # Store conversation in being's memory if being_id is provided
-        if request.being_id and memory_manager:
+        # Store conversation in memory
+        if request.target_being_id:
+            # Being-to-being conversation: store in both beings' memories
+            conversation_text_source = f"To {request.target_being_id}: {request.query}\nFrom {request.target_being_id}: {response.text}"
+            conversation_text_target = f"From {request.being_id}: {request.query}\nTo {request.being_id}: {response.text}"
+            
+            if request.being_id and memory_manager:
+                await memory_manager.add_memory(
+                    conversation_text_source,
+                    metadata={
+                        "type": "being_conversation",
+                        "target_being_id": request.target_being_id,
+                        "session_id": request.session_id,
+                        "game_system": request.game_system,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                )
+            
+            if target_memory:
+                await target_memory.add_memory(
+                    conversation_text_target,
+                    metadata={
+                        "type": "being_conversation",
+                        "source_being_id": request.being_id,
+                        "session_id": request.session_id,
+                        "game_system": request.game_system,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                )
+            
+            logger.info(f"Stored being-to-being conversation between {request.being_id} and {request.target_being_id}")
+        elif request.being_id and memory_manager:
+            # Human-to-being conversation: store in being's memory
             conversation_text = f"User: {request.query}\nBeing: {response.text}"
             await memory_manager.add_memory(
                 conversation_text,
@@ -232,6 +302,7 @@ Answer the GM's question about consciousness, decision-making, autonomous behavi
                     "type": "conversation",
                     "session_id": request.session_id,
                     "game_system": request.game_system,
+                    "mentions": mentions if mentions else [],
                     "timestamp": datetime.now().isoformat()
                 }
             )
@@ -242,9 +313,12 @@ Answer the GM's question about consciousness, decision-making, autonomous behavi
             "query": request.query,
             "response": response.text,
             "being_id": request.being_id,
+            "target_being_id": request.target_being_id,
+            "mentions": mentions,
             "metadata": {
                 "context_provided": request.context is not None,
-                "stored_in_memory": request.being_id is not None
+                "stored_in_memory": request.being_id is not None,
+                "being_to_being": request.target_being_id is not None
             }
         }
     except Exception as e:
