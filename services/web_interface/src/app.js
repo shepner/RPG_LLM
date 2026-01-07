@@ -6,6 +6,7 @@ const AUTH_URL = 'http://localhost:8000';
 const GAME_SESSION_URL = 'http://localhost:8001';
 const RULES_ENGINE_URL = 'http://localhost:8002';
 const BEING_REGISTRY_URL = 'http://localhost:8007';
+const BEING_URL = 'http://localhost:8006';
 const GM_URL = 'http://localhost:8005';
 const WORLDS_URL = 'http://localhost:8004';
 const TIME_MANAGEMENT_URL = 'http://localhost:8003';
@@ -1449,6 +1450,12 @@ const LLM_SERVICES = {
         icon: "📜",
         url: GM_URL + '/query',
         color: '#f59e0b'
+    },
+    being: {
+        name: "Atman (Being Service)",
+        icon: "🧠",
+        url: BEING_URL + '/query',
+        color: '#8b5cf6'
     }
 };
 
@@ -2513,7 +2520,12 @@ async function loadPrompts() {
 async function showCreatePromptModal() {
     const serviceSelect = document.getElementById('prompt-service-select');
     const service = serviceSelect ? serviceSelect.value : 'rules_engine';
-    const serviceName = service === 'rules_engine' ? "Ma'at (Rules Engine)" : "Thoth (Game Master)";
+    const serviceNames = {
+        'rules_engine': "Ma'at (Rules Engine)",
+        'game_master': "Thoth (Game Master)",
+        'being': "Atman (Being Service)"
+    };
+    const serviceName = serviceNames[service] || serviceNames['rules_engine'];
     
     // Get available sessions for session-scoped prompts
     let sessions = [];

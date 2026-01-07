@@ -21,12 +21,14 @@ class BeingAgent:
             redis_url=os.getenv("REDIS_URL", "redis://localhost:6379")
         )
     
-    async def think(self, context: str, game_time: float) -> Thought:
+    async def think(self, context: str, game_time: float, system_prompt: Optional[str] = None) -> Thought:
         """Generate thoughts."""
         import uuid
         
         prompt = f"As this being, think about: {context}"
-        response = await self.llm_provider.generate(prompt)
+        base_system = "You are a thinking being in a Tabletop Role-Playing Game. Generate thoughts that reflect your character's personality, goals, and current situation."
+        system = system_prompt if system_prompt else base_system
+        response = await self.llm_provider.generate(prompt, system_prompt=system)
         
         return Thought(
             thought_id=str(uuid.uuid4()),
@@ -36,12 +38,14 @@ class BeingAgent:
             metadata={}
         )
     
-    async def decide(self, context: str, game_time: float) -> BeingAction:
+    async def decide(self, context: str, game_time: float, system_prompt: Optional[str] = None) -> BeingAction:
         """Make a decision and generate action."""
         import uuid
         
         prompt = f"As this being, decide what to do: {context}"
-        response = await self.llm_provider.generate(prompt)
+        base_system = "You are a thinking being in a Tabletop Role-Playing Game. Make decisions that reflect your character's personality, goals, motivations, and current situation."
+        system = system_prompt if system_prompt else base_system
+        response = await self.llm_provider.generate(prompt, system_prompt=system)
         
         return BeingAction(
             action_id=str(uuid.uuid4()),
