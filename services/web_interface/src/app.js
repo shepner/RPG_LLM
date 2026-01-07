@@ -1568,10 +1568,12 @@ async function initializeSession() {
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         initializeSession();
-        // Display version number
+        // Display version number (build timestamp)
         const versionDisplay = document.getElementById('version-display');
         if (versionDisplay) {
-            versionDisplay.textContent = `v${SYSTEM_VERSION}`;
+            const version = SYSTEM_VERSION === 'dev' ? 'dev' : `build-${SYSTEM_VERSION}`;
+            versionDisplay.textContent = version;
+            versionDisplay.title = `Build time: ${SYSTEM_VERSION === 'dev' ? 'Development mode' : SYSTEM_VERSION.replace(/-/g, ' ')}`;
         }
     });
 } else {
