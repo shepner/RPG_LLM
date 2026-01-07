@@ -2055,17 +2055,7 @@ window.submitLLMMessage = async function() {
     }
 };
 
-// Initialize LLM Services Chat
-document.getElementById('llm-services-btn')?.addEventListener('click', () => {
-    const panel = document.getElementById('llm-services');
-    if (panel.style.display === 'none') {
-        panel.style.display = 'block';
-        // Initialize with default channel
-        switchLLMChannel(currentLLMService);
-    } else {
-        panel.style.display = 'none';
-    }
-});
+// LLM Services are now integrated into being chat - no separate panel needed
 
 // System Prompts Management
 document.getElementById('system-prompts-btn')?.addEventListener('click', () => {
