@@ -9,13 +9,13 @@ from .base import BaseLLMProvider, LLMResponse, LLMStreamChunk
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini LLM provider."""
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3-flash-preview", **kwargs):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash", **kwargs):
         """
         Initialize Gemini provider.
         
         Args:
             api_key: Gemini API key (or use GOOGLE_APPLICATION_CREDENTIALS)
-            model: Model name (gemini-3-flash-preview, gemini-3-pro-preview, gemini-1.0-pro, etc.)
+            model: Model name (gemini-2.5-flash (stable), gemini-3-flash-preview, gemini-3-pro-preview, etc.)
             **kwargs: Additional configuration
         """
         super().__init__(api_key, model, **kwargs)
@@ -32,19 +32,19 @@ class GeminiProvider(BaseLLMProvider):
         # Normalize model name - remove 'models/' prefix if present, as GenerativeModel adds it
         normalized_model = model.replace('models/', '') if model.startswith('models/') else model
         
-        # Use normalized model directly (Gemini 3 models are available in v1beta)
+        # Use normalized model directly
         try:
             self.client = genai.GenerativeModel(normalized_model)
         except Exception as e:
-            # If model not found, try gemini-3-flash-preview as fallback (has free tier)
-            if normalized_model != 'gemini-3-flash-preview':
-                print(f"Warning: Model {normalized_model} not available, falling back to gemini-3-flash-preview: {e}")
+            # If model not found, try stable gemini-2.5-flash as fallback
+            if normalized_model != 'gemini-2.5-flash':
+                print(f"Warning: Model {normalized_model} not available, falling back to gemini-2.5-flash (stable): {e}")
                 try:
-                    self.client = genai.GenerativeModel('gemini-3-flash-preview')
-                    self.model = 'gemini-3-flash-preview'  # Update stored model name
+                    self.client = genai.GenerativeModel('gemini-2.5-flash')
+                    self.model = 'gemini-2.5-flash'  # Update stored model name
                 except Exception as e2:
                     # Last resort: try gemini-1.0-pro (older but stable)
-                    print(f"Warning: gemini-3-flash-preview also not available, trying gemini-1.0-pro: {e2}")
+                    print(f"Warning: gemini-2.5-flash also not available, trying gemini-1.0-pro: {e2}")
                     self.client = genai.GenerativeModel('gemini-1.0-pro')
                     self.model = 'gemini-1.0-pro'  # Update stored model name
             else:

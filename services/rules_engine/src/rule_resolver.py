@@ -23,7 +23,7 @@ class RuleResolver:
         self.llm_provider = None
         if LLM_AVAILABLE:
             try:
-                model = os.getenv("LLM_MODEL", "gemini-3-flash-preview")
+                model = os.getenv("LLM_MODEL", "gemini-2.5-flash")
                 self.llm_provider = GeminiProvider(model=model)
             except Exception as e:
                 print(f"Warning: LLM provider not available: {e}")

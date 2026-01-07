@@ -14,7 +14,7 @@ class GMEngine:
         """Initialize GM engine."""
         self.llm_provider = GeminiProvider(
             api_key=os.getenv("GEMINI_API_KEY"),
-            model=os.getenv("LLM_MODEL", "gemini-3-flash-preview")
+            model=os.getenv("LLM_MODEL", "gemini-2.5-flash")
         )
         self.cache = RedisCache(
             redis_url=os.getenv("REDIS_URL", "redis://localhost:6379")
