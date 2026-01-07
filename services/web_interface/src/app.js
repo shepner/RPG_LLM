@@ -892,7 +892,21 @@ async function listRules() {
                         
                         if (indexingStatus === 'indexing') {
                             statusColor = '#f59e0b';
-                            statusText = 'Indexing...';
+                            // Show progress if available
+                            const progress = rule.indexing_progress || {};
+                            const percentage = progress.percentage || 0;
+                            const stage = progress.stage || 'indexing';
+                            const stageLabels = {
+                                'starting': 'Starting...',
+                                'chunking': 'Chunking content...',
+                                'generating_embeddings': 'Generating embeddings...',
+                                'preparing_data': 'Preparing data...',
+                                'storing': 'Storing in database...',
+                                'complete': 'Complete',
+                                'error': 'Error'
+                            };
+                            const stageLabel = stageLabels[stage] || 'Indexing...';
+                            statusText = `${stageLabel} ${percentage}%`;
                             statusIcon = '🔄';
                         } else if (indexingStatus === 'indexed') {
                             statusColor = '#10b981';
@@ -906,7 +920,21 @@ async function listRules() {
                             statusText = 'Pending Indexing';
                         }
                         
-                        statusBadge = `<span style="color: ${statusColor}; margin-left: 10px; font-size: 0.85em; font-weight: bold;">${statusIcon} ${statusText}</span>`;
+                        if (indexingStatus === 'indexing' && rule.indexing_progress) {
+                            // Show progress bar for indexing
+                            const progress = rule.indexing_progress;
+                            const percentage = progress.percentage || 0;
+                            statusBadge = `
+                                <div style="margin-left: 10px; display: inline-block;">
+                                    <span style="color: ${statusColor}; font-size: 0.85em; font-weight: bold;">${statusIcon} ${statusText}</span>
+                                    <div style="width: 200px; height: 6px; background: #2a2a2a; border-radius: 3px; margin-top: 4px; overflow: hidden;">
+                                        <div style="width: ${percentage}%; height: 100%; background: linear-gradient(90deg, #f59e0b, #fbbf24); transition: width 0.3s;"></div>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            statusBadge = `<span style="color: ${statusColor}; margin-left: 10px; font-size: 0.85em; font-weight: bold;">${statusIcon} ${statusText}</span>`;
+                        }
                         if (rule.indexed_at) {
                             statusBadge += `<span style="color: #666; margin-left: 5px; font-size: 0.75em;">(${new Date(rule.indexed_at).toLocaleString()})</span>`;
                         }

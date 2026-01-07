@@ -310,7 +310,14 @@ async def list_rules(token_data: Optional[TokenData] = Depends(require_auth) if 
         except Exception as e:
             print(f"Warning: Error checking indexing status: {e}")
     
-    rules_list = list(_rules_metadata.values())
+    # Include indexing progress in response
+    rules_list = []
+    for file_id, metadata in _rules_metadata.items():
+        rule_data = metadata.copy()
+        if "indexing_progress" in metadata:
+            rule_data["indexing_progress"] = metadata["indexing_progress"]
+        rules_list.append(rule_data)
+    
     return {
         "rules": rules_list,
         "count": len(rules_list),
