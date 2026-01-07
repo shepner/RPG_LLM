@@ -821,13 +821,6 @@ async def _extract_and_index_file_background(
     
     def update_progress(current: int, total: int, stage: str):
         """Update progress in metadata."""
-        # #region agent log
-        import json
-        try:
-            with open('/Users/shepner/RPG_LLM/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"location": "api.py:update_progress", "message": "Progress update", "data": {"file_id": file_id, "current": current, "total": total, "stage": stage, "percentage": int((current / total * 100)) if total > 0 else 0}, "timestamp": __import__('time').time(), "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-        except: pass
-        # #endregion
         load_rules_metadata()
         if file_id in _rules_metadata:
             _rules_metadata[file_id]["indexing_status"] = "indexing"
