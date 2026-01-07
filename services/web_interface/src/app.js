@@ -1555,40 +1555,50 @@ window.submitLLMMessage = async function() {
         return;
     }
     
+    // CRITICAL: Capture the service at request time to prevent race conditions
+    // If user switches channels while request is in flight, we still use the original service
+    const requestService = currentLLMService;
+    const serviceConfig = LLM_SERVICES[requestService];
+    
     // Clear input
     input.value = '';
     
     // Add user message to history and render
-    addLLMMessage(currentLLMService, 'user', message);
-    renderLLMConversation(currentLLMService);
+    addLLMMessage(requestService, 'user', message);
+    // Only render if this is still the active channel
+    if (currentLLMService === requestService) {
+        renderLLMConversation(requestService);
+    }
     
-    // Show typing indicator
-    const messagesDiv = document.getElementById('llm-chat-messages');
-    const typingIndicator = document.createElement('div');
-    typingIndicator.id = 'llm-typing-indicator';
-    typingIndicator.style.cssText = 'display: flex; gap: 12px;';
-    typingIndicator.innerHTML = `
-        <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${LLM_SERVICES[currentLLMService].color}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
-            ${LLM_SERVICES[currentLLMService].icon}
-        </div>
-        <div style="flex: 1;">
-            <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
-                <span style="font-weight: bold; color: ${LLM_SERVICES[currentLLMService].color}; font-size: 0.9em;">
-                    ${LLM_SERVICES[currentLLMService].name.split(' ')[0]}
-                </span>
-                <span style="font-size: 0.75em; color: #888;">typing...</span>
+    // Show typing indicator (only if this is still the active channel)
+    let typingIndicator = null;
+    if (currentLLMService === requestService) {
+        const messagesDiv = document.getElementById('llm-chat-messages');
+        typingIndicator = document.createElement('div');
+        typingIndicator.id = `llm-typing-indicator-${requestService}`;
+        typingIndicator.style.cssText = 'display: flex; gap: 12px;';
+        typingIndicator.innerHTML = `
+            <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${serviceConfig.color}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
+                ${serviceConfig.icon}
             </div>
-            <div style="background: #2a2a2a; padding: 10px 12px; border-radius: 8px; color: #888;">
-                <span style="animation: blink 1s infinite;">●</span>
+            <div style="flex: 1;">
+                <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
+                    <span style="font-weight: bold; color: ${serviceConfig.color}; font-size: 0.9em;">
+                        ${serviceConfig.name.split(' ')[0]}
+                    </span>
+                    <span style="font-size: 0.75em; color: #888;">typing...</span>
+                </div>
+                <div style="background: #2a2a2a; padding: 10px 12px; border-radius: 8px; color: #888;">
+                    <span style="animation: blink 1s infinite;">●</span>
+                </div>
             </div>
-        </div>
-    `;
-    messagesDiv.appendChild(typingIndicator);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        `;
+        messagesDiv.appendChild(typingIndicator);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
     
     try {
         const token = authToken || localStorage.getItem('authToken');
-        const serviceConfig = LLM_SERVICES[currentLLMService];
         
         const response = await fetch(serviceConfig.url, {
             method: 'POST',
@@ -1601,17 +1611,21 @@ window.submitLLMMessage = async function() {
             })
         });
         
-        // Remove typing indicator
-        typingIndicator.remove();
+        // Remove typing indicator if it exists and is still visible
+        if (typingIndicator && typingIndicator.parentNode) {
+            typingIndicator.remove();
+        }
         
         if (response.ok) {
             const result = await response.json();
             
             if (result.error) {
-                addLLMMessage(currentLLMService, 'assistant', `Error: ${result.error}`, { error: true });
+                // Always save to the correct service's history
+                addLLMMessage(requestService, 'assistant', `Error: ${result.error}`, { error: true });
             } else {
                 const responseText = result.response || 'No response received';
-                addLLMMessage(currentLLMService, 'assistant', responseText, {
+                // Always save to the correct service's history
+                addLLMMessage(requestService, 'assistant', responseText, {
                     rules_found: result.rules_found,
                     metadata: result.metadata
                 });
@@ -1625,15 +1639,29 @@ window.submitLLMMessage = async function() {
             } catch {
                 errorMessage = errorText || errorMessage;
             }
-            addLLMMessage(currentLLMService, 'assistant', `Error: ${errorMessage}`, { error: true });
+            // Always save to the correct service's history
+            addLLMMessage(requestService, 'assistant', `Error: ${errorMessage}`, { error: true });
         }
         
-        // Re-render to show new message
-        renderLLMConversation(currentLLMService);
+        // Only re-render if this response is for the currently active channel
+        // This prevents responses from appearing in the wrong channel
+        if (currentLLMService === requestService) {
+            renderLLMConversation(requestService);
+        } else {
+            // If user switched channels, update the channel indicator if needed
+            // (optional: could show a badge indicating new messages in other channels)
+        }
     } catch (error) {
-        typingIndicator.remove();
-        addLLMMessage(currentLLMService, 'assistant', `Error: ${error.message}`, { error: true });
-        renderLLMConversation(currentLLMService);
+        // Remove typing indicator if it exists
+        if (typingIndicator && typingIndicator.parentNode) {
+            typingIndicator.remove();
+        }
+        // Always save to the correct service's history
+        addLLMMessage(requestService, 'assistant', `Error: ${error.message}`, { error: true });
+        // Only render if this is still the active channel
+        if (currentLLMService === requestService) {
+            renderLLMConversation(requestService);
+        }
     }
 };
 
