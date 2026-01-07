@@ -84,14 +84,26 @@ class GeminiProvider(BaseLLMProvider):
             )
         )
         
+        # Extract usage metadata with defaults for None values
+        usage_metadata = {}
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            usage_metadata = {
+                "prompt_tokens": response.usage_metadata.prompt_token_count if hasattr(response.usage_metadata, 'prompt_token_count') and response.usage_metadata.prompt_token_count is not None else 0,
+                "completion_tokens": response.usage_metadata.candidates_token_count if hasattr(response.usage_metadata, 'candidates_token_count') and response.usage_metadata.candidates_token_count is not None else 0,
+                "total_tokens": response.usage_metadata.total_token_count if hasattr(response.usage_metadata, 'total_token_count') and response.usage_metadata.total_token_count is not None else 0,
+            }
+        else:
+            # Default to 0 if no usage metadata available
+            usage_metadata = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            }
+        
         return LLMResponse(
             text=response.text,
             model=self.model,
-            usage={
-                "prompt_tokens": response.usage_metadata.prompt_token_count if hasattr(response, 'usage_metadata') else None,
-                "completion_tokens": response.usage_metadata.candidates_token_count if hasattr(response, 'usage_metadata') else None,
-                "total_tokens": response.usage_metadata.total_token_count if hasattr(response, 'usage_metadata') else None,
-            },
+            usage=usage_metadata,
             finish_reason=response.candidates[0].finish_reason.name if response.candidates else None,
             metadata={}
         )
