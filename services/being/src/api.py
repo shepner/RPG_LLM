@@ -158,14 +158,19 @@ async def query_being_service(
         raise HTTPException(status_code=403, detail="Authentication required to query being service")
     
     # If being_id is provided, verify access and use that being's agent
+    agent = None
+    memory_manager = None
+    
     if request.being_id:
         if AUTH_AVAILABLE:
             # Verify user has access to this being (owner or assigned)
             try:
-                # Check access using require_being_access
-                from .api import require_being_access
+                # Use require_being_access directly (already imported)
                 await require_being_access(request.being_id)(None, None)
+            except HTTPException:
+                raise
             except Exception as e:
+                logger.error(f"Error checking being access: {e}")
                 raise HTTPException(status_code=403, detail="You do not have access to this being")
         
         agent = get_agent(request.being_id)
