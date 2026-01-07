@@ -399,9 +399,14 @@ document.getElementById('create-session-btn').addEventListener('click', async ()
     }
 });
 
-document.getElementById('refresh-sessions-btn').addEventListener('click', async () => {
-    await refreshSessions();
-});
+// Refresh button removed - sessions now auto-refresh
+// Check if button exists before adding listener (for backwards compatibility)
+const refreshBtn = document.getElementById('refresh-sessions-btn');
+if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+        await refreshSessions();
+    });
+}
 
 let sessionsAutoRefreshInterval = null;
 
