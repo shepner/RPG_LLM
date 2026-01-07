@@ -1377,6 +1377,19 @@ async function listRules() {
                         </div>
                     `;
                 }).join('');
+                
+                // After rendering, restore expanded state for details elements
+                setTimeout(() => {
+                    expandedErrorDetails.forEach(fileId => {
+                        const fileElement = rulesList.querySelector(`[data-file-id="${fileId}"]`);
+                        if (fileElement) {
+                            const details = fileElement.querySelector('details');
+                            if (details) {
+                                details.open = true;
+                            }
+                        }
+                    });
+                }, 0);
             } else {
                 rulesList.innerHTML = '<div style="color: #888; padding: 10px;">No files uploaded yet.</div>';
             }
