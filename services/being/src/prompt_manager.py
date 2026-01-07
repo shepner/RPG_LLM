@@ -136,7 +136,14 @@ class PromptManager:
             
             result = await session.execute(query.order_by(SystemPromptDB.created_at.desc()))
             prompts_db = result.scalars().all()
-            prompts = [self._db_to_model(p) for p in prompts_db]
+            prompts = []
+            for p in prompts_db:
+                try:
+                    prompts.append(self._db_to_model(p))
+                except Exception as e:
+                    logger.warning(f"Error converting prompt {p.prompt_id} to model: {e}")
+                    # Skip this prompt if conversion fails
+                    continue
             
             # Filter out GM-only prompts if user is not GM
             if not user_is_gm:
