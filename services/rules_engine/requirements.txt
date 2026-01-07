@@ -8,4 +8,5 @@ google-generativeai==0.3.2
 pypdf2==3.0.1
 ebooklib==0.18
 chromadb==0.4.18
+numpy<2.0.0
 
