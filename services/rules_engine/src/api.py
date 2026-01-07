@@ -54,10 +54,58 @@ def load_rules_metadata():
         try:
             with open(RULES_METADATA_FILE, 'r') as f:
                 _rules_metadata = json.load(f)
-        except Exception:
+            # Verify files still exist on disk and remove from metadata if missing
+            for file_id, metadata in list(_rules_metadata.items()):
+                file_path = RULES_DIR / metadata.get("filename", "")
+                if not file_path.exists():
+                    print(f"Warning: File {metadata.get('filename')} not found on disk, removing from metadata")
+                    del _rules_metadata[file_id]
+                    save_rules_metadata()
+        except Exception as e:
+            print(f"Error loading rules metadata: {e}")
             _rules_metadata = {}
     else:
         _rules_metadata = {}
+    
+    # Also scan directory for files that might not be in metadata (recovery)
+    if RULES_DIR.exists():
+        for file_path in RULES_DIR.iterdir():
+            if file_path.is_file() and file_path.name != "metadata.json":
+                # Check if this file is in metadata
+                found = False
+                for metadata in _rules_metadata.values():
+                    if metadata.get("filename") == file_path.name:
+                        found = True
+                        break
+                
+                if not found:
+                    # Add orphaned file to metadata
+                    print(f"Found orphaned file: {file_path.name}, adding to metadata")
+                    file_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()[:16]
+                    file_ext = file_path.suffix.lower()
+                    is_text = file_ext in {'.md', '.markdown', '.yaml', '.yml', '.json', '.txt'}
+                    is_image = file_ext in {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
+                    is_pdf = file_ext == '.pdf'
+                    is_epub = file_ext == '.epub'
+                    file_category = "text" if is_text else ("image" if is_image else "document")
+                    
+                    _rules_metadata[file_hash] = {
+                        "file_id": file_hash,
+                        "filename": file_path.name,
+                        "original_filename": file_path.name,
+                        "size": file_path.stat().st_size,
+                        "type": "application/octet-stream",
+                        "extension": file_ext,
+                        "category": file_category,
+                        "is_text": is_text,
+                        "is_image": is_image,
+                        "is_pdf": is_pdf,
+                        "is_epub": is_epub,
+                        "is_document": file_ext in {'.pdf', '.epub'},
+                        "uploaded_at": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
+                        "uploaded_by": None
+                    }
+                    save_rules_metadata()
 
 def save_rules_metadata():
     """Save rules metadata to file."""
