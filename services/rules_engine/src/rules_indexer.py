@@ -334,13 +334,42 @@ class RulesIndexer:
                     n_results=n_results
                 )
                 
-                # Format results
+                # Format results and filter by game_system and session_id
                 formatted_results = []
                 if results['ids'] and len(results['ids'][0]) > 0:
                     for i in range(len(results['ids'][0])):
+                        chunk_metadata = results['metadatas'][0][i]
+                        file_id = chunk_metadata.get('file_id')
+                        
+                        # Load file metadata to check associations
+                        if file_id:
+                            import json
+                            from pathlib import Path
+                            metadata_file = self.rules_dir / "metadata.json"
+                            if metadata_file.exists():
+                                try:
+                                    with open(metadata_file, 'r') as f:
+                                        all_metadata = json.load(f)
+                                    file_metadata = all_metadata.get(file_id, {})
+                                    
+                                    # Filter by game_system
+                                    if game_system:
+                                        file_game_system = file_metadata.get('game_system')
+                                        if file_game_system and file_game_system != game_system:
+                                            continue
+                                    
+                                    # Filter by session_id (include global files + session-specific)
+                                    if session_id:
+                                        file_session_ids = file_metadata.get('session_ids', [])
+                                        # Include if global (empty session_ids) or if session_id is in list
+                                        if file_session_ids and session_id not in file_session_ids:
+                                            continue
+                                except Exception as e:
+                                    print(f"Warning: Error loading metadata for filtering: {e}")
+                        
                         formatted_results.append({
                             "content": results['documents'][0][i],
-                            "metadata": results['metadatas'][0][i],
+                            "metadata": chunk_metadata,
                             "distance": results['distances'][0][i] if 'distances' in results else None
                         })
                 
