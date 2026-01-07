@@ -27,9 +27,23 @@ class RulesIndexer:
         
         # Initialize embedding provider first
         try:
+            # Ensure GOOGLE_APPLICATION_CREDENTIALS is set correctly
+            creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+            if creds_path and not os.path.exists(creds_path):
+                # Try to find it in the container path
+                container_path = "/app/credentials.json"
+                if os.path.exists(container_path):
+                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = container_path
+                    print(f"Using credentials from container path: {container_path}")
+                else:
+                    print(f"Warning: Credentials file not found at {creds_path} or {container_path}")
             self.embedding_provider = GeminiEmbeddingProvider()
         except Exception as e:
-            print(f"Warning: Embedding provider not available: {e}")
+            error_msg = str(e)
+            # Clean up error message to not expose host paths
+            if "/Users/" in error_msg:
+                error_msg = error_msg.replace("/Users/shepner/", "/app/")
+            print(f"Warning: Embedding provider not available: {error_msg}")
             self.embedding_provider = None
         
         # Get or create collection with embedding function if available

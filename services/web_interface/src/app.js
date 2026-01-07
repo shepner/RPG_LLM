@@ -1,4 +1,5 @@
 // TTRPG LLM System Web Interface
+// Version: 1.0.0
 
 const AUTH_URL = 'http://localhost:8000';
 const GAME_SESSION_URL = 'http://localhost:8001';
@@ -6,6 +7,8 @@ const RULES_ENGINE_URL = 'http://localhost:8002';
 const WORLDS_URL = 'http://localhost:8004';
 const GM_URL = 'http://localhost:8005';
 const BEING_REGISTRY_URL = 'http://localhost:8007';
+
+const SYSTEM_VERSION = '1.0.0';
 
 let authToken = null;
 let worldsWS = null;
