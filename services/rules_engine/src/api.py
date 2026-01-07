@@ -280,6 +280,27 @@ async def upload_rules(
 async def list_rules(token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None):
     """List all uploaded rules files."""
     load_rules_metadata()  # Refresh metadata
+    
+    # Check indexing status for files that should be indexed
+    if rules_indexer:
+        try:
+            indexed_files = set(rules_indexer.get_all_indexed_files())
+            for file_id, metadata in _rules_metadata.items():
+                # Only check indexing for files that can be indexed (text, PDF, EPUB)
+                if metadata.get("is_text") or metadata.get("is_pdf") or metadata.get("is_epub"):
+                    if file_id in indexed_files:
+                        if metadata.get("indexing_status") != "indexed":
+                            metadata["indexing_status"] = "indexed"
+                            if not metadata.get("indexed_at"):
+                                metadata["indexed_at"] = datetime.now().isoformat()
+                    elif metadata.get("indexing_status") not in ["indexing", "failed"]:
+                        # If not indexed and not currently indexing/failed, mark as pending
+                        if not metadata.get("indexing_status"):
+                            metadata["indexing_status"] = "pending"
+            save_rules_metadata()
+        except Exception as e:
+            print(f"Warning: Error checking indexing status: {e}")
+    
     rules_list = list(_rules_metadata.values())
     return {
         "rules": rules_list,
