@@ -118,17 +118,17 @@
         </main>
     </div>
 
-    <!-- Custom Modal Dialogs -->
+    <!-- Custom Modal Dialogs - Non-blocking replacements for prompt() and confirm() -->
     <div id="custom-modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 10000; align-items: center; justify-content: center;">
         <div id="custom-modal" style="background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 20px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);">
             <h3 id="custom-modal-title" style="color: #e0e0e0; margin: 0 0 12px 0; font-size: 1.1em; font-weight: 600;"></h3>
-            <p id="custom-modal-message" style="color: #bbb; margin: 0 0 16px 0; font-size: 0.95em; line-height: 1.5;"></p>
+            <p id="custom-modal-message" style="color: #bbb; margin: 0 0 16px 0; font-size: 0.95em; line-height: 1.5; white-space: pre-line;"></p>
             <div id="custom-modal-input-container" style="display: none; margin-bottom: 16px;">
                 <input type="text" id="custom-modal-input" placeholder="" style="width: 100%; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
             </div>
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                <button id="custom-modal-cancel" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Cancel</button>
-                <button id="custom-modal-confirm" style="padding: 8px 16px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">OK</button>
+                <button id="custom-modal-cancel" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em; transition: background 0.2s;">Cancel</button>
+                <button id="custom-modal-confirm" style="padding: 8px 16px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em; transition: background 0.2s;">OK</button>
             </div>
         </div>
     </div>

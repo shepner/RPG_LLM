@@ -52,14 +52,18 @@ function showCustomModal(options) {
         // Handle cancel
         newCancelBtn.addEventListener('click', () => {
             overlay.style.display = 'none';
-            resolve(options.type === 'prompt' ? null : false);
+            if (options.type === 'prompt') {
+                resolve(null);
+            } else {
+                resolve(false);
+            }
         });
         
         // Handle confirm
         const handleConfirm = () => {
             overlay.style.display = 'none';
             if (options.type === 'prompt') {
-                resolve(input.value);
+                resolve(input.value || null);
             } else {
                 resolve(true);
             }
@@ -79,19 +83,33 @@ function showCustomModal(options) {
         }
         
         // Handle Escape key
-        const handleEscape = (e) => {
-            if (e.key === 'Escape') {
+        let escapeHandler = null;
+        let resolved = false;
+        const cleanup = () => {
+            if (escapeHandler) {
+                document.removeEventListener('keydown', escapeHandler);
+                escapeHandler = null;
+            }
+        };
+        
+        escapeHandler = (e) => {
+            if (e.key === 'Escape' && !resolved) {
+                resolved = true;
                 overlay.style.display = 'none';
+                cleanup();
                 resolve(options.type === 'prompt' ? null : false);
             }
         };
-        document.addEventListener('keydown', handleEscape);
+        document.addEventListener('keydown', escapeHandler);
         
-        // Clean up escape listener when modal closes
+        // Wrap resolve to clean up escape listener
         const originalResolve = resolve;
         resolve = (value) => {
-            document.removeEventListener('keydown', handleEscape);
-            originalResolve(value);
+            if (!resolved) {
+                resolved = true;
+                cleanup();
+                originalResolve(value);
+            }
         };
     });
 }
