@@ -1207,8 +1207,24 @@ function stopIndexingProgressPoll(fileId) {
     }
 }
 
+// Track which error details are expanded
+const expandedErrorDetails = new Set();
+
 async function listRules() {
     try {
+        // Before refreshing, save which details are currently open
+        const rulesList = document.getElementById('rules-list');
+        if (rulesList) {
+            const openDetails = rulesList.querySelectorAll('details[open]');
+            expandedErrorDetails.clear();
+            openDetails.forEach(details => {
+                const errorId = details.closest('[data-file-id]')?.getAttribute('data-file-id');
+                if (errorId) {
+                    expandedErrorDetails.add(errorId);
+                }
+            });
+        }
+        
         const token = authToken || localStorage.getItem('authToken');
         const response = await fetch(`${RULES_ENGINE_URL}/rules/list`, {
             headers: {
@@ -1218,7 +1234,6 @@ async function listRules() {
         
         if (response.ok) {
             const data = await response.json();
-            const rulesList = document.getElementById('rules-list');
             if (data.rules && data.rules.length > 0) {
                 rulesList.innerHTML = data.rules.map(rule => {
                     // Start polling for progress if file is indexing
@@ -1322,7 +1337,8 @@ async function listRules() {
                             }
                             
                             // Show full error in a collapsible section
-                            const errorId = `error-${rule.file_id}`;
+                            const errorId = rule.file_id;
+                            const shouldBeOpen = expandedErrorDetails.has(errorId);
                             statusBadge += `
                                 <div style="margin-top: 8px; padding: 8px; background: #2a1a1a; border-left: 3px solid ${errorColor}; border-radius: 4px;">
                                     <div style="color: ${errorColor}; font-weight: bold; font-size: 0.85em; margin-bottom: 4px;">
@@ -1331,7 +1347,7 @@ async function listRules() {
                                     <div style="color: #e0e0e0; font-size: 0.8em; margin-bottom: 6px;">
                                         ${errorMsg}
                                     </div>
-                                    <details style="margin-top: 4px;">
+                                    <details ${shouldBeOpen ? 'open' : ''} style="margin-top: 4px;">
                                         <summary style="color: #888; font-size: 0.75em; cursor: pointer; user-select: none;">Show technical details</summary>
                                         <pre style="color: #aaa; font-size: 0.7em; margin-top: 4px; white-space: pre-wrap; word-break: break-word; max-height: 100px; overflow-y: auto;">${rule.indexing_error.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
                                     </details>
@@ -1342,7 +1358,7 @@ async function listRules() {
                     }
                     
                     return `
-                        <div style="padding: 10px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${categoryColor};">
+                        <div data-file-id="${rule.file_id}" style="padding: 10px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${categoryColor};">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div>
                                     <strong style="color: ${categoryColor};">${categoryIcon} ${rule.filename || rule.original_filename}</strong>
