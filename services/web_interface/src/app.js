@@ -885,7 +885,7 @@ window.downloadRule = async function(fileId) {
 
 // Delete rule
 window.deleteRule = async function(fileId) {
-    if (!confirm('Are you sure you want to delete this file?')) {
+    if (!confirm('Are you sure you want to delete this file?\n\nThis will permanently remove the file from:\n- Disk storage\n- Search index\n- System metadata')) {
         return;
     }
     
@@ -898,11 +898,20 @@ window.deleteRule = async function(fileId) {
         });
         
         if (response.ok) {
-            alert('File deleted successfully');
+            const result = await response.json();
+            const deletedFrom = result.deleted_from || [];
+            alert(`File deleted successfully!\n\nRemoved from: ${deletedFrom.join(', ')}`);
             await listRules();
         } else {
-            const error = await response.text();
-            alert('Failed to delete file: ' + error);
+            const errorText = await response.text();
+            let errorMessage = 'Failed to delete file';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            alert(errorMessage);
         }
     } catch (error) {
         console.error('Error deleting rule:', error);

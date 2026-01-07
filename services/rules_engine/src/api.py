@@ -375,10 +375,21 @@ async def delete_rule(
     file_id: str,
     token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
 ):
-    """Delete a rules file (GM only)."""
-    if AUTH_AVAILABLE and token_data:
-        # Check if user is GM (would need to import require_gm)
-        pass  # TODO: Add GM check
+    """Delete a rules file from disk, index, and metadata (GM only)."""
+    if AUTH_AVAILABLE:
+        if not token_data:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        # Check if user is GM
+        try:
+            from middleware import require_gm
+            # This will raise HTTPException if not GM
+            await require_gm()(token_data)
+        except HTTPException:
+            raise HTTPException(status_code=403, detail="GM role required to delete rules")
+        except Exception:
+            # If require_gm not available, just check role manually
+            if token_data.role != "gm":
+                raise HTTPException(status_code=403, detail="GM role required to delete rules")
     
     load_rules_metadata()
     if file_id not in _rules_metadata:
@@ -387,22 +398,41 @@ async def delete_rule(
     metadata = _rules_metadata[file_id]
     file_path = RULES_DIR / metadata["filename"]
     
-    # Delete file
+    deleted_items = []
+    
+    # Delete file from disk
     if file_path.exists():
-        file_path.unlink()
+        try:
+            file_path.unlink()
+            deleted_items.append("file")
+        except Exception as e:
+            print(f"Warning: Failed to delete file from disk: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to delete file from disk: {str(e)}")
     
     # Remove from index
     if rules_indexer:
         try:
             rules_indexer.delete_file_index(file_id)
+            deleted_items.append("index")
         except Exception as e:
             print(f"Warning: Failed to remove file from index: {e}")
+            # Don't fail the delete if index removal fails, but log it
     
     # Remove from metadata
-    del _rules_metadata[file_id]
-    save_rules_metadata()
+    try:
+        del _rules_metadata[file_id]
+        save_rules_metadata()
+        deleted_items.append("metadata")
+    except Exception as e:
+        print(f"Warning: Failed to remove file from metadata: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove file from metadata: {str(e)}")
     
-    return {"message": "Rules file deleted", "file_id": file_id}
+    return {
+        "message": "Rules file deleted successfully",
+        "file_id": file_id,
+        "filename": metadata.get("filename", "unknown"),
+        "deleted_from": deleted_items
+    }
 
 
 @app.get("/health")

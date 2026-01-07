@@ -157,13 +157,20 @@ class RulesIndexer:
     
     def delete_file_index(self, file_id: str) -> None:
         """Remove all chunks for a file from the index."""
-        # Get all document IDs for this file
-        results = self.collection.get(
-            where={"file_id": file_id}
-        )
-        
-        if results['ids']:
-            self.collection.delete(ids=results['ids'])
+        try:
+            # Get all document IDs for this file
+            results = self.collection.get(
+                where={"file_id": file_id}
+            )
+            
+            if results and results.get('ids') and len(results['ids']) > 0:
+                self.collection.delete(ids=results['ids'])
+                print(f"Deleted {len(results['ids'])} chunks from index for file {file_id}")
+            else:
+                print(f"No chunks found in index for file {file_id}")
+        except Exception as e:
+            print(f"Error deleting file index for {file_id}: {e}")
+            raise
     
     def get_all_indexed_files(self) -> List[str]:
         """Get list of all indexed file IDs."""
