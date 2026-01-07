@@ -442,6 +442,7 @@ document.getElementById('create-session-btn').addEventListener('click', () => {
             console.error('Error creating session:', error);
             alert('Error creating session: ' + error.message);
         }
+        }, 0);
     }, 0);
 });
 
