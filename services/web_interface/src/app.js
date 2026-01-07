@@ -10,6 +10,14 @@ const GM_URL = 'http://localhost:8005';
 const WORLDS_URL = 'http://localhost:8004';
 const TIME_MANAGEMENT_URL = 'http://localhost:8003';
 
+// Utility function to escape HTML
+function escapeHTML(str) {
+    if (typeof str !== 'string') return str;
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 // Custom Modal Dialogs - Non-blocking replacements for prompt() and confirm()
 function showCustomModal(options) {
     return new Promise((resolve) => {
