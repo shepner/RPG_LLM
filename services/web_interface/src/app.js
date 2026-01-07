@@ -1,12 +1,120 @@
 // TTRPG LLM System Web Interface
 // Version: 1.0.0
 
-const AUTH_URL = 'http://localhost:8000';
-const GAME_SESSION_URL = 'http://localhost:8001';
-const RULES_ENGINE_URL = 'http://localhost:8002';
-const WORLDS_URL = 'http://localhost:8004';
-const GM_URL = 'http://localhost:8005';
-const BEING_REGISTRY_URL = 'http://localhost:8007';
+// Constants
+const AUTH_URL = 'http://localhost:8001';
+const GAME_SESSION_URL = 'http://localhost:8002';
+const RULES_ENGINE_URL = 'http://localhost:8003';
+const BEING_REGISTRY_URL = 'http://localhost:8005';
+const GM_URL = 'http://localhost:8004';
+const WORLDS_URL = 'http://localhost:8006';
+const TIME_MANAGEMENT_URL = 'http://localhost:8007';
+
+// Custom Modal Dialogs - Non-blocking replacements for prompt() and confirm()
+function showCustomModal(options) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('custom-modal-overlay');
+        const title = document.getElementById('custom-modal-title');
+        const message = document.getElementById('custom-modal-message');
+        const inputContainer = document.getElementById('custom-modal-input-container');
+        const input = document.getElementById('custom-modal-input');
+        const cancelBtn = document.getElementById('custom-modal-cancel');
+        const confirmBtn = document.getElementById('custom-modal-confirm');
+        
+        // Set content
+        title.textContent = options.title || (options.type === 'prompt' ? 'Input Required' : 'Confirm');
+        message.textContent = options.message || '';
+        
+        // Show/hide input for prompt
+        if (options.type === 'prompt') {
+            inputContainer.style.display = 'block';
+            input.value = options.defaultValue || '';
+            input.placeholder = options.placeholder || '';
+            input.focus();
+            input.select();
+        } else {
+            inputContainer.style.display = 'none';
+        }
+        
+        // Set button labels
+        cancelBtn.textContent = options.cancelLabel || 'Cancel';
+        confirmBtn.textContent = options.confirmLabel || 'OK';
+        
+        // Clean up previous listeners
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        
+        // Show modal
+        overlay.style.display = 'flex';
+        
+        // Handle cancel
+        newCancelBtn.addEventListener('click', () => {
+            overlay.style.display = 'none';
+            resolve(options.type === 'prompt' ? null : false);
+        });
+        
+        // Handle confirm
+        const handleConfirm = () => {
+            overlay.style.display = 'none';
+            if (options.type === 'prompt') {
+                resolve(input.value);
+            } else {
+                resolve(true);
+            }
+        };
+        
+        newConfirmBtn.addEventListener('click', handleConfirm);
+        
+        // Handle Enter key for prompt
+        if (options.type === 'prompt') {
+            const handleEnter = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleConfirm();
+                }
+            };
+            input.addEventListener('keydown', handleEnter);
+        }
+        
+        // Handle Escape key
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                overlay.style.display = 'none';
+                resolve(options.type === 'prompt' ? null : false);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+        
+        // Clean up escape listener when modal closes
+        const originalResolve = resolve;
+        resolve = (value) => {
+            document.removeEventListener('keydown', handleEscape);
+            originalResolve(value);
+        };
+    });
+}
+
+// Non-blocking prompt replacement
+async function customPrompt(message, defaultValue = '', placeholder = '') {
+    return await showCustomModal({
+        type: 'prompt',
+        title: 'Input Required',
+        message: message,
+        defaultValue: defaultValue,
+        placeholder: placeholder
+    });
+}
+
+// Non-blocking confirm replacement
+async function customConfirm(message, title = 'Confirm') {
+    return await showCustomModal({
+        type: 'confirm',
+        title: title,
+        message: message
+    });
+}
 
 // Get version from build-time generated file, or fallback to default
 const SYSTEM_VERSION = (typeof window !== 'undefined' && window.BUILD_VERSION) || 'dev';
@@ -375,7 +483,7 @@ document.getElementById('create-session-btn').addEventListener('click', () => {
             const isGM = user.role === 'gm';
             
             if (!isGM) {
-                const fixFirst = confirm('Only Game Masters can create sessions. Your role is: ' + user.role + '\n\nWould you like to check if you should be the first GM?');
+                const fixFirst = await customConfirm('Only Game Masters can create sessions. Your role is: ' + user.role + '\n\nWould you like to check if you should be the first GM?', 'Game Master Required');
                 if (fixFirst) {
                     try {
                         const fixResponse = await fetch(`${AUTH_URL}/users/fix-first-user`, {
@@ -751,7 +859,11 @@ window.updateUserRole = async function(userId) {
 
 // Delete user
 window.deleteUser = async function(userId, username) {
-    if (!confirm(`Are you sure you want to delete user "${username}"?\n\nThis will:\n- Delete their account permanently\n- Remove them from all character assignments\n- Cannot be undone!`)) {
+    const confirmed = await customConfirm(
+        `Are you sure you want to delete user "${username}"?\n\nThis will:\n- Delete their account permanently\n- Remove them from all character assignments\n- Cannot be undone!`,
+        'Delete User'
+    );
+    if (!confirmed) {
         return;
     }
     
@@ -1662,7 +1774,8 @@ window.downloadRule = async function(fileId) {
 
 // Retry indexing for a failed file
 window.retryIndexing = async function(fileId) {
-    if (!confirm('Retry indexing for this file? This will attempt to index the file again.')) {
+    const confirmed = await customConfirm('Retry indexing for this file? This will attempt to index the file again.', 'Retry Indexing');
+    if (!confirmed) {
         return;
     }
     
@@ -1703,7 +1816,11 @@ window.retryIndexing = async function(fileId) {
 
 // Delete rule
 window.deleteRule = async function(fileId) {
-    if (!confirm('Are you sure you want to delete this file?\n\nThis will permanently remove the file from:\n- Disk storage\n- Search index\n- System metadata')) {
+    const confirmed = await customConfirm(
+        'Are you sure you want to delete this file?\n\nThis will permanently remove the file from:\n- Disk storage\n- Search index\n- System metadata',
+        'Delete File'
+    );
+    if (!confirmed) {
         return;
     }
     
