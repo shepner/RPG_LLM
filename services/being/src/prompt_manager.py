@@ -134,8 +134,27 @@ class PromptManager:
                 # Only session-scoped prompts (no specific session)
                 query = query.where(SystemPromptDB.scope == PromptScope.SESSION)
             
-            result = await session.execute(query.order_by(SystemPromptDB.created_at.desc()))
-            prompts_db = result.scalars().all()
+            try:
+                result = await session.execute(query.order_by(SystemPromptDB.created_at.desc()))
+                prompts_db = result.scalars().all()
+            except Exception as e:
+                # If query fails due to missing column, try to recreate table
+                if "no such column" in str(e).lower() and "gm_only" in str(e):
+                    logger.warning("gm_only column missing, attempting migration...")
+                    try:
+                        async with self.engine.begin() as conn:
+                            await conn.execute(sa.text("ALTER TABLE system_prompts ADD COLUMN gm_only BOOLEAN DEFAULT 0"))
+                        logger.info("Successfully added gm_only column")
+                        # Retry query
+                        result = await session.execute(query.order_by(SystemPromptDB.created_at.desc()))
+                        prompts_db = result.scalars().all()
+                    except Exception as e2:
+                        logger.error(f"Failed to migrate database: {e2}")
+                        # Return empty list if migration fails
+                        return []
+                else:
+                    raise
+            
             prompts = []
             for p in prompts_db:
                 try:
