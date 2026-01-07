@@ -453,6 +453,74 @@ async def delete_rule(
     }
 
 
+@app.post("/rules/{file_id}/retry-indexing")
+async def retry_indexing(
+    file_id: str,
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None,
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
+    """Retry indexing a failed file (GM only)."""
+    if AUTH_AVAILABLE:
+        await require_gm()(token_data)  # Ensure user is GM
+    
+    load_rules_metadata()
+    if file_id not in _rules_metadata:
+        raise HTTPException(status_code=404, detail="Rules file not found")
+    
+    metadata = _rules_metadata[file_id]
+    file_path = RULES_DIR / metadata["filename"]
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    
+    # Only retry if file can be indexed and is currently failed or pending
+    if not (metadata.get("is_text") or metadata.get("is_pdf") or metadata.get("is_epub")):
+        raise HTTPException(status_code=400, detail="File type cannot be indexed")
+    
+    if metadata.get("indexing_status") not in ["failed", "pending"]:
+        raise HTTPException(status_code=400, detail=f"Cannot retry indexing for file with status: {metadata.get('indexing_status')}")
+    
+    # Extract content and retry indexing
+    if rules_parser and rules_indexer:
+        try:
+            file_ext = Path(metadata["filename"]).suffix.lower()
+            extracted = rules_parser.extract_content(file_path, file_ext)
+            if extracted.get("content"):
+                # Update status to "indexing"
+                _rules_metadata[file_id]["indexing_status"] = "indexing"
+                _rules_metadata[file_id]["indexing_progress"] = {
+                    "current": 0,
+                    "total": 0,
+                    "percentage": 0,
+                    "stage": "starting"
+                }
+                _rules_metadata[file_id]["indexing_error"] = None
+                save_rules_metadata()
+                
+                # Index in background task
+                background_tasks.add_task(
+                    _index_file_background,
+                    rules_indexer,
+                    file_id,
+                    metadata["filename"],
+                    extracted["content"],
+                    {
+                        "file_id": file_id,
+                        "filename": metadata["filename"],
+                        "original_filename": metadata.get("original_filename", metadata["filename"]),
+                        "type": metadata.get("category", "document"),
+                        "extension": file_ext
+                    }
+                )
+                return {"message": "Indexing retry initiated", "file_id": file_id}
+            else:
+                raise HTTPException(status_code=400, detail="No content extracted from file")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to retry indexing: {str(e)}")
+    else:
+        raise HTTPException(status_code=503, detail="Indexing service not available")
+
+
 @app.get("/health")
 async def health():
     """Health check."""

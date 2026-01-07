@@ -1051,7 +1051,43 @@ async function listRules() {
                             statusBadge += `<span style="color: #666; margin-left: 5px; font-size: 0.75em;">(${new Date(rule.indexed_at).toLocaleString()})</span>`;
                         }
                         if (indexingStatus === 'failed' && rule.indexing_error) {
-                            statusBadge += `<div style="color: #ef4444; font-size: 0.75em; margin-top: 3px;">Error: ${rule.indexing_error.substring(0, 100)}</div>`;
+                            // Format error message better
+                            let errorMsg = rule.indexing_error;
+                            let errorType = 'Error';
+                            let errorColor = '#ef4444';
+                            
+                            // Categorize errors
+                            if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('exceeded')) {
+                                errorType = '⚠️ Quota Exceeded';
+                                errorMsg = 'API quota exceeded. Please check your billing and plan limits.';
+                            } else if (errorMsg.includes('401') || errorMsg.includes('unauthorized') || errorMsg.includes('credentials')) {
+                                errorType = '🔐 Authentication Error';
+                                errorMsg = 'Authentication failed. Please check your API credentials.';
+                            } else if (errorMsg.includes('404') || errorMsg.includes('not found')) {
+                                errorType = '📁 File Not Found';
+                                errorMsg = 'File or resource not found.';
+                            } else if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
+                                errorType = '⏱️ Timeout';
+                                errorMsg = 'Request timed out. Please try again.';
+                            }
+                            
+                            // Show full error in a collapsible section
+                            const errorId = `error-${rule.file_id}`;
+                            statusBadge += `
+                                <div style="margin-top: 8px; padding: 8px; background: #2a1a1a; border-left: 3px solid ${errorColor}; border-radius: 4px;">
+                                    <div style="color: ${errorColor}; font-weight: bold; font-size: 0.85em; margin-bottom: 4px;">
+                                        ${errorType}
+                                    </div>
+                                    <div style="color: #e0e0e0; font-size: 0.8em; margin-bottom: 6px;">
+                                        ${errorMsg}
+                                    </div>
+                                    <details style="margin-top: 4px;">
+                                        <summary style="color: #888; font-size: 0.75em; cursor: pointer; user-select: none;">Show technical details</summary>
+                                        <pre style="color: #aaa; font-size: 0.7em; margin-top: 4px; white-space: pre-wrap; word-break: break-word; max-height: 100px; overflow-y: auto;">${rule.indexing_error.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+                                    </details>
+                                    <button onclick="retryIndexing('${rule.file_id}')" style="margin-top: 6px; padding: 4px 12px; background: #f59e0b; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em; font-weight: bold;">🔄 Retry Indexing</button>
+                                </div>
+                            `;
                         }
                     }
                     
@@ -1142,6 +1178,47 @@ window.downloadRule = async function(fileId) {
     } catch (error) {
         console.error('Error downloading rule:', error);
         alert('Error downloading file: ' + error.message);
+    }
+};
+
+// Retry indexing for a failed file
+window.retryIndexing = async function(fileId) {
+    if (!confirm('Retry indexing for this file? This will attempt to index the file again.')) {
+        return;
+    }
+    
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        const response = await fetch(`${RULES_ENGINE_URL}/rules/${fileId}/retry-indexing`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            alert('Indexing retry initiated! The file will be re-indexed in the background.');
+            // Refresh the list to show updated status
+            await listRules();
+            // Start polling for progress
+            setTimeout(() => {
+                startIndexingProgressPoll(fileId);
+            }, 500);
+        } else {
+            const errorText = await response.text();
+            let errorMessage = 'Failed to retry indexing';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            alert(errorMessage);
+        }
+    } catch (error) {
+        console.error('Error retrying indexing:', error);
+        alert('Error retrying indexing: ' + error.message);
     }
 };
 
