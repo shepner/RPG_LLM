@@ -428,14 +428,7 @@ document.getElementById('create-session-btn').addEventListener('click', () => {
         
         if (response.ok) {
             const session = await response.json();
-            addNarrative({
-                text: `Created game session: ${session.name} (ID: ${session.session_id})`
-            });
-            addEvent({
-                event_type: 'session_created',
-                description: `New game session "${session.name}" created`,
-                game_time: Date.now()
-            });
+            addSystemMessage(`Created game session: ${session.name} (ID: ${session.session_id})`);
             // Refresh in background, don't await
             refreshSessions().catch(err => console.error('Error refreshing sessions:', err));
         } else {
@@ -1063,12 +1056,8 @@ window.joinSession = async function(sessionId) {
                 }
             }
             
-            // Session join is a game event, not narrative
-            addEvent({
-                event_type: 'session_joined',
-                description: `You joined session ${sessionId}`,
-                game_time: Date.now()
-            });
+            // Session join is a system message
+            addSystemMessage(`You joined session ${sessionId}`);
             await refreshSessions();
             // Reload characters for this session
             await loadUserCharacters();
@@ -1183,11 +1172,7 @@ async function loadGameState() {
         
     } catch (error) {
         console.error('Error loading game state:', error);
-        addEvent({
-            event_type: 'error',
-            description: 'Could not load game state. Some features may not work.',
-            game_time: Date.now()
-        });
+        addSystemMessage('Could not load game state. Some features may not work.');
     }
     
     // Load user's characters
