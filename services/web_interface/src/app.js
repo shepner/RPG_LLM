@@ -478,14 +478,16 @@ document.addEventListener('click', (e) => {
         const sessionId = e.target.dataset.sessionId;
         if (sessionId) {
             e.preventDefault();
-            joinSession(sessionId);
+            // Defer to prevent blocking
+            setTimeout(() => joinSession(sessionId), 0);
         }
     } else if (e.target.classList.contains('delete-session-btn')) {
         const sessionId = e.target.dataset.sessionId;
         const sessionName = e.target.dataset.sessionName;
         if (sessionId && sessionName) {
             e.preventDefault();
-            deleteSession(sessionId, sessionName);
+            // Defer to prevent blocking
+            setTimeout(() => deleteSession(sessionId, sessionName), 0);
         }
     }
 });
@@ -564,45 +566,57 @@ async function refreshSessions() {
     }
 }
 
-// Delete session function
+// Delete session function - defer confirm to prevent blocking
 window.deleteSession = async function(sessionId, sessionName) {
-    if (!confirm(`Are you sure you want to delete the session "${sessionName}"?\n\nThis will permanently delete the session and all associated data. This cannot be undone!`)) {
-        return;
-    }
-    
-    try {
-        const token = authToken || localStorage.getItem('authToken');
-        const currentUser = window.currentUser;
-        
-        if (!currentUser) {
-            alert('You must be logged in to delete a session.');
-            return;
-        }
-        
-        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}?gm_user_id=${currentUser.user_id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (response.ok) {
-            // Refresh sessions in background
-            refreshSessions().catch(err => console.error('Error refreshing sessions:', err));
-            alert(`Session "${sessionName}" deleted successfully!`);
-        } else {
-            const errorText = await response.text();
-            let errorMessage = 'Failed to delete session';
-            try {
-                const errorJson = JSON.parse(errorText);
-                errorMessage = errorJson.detail || errorMessage;
-            } catch {
-                errorMessage = errorText || errorMessage;
+    // Defer confirm call to prevent blocking the click handler
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            if (!confirm(`Are you sure you want to delete the session "${sessionName}"?\n\nThis will permanently delete the session and all associated data. This cannot be undone!`)) {
+                resolve();
+                return;
             }
-            alert(errorMessage);
-        }
-    } catch (error) {
-        console.error('Error deleting session:', error);
-        alert('Error deleting session: ' + error.message);
-    }
+            
+            // Continue with async work after confirm
+            (async () => {
+                try {
+                    const token = authToken || localStorage.getItem('authToken');
+                    const currentUser = window.currentUser;
+                    
+                    if (!currentUser) {
+                        alert('You must be logged in to delete a session.');
+                        resolve();
+                        return;
+                    }
+                    
+                    const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}?gm_user_id=${currentUser.user_id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (response.ok) {
+                        // Refresh sessions in background
+                        refreshSessions().catch(err => console.error('Error refreshing sessions:', err));
+                        alert(`Session "${sessionName}" deleted successfully!`);
+                    } else {
+                        const errorText = await response.text();
+                        let errorMessage = 'Failed to delete session';
+                        try {
+                            const errorJson = JSON.parse(errorText);
+                            errorMessage = errorJson.detail || errorMessage;
+                        } catch {
+                            errorMessage = errorText || errorMessage;
+                        }
+                        alert(errorMessage);
+                    }
+                    resolve();
+                } catch (error) {
+                    console.error('Error deleting session:', error);
+                    alert('Error deleting session: ' + error.message);
+                    resolve();
+                }
+            })();
+        }, 0);
+    });
 };
 
 // User management for GMs - set up event listener when button is available
