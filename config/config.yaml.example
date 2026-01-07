@@ -4,7 +4,7 @@
 # LLM Provider Settings
 llm:
   provider: gemini  # gemini, openai, anthropic
-  model: gemini-1.5-flash  # Model name for the selected provider (gemini-1.5-flash, gemini-1.5-pro)
+  model: gemini-1.0-pro  # Model name for the selected provider (gemini-1.0-pro, gemini-1.5-flash, gemini-1.5-pro)
   temperature: 0.7
   max_tokens: 2000
   streaming: true

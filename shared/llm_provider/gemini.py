@@ -9,7 +9,7 @@ from .base import BaseLLMProvider, LLMResponse, LLMStreamChunk
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini LLM provider."""
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-1.5-flash", **kwargs):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-1.0-pro", **kwargs):
         """
         Initialize Gemini provider.
         
@@ -29,7 +29,29 @@ class GeminiProvider(BaseLLMProvider):
         else:
             raise ValueError("Either api_key or GOOGLE_APPLICATION_CREDENTIALS must be provided")
         
-        self.client = genai.GenerativeModel(model)
+        # Normalize model name - remove 'models/' prefix if present, as GenerativeModel adds it
+        normalized_model = model.replace('models/', '') if model.startswith('models/') else model
+        
+        # Map newer model names to v1beta-compatible names if needed
+        # v1beta API may use different model names than v1
+        model_mapping = {
+            'gemini-1.5-flash': 'gemini-1.0-pro',  # Fallback for v1beta
+            'gemini-1.5-pro': 'gemini-1.0-pro',    # Fallback for v1beta
+        }
+        
+        # Use mapped model if available, otherwise use normalized model
+        final_model = model_mapping.get(normalized_model, normalized_model)
+        
+        try:
+            self.client = genai.GenerativeModel(final_model)
+        except Exception as e:
+            # If model not found, try gemini-1.0-pro as fallback
+            if final_model != 'gemini-1.0-pro':
+                print(f"Warning: Model {final_model} not available, falling back to gemini-1.0-pro: {e}")
+                self.client = genai.GenerativeModel('gemini-1.0-pro')
+                self.model = 'gemini-1.0-pro'  # Update stored model name
+            else:
+                raise
     
     async def generate(
         self,
