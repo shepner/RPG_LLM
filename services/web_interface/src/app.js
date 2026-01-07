@@ -707,10 +707,17 @@ async function loadUserInfo() {
 // Load initial game state
 async function loadGameState() {
     try {
+        // Get token from localStorage if not in memory
+        const token = authToken || localStorage.getItem('authToken');
+        if (!token) {
+            console.log('No auth token available for loadGameState');
+            return;
+        }
+        
         // Get user info
         const userResponse = await fetch(`${AUTH_URL}/me`, {
             headers: {
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
         
