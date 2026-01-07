@@ -1456,6 +1456,12 @@ const LLM_SERVICES = {
         icon: "🧠",
         url: BEING_URL + '/query',
         color: '#8b5cf6'
+    },
+    worlds: {
+        name: "Gaia (Worlds Service)",
+        icon: "🌍",
+        url: WORLDS_URL + '/query',
+        color: '#06b6d4'
     }
 };
 

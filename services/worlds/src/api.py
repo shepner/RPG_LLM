@@ -2,13 +2,16 @@
 
 import os
 import logging
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from typing import List, Optional, Dict, Any
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from .world_state import WorldStateManager
-from .models import WorldEvent
+from .models import WorldEvent, SystemPrompt, SystemPromptCreate, SystemPromptUpdate
 from shared.embedding_provider.gemini import GeminiEmbeddingProvider
+from shared.llm_provider.gemini import GeminiProvider
 from shared.websocket.manager import WebSocketManager
+from .prompt_manager import PromptManager
 
 # Import auth middleware (optional - service can work without it)
 try:
@@ -51,11 +54,21 @@ embedding_provider = GeminiEmbeddingProvider(
     api_key=os.getenv("GEMINI_API_KEY")
 )
 
+# Initialize LLM provider
+llm_provider = GeminiProvider(
+    api_key=os.getenv("GEMINI_API_KEY"),
+    model=os.getenv("LLM_MODEL", "gemini-2.5-flash")
+)
+
 world_manager = WorldStateManager(
     database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./RPG_LLM_DATA/databases/worlds.db"),
     chroma_path=os.getenv("CHROMA_DB_PATH", "./RPG_LLM_DATA/vector_stores/worlds"),
     embedding_provider=embedding_provider
 )
+
+# Initialize database for system prompts
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./RPG_LLM_DATA/databases/worlds.db")
+prompt_manager = PromptManager(DATABASE_URL, "worlds")
 
 
 @app.on_event("startup")
@@ -64,6 +77,7 @@ async def startup():
     try:
         logger.info("Initializing worlds service database...")
         await world_manager.init_db()
+        await prompt_manager.init_db()
         logger.info("Worlds service database initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}", exc_info=True)
@@ -136,4 +150,176 @@ async def websocket_endpoint(websocket: WebSocket):
 async def health():
     """Health check."""
     return {"status": "healthy"}
+
+
+class QueryRequest(BaseModel):
+    """Request model for querying the worlds service."""
+    query: str
+    context: Optional[Dict[str, Any]] = None
+    session_id: Optional[str] = None  # For session-scoped prompts
+    game_system: Optional[str] = None  # For game system filtering
+
+
+@app.post("/query")
+async def query_worlds_service(
+    request: QueryRequest,
+    token_data: Optional[TokenData] = Depends(lambda: require_auth() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
+):
+    """
+    Query the Worlds service (Gaia) with a question (GM only).
+    
+    This allows GMs to test if the worlds service understands world state,
+    logical consistency, physics validation, and world evolution.
+    """
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="Authentication required to query worlds service")
+    
+    if not llm_provider:
+        return {
+            "service": "Gaia (Worlds Service)",
+            "query": request.query,
+            "response": "LLM provider not available. Cannot process queries.",
+            "error": "LLM not configured"
+        }
+    
+    try:
+        # Load active system prompts
+        active_prompts = await prompt_manager.get_active_prompts(
+            session_id=request.session_id,
+            game_system=request.game_system
+        )
+        
+        # Search for relevant world events to provide context
+        relevant_events = []
+        if world_manager:
+            try:
+                search_results = await world_manager.search_events(request.query, n_results=5)
+                if search_results and search_results.get('documents') and len(search_results['documents']) > 0:
+                    relevant_events = search_results['documents'][0][:5]  # Get top 5
+            except Exception as e:
+                logger.warning(f"Error searching world events for context: {e}")
+        
+        # Combine base system prompt with active prompts
+        base_system_prompt = "You are Gaia, the Worlds Service. You manage world state, track events, validate logical consistency, and oversee world evolution in a Tabletop Role-Playing Game. Answer GM questions about world state, physics, logical consistency, and world evolution."
+        if active_prompts:
+            system_prompt = f"{base_system_prompt}\n\n## Additional Context and Instructions\n{active_prompts}"
+        else:
+            system_prompt = base_system_prompt
+        
+        # Build context from relevant events
+        events_context = ""
+        if relevant_events:
+            events_context = "\n\n## Relevant World Events:\n" + "\n".join([f"- {event}" for event in relevant_events[:5]])
+        
+        prompt = f"""You are Gaia, the Worlds Service for a Tabletop Role-Playing Game. Your role is to manage world state, validate logical consistency, oversee physics, and track world evolution.
+
+GM QUERY:
+{request.query}
+
+ADDITIONAL CONTEXT:
+{request.context or "None"}
+{events_context}
+
+Answer the GM's question about world state, logical consistency, physics validation, world evolution, or world service responsibilities. Be helpful and provide insights into how you would handle the situation."""
+        
+        response = await llm_provider.generate(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            temperature=0.7,
+            max_tokens=1000
+        )
+        
+        return {
+            "service": "Gaia (Worlds Service)",
+            "query": request.query,
+            "response": response.text,
+            "metadata": {
+                "context_provided": request.context is not None,
+                "events_found": len(relevant_events)
+            }
+        }
+    except Exception as e:
+        error_msg = str(e)
+        if "/Users/" in error_msg:
+            error_msg = error_msg.replace("/Users/shepner/", "/app/")
+        return {
+            "service": "Gaia (Worlds Service)",
+            "query": request.query,
+            "response": None,
+            "error": f"Error processing query: {error_msg}"
+        }
+
+
+# System Prompt Management Endpoints (GM only)
+@app.post("/prompts", response_model=SystemPrompt)
+async def create_prompt(
+    prompt_data: SystemPromptCreate,
+    token_data: Optional[TokenData] = Depends(lambda: require_auth() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
+):
+    """Create a new system prompt."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="Authentication required")
+    prompt = await prompt_manager.create_prompt(prompt_data)
+    return prompt
+
+
+@app.get("/prompts", response_model=List[SystemPrompt])
+async def list_prompts(
+    session_id: Optional[str] = None,
+    game_system: Optional[str] = None,
+    include_global: bool = True,
+    token_data: Optional[TokenData] = Depends(lambda: require_auth() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
+):
+    """List system prompts."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="Authentication required")
+    prompts = await prompt_manager.list_prompts(
+        session_id=session_id,
+        game_system=game_system,
+        include_global=include_global
+    )
+    return prompts
+
+
+@app.get("/prompts/{prompt_id}", response_model=SystemPrompt)
+async def get_prompt(
+    prompt_id: str,
+    token_data: Optional[TokenData] = Depends(lambda: require_auth() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
+):
+    """Get a system prompt by ID."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="Authentication required")
+    prompt = await prompt_manager.get_prompt(prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return prompt
+
+
+@app.patch("/prompts/{prompt_id}", response_model=SystemPrompt)
+async def update_prompt(
+    prompt_id: str,
+    prompt_data: SystemPromptUpdate,
+    token_data: Optional[TokenData] = Depends(lambda: require_auth() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
+):
+    """Update a system prompt."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="Authentication required")
+    prompt = await prompt_manager.update_prompt(prompt_id, prompt_data)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return prompt
+
+
+@app.delete("/prompts/{prompt_id}")
+async def delete_prompt(
+    prompt_id: str,
+    token_data: Optional[TokenData] = Depends(lambda: require_auth() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
+):
+    """Delete a system prompt."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="Authentication required")
+    success = await prompt_manager.delete_prompt(prompt_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return {"message": "Prompt deleted successfully"}
 

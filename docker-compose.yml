@@ -92,6 +92,7 @@ services:
       - CHROMA_DB_PATH=./RPG_LLM_DATA/vector_stores/worlds
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/credentials.json}
+      - LLM_MODEL=${LLM_MODEL:-gemini-2.5-flash}
     volumes:
       - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
       - ./credentials.json:/app/credentials.json:ro
