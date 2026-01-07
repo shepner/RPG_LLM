@@ -214,13 +214,21 @@ async def get_beings_in_vicinity(
     beings_in_session = []
     
     # Get all beings in this session from registry
-    for being_id, entry in registry._registry.items():
-        if entry.session_id == session_id:
-            beings_in_session.append({
-                "being_id": being_id,
-                "name": entry.get("name", f"Character {being_id[:8]}") if isinstance(entry, dict) else f"Character {being_id[:8]}",
-                "owner_id": entry.owner_id if hasattr(entry, 'owner_id') else None
-            })
+    if hasattr(registry, '_registry'):
+        for being_id, entry in registry._registry.items():
+            if hasattr(entry, 'session_id') and entry.session_id == session_id:
+                # Try to get name from registry entry or use being_id as fallback
+                name = f"Character {being_id[:8]}"
+                if hasattr(entry, 'name') and entry.name:
+                    name = entry.name
+                elif isinstance(entry, dict) and 'name' in entry:
+                    name = entry['name']
+                
+                beings_in_session.append({
+                    "being_id": being_id,
+                    "name": name,
+                    "owner_id": entry.owner_id if hasattr(entry, 'owner_id') else None
+                })
     
     return {"beings": beings_in_session}
 

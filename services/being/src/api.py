@@ -218,12 +218,12 @@ async def query_being_service(
                     logger.error(f"Error checking target being access: {e}")
                     raise HTTPException(status_code=403, detail="You do not have access to the target being")
             
-            target_agent = get_agent(request.target_being_id)
-            target_memory = get_memory_manager(request.target_being_id)
+            target_agent = get_agent(target_being_id)
+            target_memory = get_memory_manager(target_being_id)
             
             # This is a being-to-being conversation
             # The source being (being_id) is talking to the target being (target_being_id)
-            base_system_prompt = f"You are {request.target_being_id}, a thinking being in a Tabletop Role-Playing Game. Another being ({request.being_id}) is speaking to you. Respond naturally based on your character's personality, goals, and current situation."
+            base_system_prompt = f"You are {target_being_id}, a thinking being in a Tabletop Role-Playing Game. Another being ({request.being_id}) is speaking to you. Respond naturally based on your character's personality, goals, and current situation."
         else:
             # Regular query (human to being or GM query)
             base_system_prompt = "You are Atman, the Being Service. You represent individual consciousness and autonomous decision-making for thinking beings in a Tabletop Role-Playing Game. Answer questions about consciousness, decision-making, and autonomous behavior."
@@ -234,7 +234,7 @@ async def query_being_service(
             system_prompt = base_system_prompt
         
         # Build prompt based on conversation type
-        if request.target_being_id:
+        if target_being_id:
             # Being-to-being conversation
             prompt = f"""Another being ({request.being_id}) is speaking to you:
 
@@ -265,9 +265,9 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
         )
         
         # Store conversation in memory
-        if request.target_being_id:
+        if target_being_id:
             # Being-to-being conversation: store in both beings' memories
-            conversation_text_source = f"To {request.target_being_id}: {request.query}\nFrom {request.target_being_id}: {response.text}"
+            conversation_text_source = f"To {target_being_id}: {request.query}\nFrom {target_being_id}: {response.text}"
             conversation_text_target = f"From {request.being_id}: {request.query}\nTo {request.being_id}: {response.text}"
             
             if request.being_id and memory_manager:
@@ -275,7 +275,7 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
                     conversation_text_source,
                     metadata={
                         "type": "being_conversation",
-                        "target_being_id": request.target_being_id,
+                        "target_being_id": target_being_id,
                         "session_id": request.session_id,
                         "game_system": request.game_system,
                         "timestamp": datetime.now().isoformat()
@@ -294,7 +294,7 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
                     }
                 )
             
-            logger.info(f"Stored being-to-being conversation between {request.being_id} and {request.target_being_id}")
+            logger.info(f"Stored being-to-being conversation between {request.being_id} and {target_being_id}")
         elif request.being_id and memory_manager:
             # Human-to-being conversation: store in being's memory
             conversation_text = f"User: {request.query}\nBeing: {response.text}"
@@ -315,12 +315,12 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
             "query": request.query,
             "response": response.text,
             "being_id": request.being_id,
-            "target_being_id": request.target_being_id,
+            "target_being_id": target_being_id,
             "mentions": mentions,
             "metadata": {
                 "context_provided": request.context is not None,
                 "stored_in_memory": request.being_id is not None,
-                "being_to_being": request.target_being_id is not None
+                "being_to_being": target_being_id is not None
             }
         }
     except Exception as e:
