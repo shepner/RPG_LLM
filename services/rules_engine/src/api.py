@@ -597,9 +597,6 @@ async def update_rule_associations(
         "game_system": metadata.get("game_system"),
         "session_ids": metadata.get("session_ids", [])
     }
-        "filename": metadata.get("filename", "unknown"),
-        "deleted_from": deleted_items
-    }
 
 
 @app.get("/rules/{file_id}/indexing-progress")
