@@ -15,7 +15,7 @@ class BeingAgent:
         self.being_id = being_id
         self.llm_provider = GeminiProvider(
             api_key=os.getenv("GEMINI_API_KEY"),
-            model=os.getenv("LLM_MODEL", "gemini-1.0-pro")
+            model=os.getenv("LLM_MODEL", "gemini-3-flash-preview")
         )
         self.cache = RedisCache(
             redis_url=os.getenv("REDIS_URL", "redis://localhost:6379")
