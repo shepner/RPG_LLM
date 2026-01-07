@@ -18,11 +18,13 @@ from .rules_indexer import RulesIndexer
 try:
     import sys
     sys.path.insert(0, '/app/services/auth/src')
-    from middleware import require_auth, get_current_user, TokenData
+    from middleware import require_auth, require_gm, get_current_user, TokenData
     AUTH_AVAILABLE = True
 except ImportError:
     AUTH_AVAILABLE = False
     def require_auth():
+        return None
+    def require_gm():
         return None
     def get_current_user():
         return None
@@ -373,23 +375,11 @@ async def download_rule(
 @app.delete("/rules/{file_id}")
 async def delete_rule(
     file_id: str,
-    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
 ):
     """Delete a rules file from disk, index, and metadata (GM only)."""
-    if AUTH_AVAILABLE:
-        if not token_data:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        # Check if user is GM
-        try:
-            from middleware import require_gm
-            # This will raise HTTPException if not GM
-            await require_gm()(token_data)
-        except HTTPException:
-            raise HTTPException(status_code=403, detail="GM role required to delete rules")
-        except Exception:
-            # If require_gm not available, just check role manually
-            if token_data.role != "gm":
-                raise HTTPException(status_code=403, detail="GM role required to delete rules")
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="GM role required to delete rules")
     
     load_rules_metadata()
     if file_id not in _rules_metadata:
