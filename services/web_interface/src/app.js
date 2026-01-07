@@ -1463,6 +1463,9 @@ window.joinSession = async function(sessionId) {
             await refreshSessions();
             // Reload characters for this session
             await loadUserCharacters();
+            // Reload being chat data
+            loadBeingChatCharacters();
+            loadNearbyBeings();
             // Update active prompts indicator if LLM Services panel is open
             if (document.getElementById('llm-services')?.style.display !== 'none') {
                 await updateActivePromptsIndicator(currentLLMService);
