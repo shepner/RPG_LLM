@@ -403,40 +403,115 @@ document.getElementById('refresh-sessions-btn').addEventListener('click', async 
     await refreshSessions();
 });
 
+let sessionsAutoRefreshInterval = null;
+
+function startSessionsAutoRefresh() {
+    if (!sessionsAutoRefreshInterval) {
+        sessionsAutoRefreshInterval = setInterval(refreshSessions, 5000); // Refresh every 5 seconds
+        console.log("Started sessions auto-refresh.");
+    }
+}
+
+function stopSessionsAutoRefresh() {
+    if (sessionsAutoRefreshInterval) {
+        clearInterval(sessionsAutoRefreshInterval);
+        sessionsAutoRefreshInterval = null;
+        console.log("Stopped sessions auto-refresh.");
+    }
+}
+
 async function refreshSessions() {
     try {
-        const response = await fetch(`${GAME_SESSION_URL}/sessions`);
+        const token = authToken || localStorage.getItem('authToken');
+        const currentUser = window.currentUser;
         const sessionsList = document.getElementById('sessions-list');
+        
+        const response = await fetch(`${GAME_SESSION_URL}/sessions`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
         
         if (response.ok) {
             const sessions = await response.json();
-            sessionsList.innerHTML = '';
-            
-            if (sessions.length === 0) {
-                sessionsList.innerHTML = '<p style="color: #888;">No game sessions available.</p>';
-                return;
+            if (sessions.length > 0) {
+                sessionsList.innerHTML = sessions.map(session => {
+                    const playerCount = session.player_user_ids?.length || 0;
+                    const statusColor = session.status === 'active' ? '#10b981' : session.status === 'paused' ? '#f59e0b' : session.status === 'ended' ? '#ef4444' : '#888';
+                    const statusIcon = session.status === 'active' ? '▶️' : session.status === 'paused' ? '⏸️' : session.status === 'ended' ? '⏹️' : '⏳';
+                    const isGM = currentUser && session.gm_user_id === currentUser.user_id;
+                    const canDelete = isGM && session.status !== 'active'; // Only allow deleting non-active sessions
+                    
+                    return `
+                        <div style="padding: 6px 8px; margin-bottom: 4px; background: #2a2a2a; border-radius: 3px; border-left: 3px solid ${statusColor}; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <strong style="color: #4a9eff; font-size: 0.9em;">${statusIcon} ${session.name}</strong>
+                                    ${isGM ? '<span style="color: #f59e0b; font-size: 0.75em;">(GM)</span>' : ''}
+                                </div>
+                                <div style="color: #888; font-size: 0.8em; margin-top: 2px;">
+                                    ${session.status} • ${playerCount} player${playerCount !== 1 ? 's' : ''}${session.game_system_type ? ` • ${session.game_system_type}` : ''}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 4px; align-items: center;">
+                                <button onclick="joinSession('${session.session_id}')" style="padding: 4px 10px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Join</button>
+                                ${canDelete ? `<button onclick="deleteSession('${session.session_id}', '${session.name}')" style="padding: 4px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">🗑️</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                sessionsList.innerHTML = '<div style="color: #888; padding: 8px; font-size: 0.85em;">No game sessions found. Create one to get started!</div>';
             }
-            
-            sessions.forEach(session => {
-                const div = document.createElement('div');
-                div.style.marginBottom = '10px';
-                div.style.padding = '10px';
-                div.style.backgroundColor = '#2a2a2a';
-                div.style.borderRadius = '4px';
-                div.innerHTML = `
-                    <strong style="color: #4a9eff;">${session.name}</strong>
-                    <br><span style="color: #888; font-size: 0.9em;">Status: ${session.status} | Players: ${session.player_user_ids?.length || 0}</span>
-                    <br><button onclick="joinSession('${session.session_id}')" style="margin-top: 5px; padding: 5px 10px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer;">Join Session</button>
-                `;
-                sessionsList.appendChild(div);
-            });
         } else {
-            sessionsList.innerHTML = '<p style="color: #f44;">Could not load sessions.</p>';
+            sessionsList.innerHTML = '<div style="color: #ef4444; padding: 8px; font-size: 0.85em;">Could not load sessions.</div>';
         }
     } catch (error) {
         console.error('Error refreshing sessions:', error);
+        const sessionsList = document.getElementById('sessions-list');
+        if (sessionsList) {
+            sessionsList.innerHTML = '<div style="color: #ef4444; padding: 8px; font-size: 0.85em;">Error loading sessions. Check console for details.</div>';
+        }
     }
 }
+
+// Delete session function
+window.deleteSession = async function(sessionId, sessionName) {
+    if (!confirm(`Are you sure you want to delete the session "${sessionName}"?\n\nThis will permanently delete the session and all associated data. This cannot be undone!`)) {
+        return;
+    }
+    
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        const currentUser = window.currentUser;
+        
+        if (!currentUser) {
+            alert('You must be logged in to delete a session.');
+            return;
+        }
+        
+        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}?gm_user_id=${currentUser.user_id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            alert(`Session "${sessionName}" deleted successfully!`);
+            await refreshSessions(); // Refresh the list
+        } else {
+            const errorText = await response.text();
+            let errorMessage = 'Failed to delete session';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            alert(errorMessage);
+        }
+    } catch (error) {
+        console.error('Error deleting session:', error);
+        alert('Error deleting session: ' + error.message);
+    }
+};
 
 // User management for GMs - set up event listener when button is available
 function setupManageUsersButton() {
