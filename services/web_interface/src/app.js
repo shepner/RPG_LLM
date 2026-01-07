@@ -497,9 +497,19 @@ async function refreshSessions() {
         
         if (!sessionsList) return;
         
+        // Show loading state immediately
+        sessionsList.innerHTML = '<div style="color: #888; padding: 8px; font-size: 0.85em;">Loading sessions...</div>';
+        
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
         const response = await fetch(`${GAME_SESSION_URL}/sessions`, {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
             sessionsList.innerHTML = '<div style="color: #ef4444; padding: 8px; font-size: 0.85em;">Could not load sessions.</div>';
