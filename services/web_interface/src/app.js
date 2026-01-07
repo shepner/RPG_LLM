@@ -1565,9 +1565,9 @@ window.joinSession = async function(sessionId) {
             // Reload being chat data
             loadBeingChatCharacters();
             loadNearbyBeings();
-            // Update active prompts indicator if LLM Services panel is open
-            if (document.getElementById('llm-services')?.style.display !== 'none') {
-                await updateActivePromptsIndicator(currentLLMService);
+            // Update active prompts indicator if LLM service is active in being chat
+            if (currentChatType === 'llm' && currentBeingChatId) {
+                await updateActivePromptsIndicator(currentBeingChatId);
             }
         } else {
             alert('Failed to join session');
