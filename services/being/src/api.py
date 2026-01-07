@@ -203,11 +203,47 @@ async def query_being_service(
         
         # Parse @mentions in the query
         import re
+        import httpx
         mention_pattern = r'@(\w+)'
         mentions = re.findall(mention_pattern, request.query)
         
+        # If @mentions are found and we have a session_id, try to resolve them to being_ids
+        # This allows users to use @name notation instead of being_id
+        target_being_id = request.target_being_id
+        if mentions and request.session_id and not target_being_id:
+            # Try to resolve first mention to a being_id via being_registry
+            try:
+                being_registry_url = os.getenv("BEING_REGISTRY_URL", "http://localhost:8007")
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    # Get token for auth if available
+                    auth_header = {}
+                    if token_data and hasattr(token_data, 'access_token'):
+                        auth_header = {"Authorization": f"Bearer {token_data.access_token}"}
+                    elif token_data:
+                        # Try to get token from request context
+                        pass
+                    
+                    response = await client.get(
+                        f"{being_registry_url}/beings/vicinity/{request.session_id}",
+                        headers=auth_header
+                    )
+                    if response.status_code == 200:
+                        vicinity_data = response.json()
+                        beings = vicinity_data.get("beings", [])
+                        # Try to match first mention to a being name
+                        first_mention = mentions[0].lower()
+                        for being in beings:
+                            being_name = being.get("name", "").lower()
+                            if first_mention in being_name or being_name.startswith(first_mention):
+                                target_being_id = being.get("being_id")
+                                logger.info(f"Resolved @{mentions[0]} to being_id {target_being_id}")
+                                break
+            except Exception as e:
+                logger.warning(f"Could not resolve @mention to being_id: {e}")
+                # Continue without resolving - mentions will be stored in metadata
+        
         # If target_being_id is provided, this is a being-to-being conversation
-        if request.target_being_id:
+        if target_being_id:
             # Verify access to target being
             if AUTH_AVAILABLE:
                 try:
