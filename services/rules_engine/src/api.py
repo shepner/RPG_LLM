@@ -206,7 +206,12 @@ async def query_rules_engine(
     relevant_rules = []
     if rules_indexer:
         try:
-            search_results = await rules_indexer.search(request.query, n_results=5)
+            search_results = await rules_indexer.search(
+                request.query, 
+                n_results=5,
+                game_system=request.game_system,
+                session_id=request.session_id
+            )
             relevant_rules = [r["content"] for r in search_results]
         except Exception as e:
             print(f"Warning: Error searching rules: {e}")
