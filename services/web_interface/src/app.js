@@ -3092,3 +3092,93 @@ document.getElementById('llm-view-prompts-btn')?.addEventListener('click', () =>
     `;
     document.body.appendChild(modal);
 });
+
+// Setup text selection handler for chat messages
+function setupTextSelectionHandler(messagesDiv, service) {
+    let selectionToolbar = null;
+    
+    // Remove existing toolbar if it exists
+    const existingToolbar = document.getElementById('selection-toolbar');
+    if (existingToolbar) {
+        existingToolbar.remove();
+    }
+    
+    // Create selection toolbar (initially hidden)
+    selectionToolbar = document.createElement('div');
+    selectionToolbar.id = 'selection-toolbar';
+    selectionToolbar.style.cssText = 'position: absolute; display: none; background: #2a2a2a; border: 1px solid #444; border-radius: 4px; padding: 6px 8px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.3);';
+    selectionToolbar.innerHTML = `
+        <button id="save-selection-btn" style="padding: 4px 8px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em; display: flex; align-items: center; gap: 4px;">
+            <span>💾</span>
+            <span>Save Selection as Prompt</span>
+        </button>
+    `;
+    document.body.appendChild(selectionToolbar);
+    
+    // Handle mouseup events to detect text selection
+    messagesDiv.addEventListener('mouseup', (e) => {
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+        
+        // Hide toolbar if no text is selected or selection is outside messages div
+        if (!selectedText || selectedText.length === 0) {
+            selectionToolbar.style.display = 'none';
+            return;
+        }
+        
+        // Check if selection is within the messages div
+        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+        if (!range || !messagesDiv.contains(range.commonAncestorContainer)) {
+            selectionToolbar.style.display = 'none';
+            return;
+        }
+        
+        // Get position for toolbar (near the selection)
+        const rect = range.getBoundingClientRect();
+        const toolbarRect = selectionToolbar.getBoundingClientRect();
+        
+        // Position toolbar above the selection, centered horizontally
+        let top = rect.top - toolbarRect.height - 8;
+        let left = rect.left + (rect.width / 2) - (toolbarRect.width / 2);
+        
+        // Adjust if toolbar would go off-screen
+        if (top < 0) {
+            top = rect.bottom + 8; // Show below instead
+        }
+        if (left < 0) {
+            left = 8;
+        }
+        if (left + toolbarRect.width > window.innerWidth) {
+            left = window.innerWidth - toolbarRect.width - 8;
+        }
+        
+        selectionToolbar.style.top = `${top}px`;
+        selectionToolbar.style.left = `${left}px`;
+        selectionToolbar.style.display = 'block';
+        
+        // Store selected text and service in the button
+        const saveBtn = document.getElementById('save-selection-btn');
+        saveBtn.dataset.selectedText = selectedText;
+        saveBtn.dataset.service = service;
+    });
+    
+    // Hide toolbar when clicking elsewhere
+    document.addEventListener('mousedown', (e) => {
+        if (!selectionToolbar.contains(e.target) && !messagesDiv.contains(e.target)) {
+            selectionToolbar.style.display = 'none';
+        }
+    });
+    
+    // Handle save selection button click
+    document.getElementById('save-selection-btn').addEventListener('click', (e) => {
+        const selectedText = e.target.dataset.selectedText || e.target.closest('#save-selection-btn').dataset.selectedText;
+        const service = e.target.dataset.service || e.target.closest('#save-selection-btn').dataset.service;
+        
+        if (selectedText && service) {
+            saveMessageAsPrompt(service, selectedText);
+            selectionToolbar.style.display = 'none';
+            // Clear selection
+            window.getSelection().removeAllRanges();
+        }
+    });
+}
