@@ -149,19 +149,33 @@ async def query_being_service(
     token_data: Optional[TokenData] = Depends(lambda: require_auth() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
 ):
     """
-    Query the Being service (Atman) with a question (GM only).
+    Query the Being service (Atman) with a question.
     
-    This allows GMs to test if the being service understands consciousness,
-    decision-making, and autonomous behavior.
+    If being_id is provided, the conversation is stored in that being's memory.
+    Players can query beings they own or are assigned to.
     """
     if AUTH_AVAILABLE and not token_data:
         raise HTTPException(status_code=403, detail="Authentication required to query being service")
     
-    # Use a generic agent for query purposes (not tied to a specific being)
-    # We'll create a temporary agent just for this query
-    temp_agent = BeingAgent("query-temp")
+    # If being_id is provided, verify access and use that being's agent
+    if request.being_id:
+        if AUTH_AVAILABLE:
+            # Verify user has access to this being (owner or assigned)
+            try:
+                # Check access using require_being_access
+                from .api import require_being_access
+                await require_being_access(request.being_id)(None, None)
+            except Exception as e:
+                raise HTTPException(status_code=403, detail="You do not have access to this being")
+        
+        agent = get_agent(request.being_id)
+        memory_manager = get_memory_manager(request.being_id)
+    else:
+        # Use a generic agent for query purposes (not tied to a specific being)
+        agent = BeingAgent("query-temp")
+        memory_manager = None
     
-    if not temp_agent.llm_provider:
+    if not agent.llm_provider:
         return {
             "service": "Atman (Being Service)",
             "query": request.query,

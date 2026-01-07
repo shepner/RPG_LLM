@@ -108,8 +108,32 @@ async def get_my_characters(
         # If auth is not available, allow access (for development)
         token_data = None
     
-    # TODO: Query actual characters from registry
-    # For now, return empty list
+    # Get characters from Auth service
+    try:
+        import httpx
+        auth_url = os.getenv("AUTH_URL", "http://localhost:8000")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{auth_url}/beings/assigned",
+                headers={"Authorization": f"Bearer {token_data.access_token if token_data else ''}"}
+            )
+            if response.status_code == 200:
+                being_ids = response.json()
+                # Get character details from registry
+                characters = []
+                for being_id in being_ids:
+                    entry = registry.get_entry(being_id)
+                    if entry:
+                        characters.append({
+                            "being_id": being_id,
+                            "name": entry.get("name", f"Character {being_id[:8]}"),
+                            "owner_id": entry.get("owner_id"),
+                            "session_id": entry.get("session_id")
+                        })
+                return {"characters": characters}
+    except Exception as e:
+        logger.error(f"Error fetching user characters: {e}")
+    
     return {"characters": []}
 
 
