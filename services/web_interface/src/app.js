@@ -1837,16 +1837,22 @@ window.deleteRule = async function(fileId) {
     }
     
     try {
+        // Stop any active polling for this file before deletion
+        stopIndexingProgressPoll(fileId);
+        
+        const token = authToken || localStorage.getItem('authToken');
         const response = await fetch(`${RULES_ENGINE_URL}/rules/${fileId}`, {
             method: 'DELETE',
             headers: {
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
         
         if (response.ok) {
             const result = await response.json();
             const deletedFrom = result.deleted_from || [];
+            // Ensure polling is stopped (in case it wasn't already)
+            stopIndexingProgressPoll(fileId);
             alert(`File deleted successfully!\n\nRemoved from: ${deletedFrom.join(', ')}`);
             await listRules();
         } else {
