@@ -45,7 +45,7 @@ services:
     environment:
       - RULES_DIR=./RPG_LLM_DATA/rules
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-./credentials.json}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/credentials.json}
       - LLM_MODEL=${LLM_MODEL:-gemini-pro}
       - CHROMA_DB_PATH=./RPG_LLM_DATA/vector_stores/rules
 
@@ -72,7 +72,7 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:///./RPG_LLM_DATA/databases/worlds.db
       - CHROMA_DB_PATH=./RPG_LLM_DATA/vector_stores/worlds
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-./credentials.json}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/credentials.json}
     volumes:
       - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
       - ./credentials.json:/app/credentials.json:ro
@@ -87,7 +87,7 @@ services:
       - "8005:8005"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-./credentials.json}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/credentials.json}
       - LLM_MODEL=${LLM_MODEL:-gemini-pro}
       - REDIS_URL=redis://redis:6379
     volumes:
@@ -106,7 +106,7 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:///./RPG_LLM_DATA/databases/being.db
       - CHROMA_DB_PATH=./RPG_LLM_DATA/vector_stores/beings
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-./credentials.json}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/credentials.json}
       - REDIS_URL=redis://redis:6379
     volumes:
       - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
