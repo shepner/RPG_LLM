@@ -33,21 +33,23 @@ services:
     depends_on:
       - redis
 
-  rules_engine:
+  game_master:
     build:
       context: .
-      dockerfile: ./services/rules_engine/Dockerfile
+      dockerfile: ./services/game_master/Dockerfile
     ports:
-      - "8002:8002"
-    volumes:
-      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
-      - ./credentials.json:/app/credentials.json:ro
+      - "8005:8005"
     environment:
-      - RULES_DIR=./RPG_LLM_DATA/rules
+      - DATABASE_URL=sqlite+aiosqlite:///./RPG_LLM_DATA/databases/game_master.db
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/credentials.json}
       - LLM_MODEL=${LLM_MODEL:-gemini-2.5-flash}
-      - CHROMA_DB_PATH=./RPG_LLM_DATA/vector_stores/rules
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+      - ./credentials.json:/app/credentials.json:ro
+    depends_on:
+      - redis
 
   time_management:
     build:
