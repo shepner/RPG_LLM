@@ -56,7 +56,6 @@
                     <div style="margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px;">
                         <button id="create-session-btn" style="padding: 6px 12px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;" title="A game session is a container for a single campaign or game. Each session has its own world state, characters, and game time.">Create New Game Session</button>
                         <button id="manage-rules-btn" style="display: none; padding: 6px 12px; background: #8b5cf6; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Manage Rules</button>
-                        <button id="llm-services-btn" style="display: none; padding: 6px 12px; background: #f59e0b; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">LLM Services</button>
                         <button id="create-character-btn" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Create Character</button>
                     </div>
                     <div id="sessions-list" style="margin-bottom: 8px;"></div>
@@ -93,62 +92,6 @@
                     <div id="prompts-list" style="min-height: 80px; max-height: 300px; overflow-y: auto; padding: 6px; background: #1a1a1a; border-radius: 3px;"></div>
                 </div>
 
-                <div class="panel" id="llm-services" style="display: none;">
-                    <h2>LLM Services Chat <span style="font-size: 0.8em; color: #888;">(GM Only)</span></h2>
-                    <div style="display: flex; height: 500px; gap: 8px;">
-                        <!-- Channel Sidebar (like Slack) -->
-                        <div id="llm-channels-sidebar" style="width: 200px; background: #1a1a1a; border-radius: 3px; padding: 8px; overflow-y: auto; flex-shrink: 0;">
-                            <div style="font-size: 0.75em; color: #888; text-transform: uppercase; font-weight: bold; margin-bottom: 8px; padding: 4px 8px;">Channels</div>
-                            <div id="llm-channel-list" style="display: flex; flex-direction: column; gap: 2px;">
-                                <div class="llm-channel-item" data-service="rules_engine" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 1.1em;">⚖️</span>
-                                    <span>Ma'at</span>
-                                </div>
-                                <div class="llm-channel-item" data-service="game_master" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 1.1em;">📜</span>
-                                    <span>Thoth</span>
-                                </div>
-                                <div class="llm-channel-item" data-service="being" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 1.1em;">🧠</span>
-                                    <span>Atman</span>
-                                </div>
-                                <div class="llm-channel-item" data-service="worlds" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 1.1em;">🌍</span>
-                                    <span>Gaia</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Main Chat Area -->
-                        <div style="flex: 1; display: flex; flex-direction: column; background: #1a1a1a; border-radius: 3px; overflow: hidden;">
-                            <!-- Chat Header -->
-                            <div id="llm-chat-header" style="padding: 10px 12px; background: #2a2a2a; border-bottom: 1px solid #444; flex-shrink: 0;">
-                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                                    <span id="llm-chat-service-icon" style="font-size: 1.2em;">⚖️</span>
-                                    <span id="llm-chat-service-name" style="font-weight: bold; color: #e0e0e0;">Ma'at (Rules Engine)</span>
-                                </div>
-                                <div id="llm-active-prompts-indicator" style="font-size: 0.75em; color: #888; padding: 4px 8px; background: #1a1a1a; border-radius: 3px; display: none;">
-                                    <strong>Active Prompts:</strong> <span id="llm-active-prompts-count">0</span>
-                                    <button id="llm-view-prompts-btn" style="margin-left: 8px; padding: 2px 6px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em;">View</button>
-                                </div>
-                                <span style="font-size: 0.8em; color: #888; margin-left: auto;">Chat with LLM services</span>
-                            </div>
-                            
-                            <!-- Message History -->
-                            <div id="llm-chat-messages" style="flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px;">
-                                <!-- Messages will be inserted here -->
-                            </div>
-                            
-                            <!-- Input Area -->
-                            <div style="padding: 10px; background: #2a2a2a; border-top: 1px solid #444; flex-shrink: 0;">
-                                <form id="llm-chat-form" onsubmit="event.preventDefault(); submitLLMMessage();" style="display: flex; gap: 8px; align-items: flex-end;">
-                                    <textarea id="llm-chat-input" placeholder="Message Ma'at..." style="flex: 1; min-height: 60px; max-height: 150px; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px; font-size: 0.9em; font-family: inherit; resize: vertical;" autocomplete="off"></textarea>
-                                    <button type="submit" id="llm-chat-send-btn" style="padding: 8px 16px; background: #8b5cf6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; font-weight: bold; height: fit-content;">Send</button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <div class="panel" id="character-creation" style="display: none;">
                     <h2>Create Character</h2>
@@ -177,6 +120,27 @@
                     <div style="display: flex; gap: 10px; height: 500px;">
                         <!-- Character/Being List Sidebar -->
                         <div id="being-chat-sidebar" style="width: 200px; background: #1a1a1a; border-radius: 3px; padding: 8px; overflow-y: auto; flex-shrink: 0;">
+                            <div id="llm-services-section" style="display: none; margin-bottom: 12px;">
+                                <div style="font-size: 0.75em; color: #888; text-transform: uppercase; font-weight: bold; margin-bottom: 8px; padding: 4px 8px;">LLM Services</div>
+                                <div id="llm-channel-list" style="display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px;">
+                                    <div class="being-chat-item llm-service-item" data-service="rules_engine" data-type="llm" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 1.1em;">⚖️</span>
+                                        <span>Ma'at</span>
+                                    </div>
+                                    <div class="being-chat-item llm-service-item" data-service="game_master" data-type="llm" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 1.1em;">📜</span>
+                                        <span>Thoth</span>
+                                    </div>
+                                    <div class="being-chat-item llm-service-item" data-service="being" data-type="llm" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 1.1em;">🧠</span>
+                                        <span>Atman</span>
+                                    </div>
+                                    <div class="being-chat-item llm-service-item" data-service="worlds" data-type="llm" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 1.1em;">🌍</span>
+                                        <span>Gaia</span>
+                                    </div>
+                                </div>
+                            </div>
                             <div style="font-size: 0.75em; color: #888; text-transform: uppercase; font-weight: bold; margin-bottom: 8px; padding: 4px 8px;">My Characters</div>
                             <div id="being-character-list" style="display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px;">
                                 <!-- Characters will be loaded here -->

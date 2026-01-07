@@ -411,8 +411,9 @@ function setupSystemMessagesToggle() {
     });
 }
 
-// Being chat functionality
+// Being chat functionality (now handles both beings and LLM services)
 let currentBeingChatId = null;
+let currentChatType = null; // 'being' or 'llm'
 let beingChatHistory = {};
 
 // Load being chat history from localStorage
@@ -485,26 +486,55 @@ function renderBeingChat(beingId, beingName) {
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-// Switch being chat channel
-function switchBeingChat(beingId, beingName) {
+// Switch being chat channel (handles both beings and LLM services)
+function switchBeingChat(beingId, beingName, chatType = 'being') {
     currentBeingChatId = beingId;
+    currentChatType = chatType;
     
     // Update header
-    document.getElementById('being-chat-character-name').textContent = beingName || `Character ${beingId.substring(0, 8)}`;
-    document.getElementById('being-chat-character-icon').textContent = '🧠';
+    const iconEl = document.getElementById('being-chat-character-icon');
+    const nameEl = document.getElementById('being-chat-character-name');
+    const infoEl = document.getElementById('being-chat-info');
+    
+    if (chatType === 'llm') {
+        const serviceConfig = LLM_SERVICES[beingId];
+        iconEl.textContent = serviceConfig.icon;
+        nameEl.textContent = serviceConfig.name;
+        infoEl.innerHTML = '<span>Chat with LLM services</span>';
+    } else {
+        iconEl.textContent = '🧠';
+        nameEl.textContent = beingName || `Character ${beingId.substring(0, 8)}`;
+        infoEl.innerHTML = '<span>Chat with your characters or other beings in the session</span>';
+    }
     
     // Enable input
     const input = document.getElementById('being-chat-input');
     const sendBtn = document.getElementById('being-chat-send-btn');
     input.disabled = false;
     sendBtn.disabled = false;
-    input.placeholder = `Message ${beingName || 'character'}... (Use @name to mention others)`;
     
-    // Render conversation
-    renderBeingChat(beingId, beingName);
+    if (chatType === 'llm') {
+        const serviceConfig = LLM_SERVICES[beingId];
+        input.placeholder = `Message ${serviceConfig.name.split(' ')[0]}...`;
+        // Render LLM conversation
+        renderLLMConversationForBeingChat(beingId);
+    } else {
+        input.placeholder = `Message ${beingName || 'character'}... (Use @name to mention others)`;
+        // Render being conversation
+        renderBeingChat(beingId, beingName);
+    }
+    
+    // Update active state in sidebar
+    document.querySelectorAll('.being-chat-item').forEach(el => {
+        if (el.dataset.beingId === beingId || (el.dataset.service === beingId && el.dataset.type === chatType)) {
+            el.style.background = '#3a2a4a';
+        } else {
+            el.style.background = '#2a2a2a';
+        }
+    });
 }
 
-// Submit message to being
+// Submit message (handles both beings and LLM services)
 async function submitBeingMessage() {
     const input = document.getElementById('being-chat-input');
     const message = input.value.trim();
@@ -519,12 +549,83 @@ async function submitBeingMessage() {
         return;
     }
     
+    // Clear input
+    input.value = '';
+    
+    // Handle LLM service messages
+    if (currentChatType === 'llm') {
+        const requestService = currentBeingChatId;
+        const serviceConfig = LLM_SERVICES[requestService];
+        
+        // Add user message to history
+        addLLMMessage(requestService, 'user', message);
+        renderLLMConversationForBeingChat(requestService);
+        
+        // Show typing indicator
+        const messagesDiv = document.getElementById('being-chat-messages');
+        const typingId = `llm-typing-${requestService}-${Date.now()}`;
+        const typingIndicator = document.createElement('div');
+        typingIndicator.id = typingId;
+        typingIndicator.innerHTML = `
+            <div style="display: flex; gap: 12px;">
+                <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${serviceConfig.color}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
+                    ${serviceConfig.icon}
+                </div>
+                <div style="flex: 1;">
+                    <div style="background: #2a2a2a; padding: 10px 12px; border-radius: 8px; color: #888;">
+                        <span style="animation: pulse 1.5s ease-in-out infinite;">●</span> Thinking...
+                    </div>
+                </div>
+            </div>
+        `;
+        messagesDiv.appendChild(typingIndicator);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        
+        try {
+            const currentSession = window.currentSession;
+            const sessionId = currentSession ? currentSession.session_id : null;
+            
+            const response = await fetch(serviceConfig.url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    query: message,
+                    session_id: sessionId,
+                    game_system: currentSession ? currentSession.game_system_type : null
+                })
+            })
+            });
+            
+            const typingEl = document.getElementById(typingId);
+            if (typingEl) typingEl.remove();
+            
+            if (response.ok) {
+                const data = await response.json();
+                const responseText = data.response || 'No response received';
+                
+                addLLMMessage(requestService, 'assistant', responseText, data.metadata || {});
+                renderLLMConversationForBeingChat(requestService);
+            } else {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Failed to send message');
+            }
+        } catch (error) {
+            const typingEl = document.getElementById(typingId);
+            if (typingEl) typingEl.remove();
+            
+            console.error('Error sending message to LLM service:', error);
+            alert('Error: ' + error.message);
+        }
+        return;
+    }
+    
+    // Handle being messages (existing code)
     // Add user message to history
     addBeingChatMessage(currentBeingChatId, 'user', message);
     renderBeingChat(currentBeingChatId, document.getElementById('being-chat-character-name').textContent);
-    
-    // Clear input
-    input.value = '';
     
     // Show typing indicator
     const messagesDiv = document.getElementById('being-chat-messages');
@@ -643,16 +744,15 @@ async function loadBeingChatCharacters() {
                 </div>
             `).join('');
             
-            // Add click handlers
-            document.querySelectorAll('.being-chat-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const beingId = item.dataset.beingId;
-                    const beingName = item.textContent.trim().replace('🧠', '').trim();
-                    switchBeingChat(beingId, beingName);
-                    // Update active state
-                    document.querySelectorAll('.being-chat-item').forEach(el => el.style.background = '#2a2a2a');
-                    item.style.background = '#3a2a4a';
-                });
+            // Add click handlers for characters
+            document.querySelectorAll('.being-chat-item:not(.llm-service-item)').forEach(item => {
+                if (!item.dataset.type) { // Only handle non-LLM items
+                    item.addEventListener('click', () => {
+                        const beingId = item.dataset.beingId;
+                        const beingName = item.textContent.trim().replace('🧠', '').trim();
+                        switchBeingChat(beingId, beingName, 'being');
+                    });
+                }
             });
         }
     } catch (error) {
@@ -1513,10 +1613,18 @@ async function loadUserInfo() {
                 if (manageRulesBtn) {
                     manageRulesBtn.style.display = 'inline-block';
                 }
-                const llmServicesBtn = document.getElementById('llm-services-btn');
-                if (llmServicesBtn) {
-                    llmServicesBtn.style.display = 'inline-block';
+                // Show LLM Services section in being chat sidebar
+                const llmServicesSection = document.getElementById('llm-services-section');
+                if (llmServicesSection) {
+                    llmServicesSection.style.display = 'block';
                 }
+                // Add click handlers for LLM service items
+                document.querySelectorAll('.llm-service-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const service = item.dataset.service;
+                        switchBeingChat(service, null, 'llm');
+                    });
+                });
                 const validateSystemBtn = document.getElementById('validate-system-btn');
                 if (validateSystemBtn) {
                     validateSystemBtn.style.display = 'inline-block';
@@ -1530,9 +1638,10 @@ async function loadUserInfo() {
                 if (manageRulesBtn) {
                     manageRulesBtn.style.display = 'none';
                 }
-                const llmServicesBtn = document.getElementById('llm-services-btn');
-                if (llmServicesBtn) {
-                    llmServicesBtn.style.display = 'none';
+                // Hide LLM Services section for non-GMs
+                const llmServicesSection = document.getElementById('llm-services-section');
+                if (llmServicesSection) {
+                    llmServicesSection.style.display = 'none';
                 }
                 const validateSystemBtn = document.getElementById('validate-system-btn');
                 if (validateSystemBtn) {
