@@ -848,6 +848,12 @@ document.getElementById('upload-rules-btn')?.addEventListener('click', async () 
             alert(`Rules uploaded successfully: ${result.filename}`);
             fileInput.value = '';
             await listRules();
+            // Start polling for progress immediately if file needs indexing
+            if (result.file_id) {
+                setTimeout(() => {
+                    startIndexingProgressPoll(result.file_id);
+                }, 500);
+            }
         } else {
             const error = await response.text();
             alert('Failed to upload rules: ' + error);
@@ -883,6 +889,18 @@ async function listRules() {
                         startIndexingProgressPoll(rule.file_id);
                     } else if (rule.indexed_status !== 'indexing' && indexingProgressPollers.has(rule.file_id)) {
                         stopIndexingProgressPoll(rule.file_id);
+                    }
+                    
+                    // Also start polling for pending files that should be indexed
+                    if ((rule.indexed_status === 'pending' || !rule.indexed_status) && 
+                        (rule.is_text || rule.is_pdf || rule.is_epub) && 
+                        !indexingProgressPollers.has(rule.file_id)) {
+                        // Check if indexing should have started - poll briefly to catch status change
+                        setTimeout(() => {
+                            if (!indexingProgressPollers.has(rule.file_id)) {
+                                startIndexingProgressPoll(rule.file_id);
+                            }
+                        }, 1000);
                     }
                     const sizeKB = ((rule.size || 0) / 1024).toFixed(1);
                     const category = rule.category || 'unknown';

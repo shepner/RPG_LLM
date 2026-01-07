@@ -162,7 +162,8 @@ async def resolve_action(request: ResolveRequest):
 @app.post("/rules/upload")
 async def upload_rules(
     file: UploadFile = File(...), 
-    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None,
+    background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     """
     Upload rules file or image.
