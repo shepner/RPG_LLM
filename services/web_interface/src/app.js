@@ -210,8 +210,20 @@ function disconnectWebSockets() {
 }
 
 // UI updates
+function addSystemMessage(message) {
+    const log = document.getElementById('system-messages-log');
+    if (!log) return;
+    const div = document.createElement('div');
+    div.className = 'system-message';
+    div.style.cssText = 'padding: 6px 8px; margin-bottom: 6px; background: #333; border-radius: 3px; border-left: 2px solid #888; font-size: 0.9em; color: #bbb;';
+    div.textContent = message;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+}
+
 function addEvent(event) {
     const log = document.getElementById('events-log');
+    if (!log) return;
     const div = document.createElement('div');
     div.className = 'event';
     div.innerHTML = `<strong>${event.event_type}</strong>: ${event.description}`;
@@ -221,11 +233,47 @@ function addEvent(event) {
 
 function addNarrative(narrative) {
     const log = document.getElementById('narrative-log');
+    if (!log) return;
     const div = document.createElement('div');
     div.className = 'narrative';
     div.textContent = narrative.text;
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
+}
+
+// System messages panel minimize/maximize
+function setupSystemMessagesToggle() {
+    const toggleBtn = document.getElementById('toggle-system-messages');
+    const messagesLog = document.getElementById('system-messages-log');
+    const panel = messagesLog?.closest('.panel');
+    
+    if (!toggleBtn || !messagesLog || !panel) return;
+    
+    // Load saved state
+    const savedState = localStorage.getItem('systemMessagesMinimized');
+    const isMinimized = savedState === 'true';
+    
+    function setMinimized(minimized) {
+        if (minimized) {
+            messagesLog.style.display = 'none';
+            toggleBtn.textContent = '+';
+            toggleBtn.title = 'Expand System Messages';
+        } else {
+            messagesLog.style.display = 'block';
+            toggleBtn.textContent = '−';
+            toggleBtn.title = 'Minimize System Messages';
+        }
+        localStorage.setItem('systemMessagesMinimized', String(minimized));
+    }
+    
+    // Apply saved state
+    setMinimized(isMinimized);
+    
+    // Toggle on click
+    toggleBtn.addEventListener('click', () => {
+        const currentlyMinimized = messagesLog.style.display === 'none';
+        setMinimized(!currentlyMinimized);
+    });
 }
 
 // Action submission
@@ -1704,6 +1752,9 @@ async function initializeSession() {
             
             // Start auto-refresh for sessions
             startSessionsAutoRefresh();
+            
+            // Setup system messages toggle
+            setupSystemMessagesToggle();
         } else {
             // Token is invalid, clear it and show login form
             console.log('Stored token is invalid, clearing session');
