@@ -1507,8 +1507,9 @@ function startIndexingProgressPoll(fileId) {
                     listRules(); // Refresh to show final status
                 }
             } else if (response.status === 404) {
-                // File not found, stop polling
+                // File not found (likely deleted), stop polling
                 stopIndexingProgressPoll(fileId);
+                return; // Exit early, don't continue polling
             } else {
                 // Other error, continue polling but less frequently
                 console.warn('Error polling indexing progress:', response.status);
