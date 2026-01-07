@@ -1755,6 +1755,9 @@ async function initializeSession() {
             
             // Setup system messages toggle
             setupSystemMessagesToggle();
+            
+            // Setup system messages toggle
+            setupSystemMessagesToggle();
         } else {
             // Token is invalid, clear it and show login form
             console.log('Stored token is invalid, clearing session');
