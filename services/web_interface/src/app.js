@@ -630,9 +630,7 @@ window.joinSession = async function(sessionId) {
                 }
             }
             
-            addNarrative({
-                text: `Joined game session!`
-            });
+            // Session join is a game event, not narrative
             addEvent({
                 event_type: 'session_joined',
                 description: `You joined session ${sessionId}`,
