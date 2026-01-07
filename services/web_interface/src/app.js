@@ -1557,6 +1557,9 @@ function renderLLMConversation(service) {
         });
     });
     
+    // Setup text selection handler for "Save Selection as Prompt"
+    setupTextSelectionHandler(messagesDiv, service);
+    
     // Auto-scroll to bottom
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
