@@ -2017,19 +2017,32 @@ async function listRules() {
                         validateButton = `<button onclick="validateIndexing('${rule.file_id}')" style="margin-left: 8px; padding: 4px 12px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em; font-weight: bold;" title="Test if file is actually searchable in the index (GM only)">✓ Validate</button>`;
                     }
                     
+                    // Show associations badges
+                    const gameSystemBadge = rule.game_system 
+                        ? `<span style="background: #8b5cf6; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; margin-left: 6px;">Game: ${escapeHTML(rule.game_system)}</span>`
+                        : '';
+                    const sessionBadge = rule.session_ids && rule.session_ids.length > 0
+                        ? `<span style="background: #f59e0b; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; margin-left: 6px;">Sessions: ${rule.session_ids.length}</span>`
+                        : rule.game_system || (rule.session_ids && rule.session_ids.length > 0) ? '' : '<span style="background: #10b981; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; margin-left: 6px;">Global</span>';
+                    
                     return `
                         <div data-file-id="${rule.file_id}" style="padding: 10px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${categoryColor};">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <strong style="color: ${categoryColor};">${categoryIcon} ${rule.filename || rule.original_filename}</strong>
-                                    <span style="color: #888; margin-left: 10px; font-size: 0.9em;">${sizeKB} KB</span>
-                                    <span style="color: #666; margin-left: 10px; font-size: 0.85em;">(${category})</span>
+                                <div style="flex: 1;">
+                                    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;">
+                                        <strong style="color: ${categoryColor};">${categoryIcon} ${escapeHTML(rule.filename || rule.original_filename)}</strong>
+                                        <span style="color: #888; font-size: 0.9em;">${sizeKB} KB</span>
+                                        <span style="color: #666; font-size: 0.85em;">(${category})</span>
+                                        ${gameSystemBadge}
+                                        ${sessionBadge}
+                                    </div>
                                     ${statusBadge}
                                     ${validateButton}
                                 </div>
-                                <div>
-                                    ${rule.is_text ? `<button onclick="viewRule('${rule.file_id}')" style="padding: 4px 8px; margin-right: 5px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">View</button>` : ''}
-                                    <button onclick="downloadRule('${rule.file_id}')" style="padding: 4px 8px; margin-right: 5px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Download</button>
+                                <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                                    <button onclick="manageRuleAssociations('${rule.file_id}')" style="padding: 4px 8px; background: #ec4899; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;" title="Manage game system and session associations (GM only)">Associations</button>
+                                    ${rule.is_text ? `<button onclick="viewRule('${rule.file_id}')" style="padding: 4px 8px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">View</button>` : ''}
+                                    <button onclick="downloadRule('${rule.file_id}')" style="padding: 4px 8px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Download</button>
                                     <button onclick="deleteRule('${rule.file_id}')" style="padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Delete</button>
                                 </div>
                             </div>
@@ -2789,5 +2802,120 @@ window.deletePrompt = async function(promptId, service) {
     } catch (error) {
         console.error('Error deleting prompt:', error);
         addSystemMessage(`Error deleting prompt: ${error.message}`);
+    }
+};
+
+// Rule File Associations Management
+window.manageRuleAssociations = async function(fileId) {
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        
+        // Get current rule metadata
+        const ruleResponse = await fetch(`${RULES_ENGINE_URL}/rules/list`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!ruleResponse.ok) {
+            addSystemMessage('Failed to load rule file');
+            return;
+        }
+        
+        const data = await ruleResponse.json();
+        const rule = data.rules.find(r => r.file_id === fileId);
+        
+        if (!rule) {
+            addSystemMessage('Rule file not found');
+            return;
+        }
+        
+        // Get available sessions
+        let sessions = [];
+        try {
+            const sessionsResponse = await fetch(`${GAME_SESSION_URL}/sessions`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (sessionsResponse.ok) {
+                sessions = await sessionsResponse.json();
+            }
+        } catch (error) {
+            console.error('Error loading sessions:', error);
+        }
+        
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+        modal.innerHTML = `
+            <div style="background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 20px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                <h3 style="color: #e0e0e0; margin: 0 0 16px 0; font-size: 1.1em; font-weight: 600;">Manage Associations: ${escapeHTML(rule.filename || rule.original_filename)}</h3>
+                <div style="margin-bottom: 12px; padding: 10px; background: #1a1a1a; border-radius: 4px; font-size: 0.85em; color: #888;">
+                    <strong>Associations</strong> control when this rule file is used:
+                    <ul style="margin: 8px 0 0 20px; padding: 0;">
+                        <li><strong>Game System:</strong> Filter rules by game system (e.g., D&D 5e, Pathfinder)</li>
+                        <li><strong>Sessions:</strong> Limit to specific sessions (empty = global, applies to all sessions)</li>
+                    </ul>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Game System (optional):</label>
+                    <input type="text" id="rule-game-system-input" value="${escapeHTML(rule.game_system || '')}" placeholder="e.g., D&D 5e, Pathfinder, Custom" style="width: 100%; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+                    <div style="color: #888; font-size: 0.75em; margin-top: 4px;">Leave empty to make this file available for all game systems</div>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Sessions (select multiple, or leave empty for global):</label>
+                    <select id="rule-sessions-select" multiple style="width: 100%; min-height: 150px; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+                        ${sessions.map(s => `<option value="${s.session_id}" ${(rule.session_ids || []).includes(s.session_id) ? 'selected' : ''}>${escapeHTML(s.name || s.session_id)}</option>`).join('')}
+                    </select>
+                    <div style="color: #888; font-size: 0.75em; margin-top: 4px;">Hold Ctrl/Cmd to select multiple sessions. Leave empty to make this file global (available to all sessions).</div>
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button id="rule-associations-cancel" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Cancel</button>
+                    <button id="rule-associations-save" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Save Associations</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Handle cancel
+        document.getElementById('rule-associations-cancel').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        // Handle save
+        document.getElementById('rule-associations-save').addEventListener('click', async () => {
+            const gameSystem = document.getElementById('rule-game-system-input').value.trim() || null;
+            const sessionsSelect = document.getElementById('rule-sessions-select');
+            const sessionIds = [];
+            for (const option of sessionsSelect.selectedOptions) {
+                sessionIds.push(option.value);
+            }
+            
+            try {
+                const token = authToken || localStorage.getItem('authToken');
+                const response = await fetch(`${RULES_ENGINE_URL}/rules/${fileId}/associations`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        game_system: gameSystem,
+                        session_ids: sessionIds
+                    })
+                });
+                
+                if (response.ok) {
+                    addSystemMessage('Rule file associations updated successfully');
+                    document.body.removeChild(modal);
+                    await listRules();
+                } else {
+                    const error = await response.text();
+                    addSystemMessage(`Failed to update associations: ${error}`);
+                }
+            } catch (error) {
+                console.error('Error updating rule associations:', error);
+                addSystemMessage(`Error updating associations: ${error.message}`);
+            }
+        });
+    } catch (error) {
+        console.error('Error loading rule for associations:', error);
+        addSystemMessage(`Error loading rule: ${error.message}`);
     }
 };
