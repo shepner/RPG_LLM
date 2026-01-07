@@ -138,6 +138,21 @@ class SessionManager:
             
             return True
     
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a game session."""
+        async with self.SessionLocal() as session:
+            result = await session.execute(
+                sa.select(GameSessionDB).where(GameSessionDB.session_id == session_id)
+            )
+            session_db = result.scalar_one_or_none()
+            
+            if not session_db:
+                return False
+            
+            await session.delete(session_db)
+            await session.commit()
+            return True
+    
     async def list_sessions(
         self,
         user_id: Optional[str] = None,
