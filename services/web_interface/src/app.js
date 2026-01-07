@@ -489,26 +489,26 @@ async function showUserManagementModal() {
             const roleIcon = user.role === 'gm' ? '👑' : '👤';
             
             return `
-                <div id="user-${user.user_id}" style="padding: 15px; margin-bottom: 10px; background: #2a2a2a; border-radius: 6px; border-left: 4px solid ${roleColor};">
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                <div id="user-${user.user_id}" style="padding: 8px; margin-bottom: 6px; background: #2a2a2a; border-radius: 3px; border-left: 3px solid ${roleColor};">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
                         <div style="flex: 1;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
-                                <strong style="color: ${roleColor}; font-size: 1.1em;">${roleIcon} ${user.username}</strong>
-                                ${isCurrentUser ? '<span style="color: #888; font-size: 0.85em;">(You)</span>' : ''}
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+                                <strong style="color: ${roleColor}; font-size: 1em;">${roleIcon} ${user.username}</strong>
+                                ${isCurrentUser ? '<span style="color: #888; font-size: 0.8em;">(You)</span>' : ''}
                             </div>
-                            <div style="color: #888; font-size: 0.9em; margin-bottom: 8px;">${user.email}</div>
-                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                                <select id="role-${user.user_id}" style="padding: 4px 8px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px; font-size: 0.9em;">
+                            <div style="color: #888; font-size: 0.85em; margin-bottom: 6px;">${user.email}</div>
+                            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                                <select id="role-${user.user_id}" style="padding: 4px 6px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.85em;">
                                     <option value="player" ${user.role === 'player' ? 'selected' : ''}>Player</option>
                                     <option value="gm" ${user.role === 'gm' ? 'selected' : ''}>Game Master</option>
                                 </select>
-                                <button onclick="updateUserRole('${user.user_id}')" style="padding: 4px 12px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Update Role</button>
-                                <button onclick="manageUserCharacters('${user.user_id}', '${user.username}')" style="padding: 4px 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">📋 Manage Characters</button>
-                                ${!isCurrentUser ? `<button onclick="deleteUser('${user.user_id}', '${user.username}')" style="padding: 4px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">🗑️ Delete</button>` : '<span style="color: #888; font-size: 0.85em;">(Cannot delete yourself)</span>'}
+                                <button onclick="updateUserRole('${user.user_id}')" style="padding: 4px 10px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Update Role</button>
+                                <button onclick="manageUserCharacters('${user.user_id}', '${user.username}')" style="padding: 4px 10px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">📋 Manage Characters</button>
+                                ${!isCurrentUser ? `<button onclick="deleteUser('${user.user_id}', '${user.username}')" style="padding: 4px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">🗑️ Delete</button>` : '<span style="color: #888; font-size: 0.8em;">(Cannot delete yourself)</span>'}
                             </div>
                         </div>
                     </div>
-                    <div style="color: #666; font-size: 0.8em; margin-top: 8px;">
+                    <div style="color: #666; font-size: 0.75em; margin-top: 4px;">
                         Created: ${new Date(user.created_at).toLocaleString()}
                     </div>
                 </div>
@@ -516,13 +516,13 @@ async function showUserManagementModal() {
         }).join('');
         
         modal.innerHTML = `
-            <div style="background: #1a1a1a; padding: 25px; border-radius: 8px; max-width: 900px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
-                <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: 15px; right: 15px; background: #ef4444; color: white; border: none; border-radius: 4px; padding: 8px 15px; cursor: pointer; font-size: 0.9em;">✕ Close</button>
-                <h2 style="margin-top: 0; margin-bottom: 20px; color: #e0e0e0;">👥 User Management</h2>
-                <p style="color: #888; font-size: 0.9em; margin-bottom: 20px;">
+            <div style="background: #1a1a1a; padding: 10px; border-radius: 4px; max-width: 900px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative;">
+                <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: 8px; right: 8px; background: #ef4444; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; font-size: 0.85em;">✕ Close</button>
+                <h2 style="margin-top: 0; margin-bottom: 8px; color: #e0e0e0; font-size: 1.1em;">👥 User Management</h2>
+                <p style="color: #888; font-size: 0.85em; margin-bottom: 8px;">
                     Manage user accounts: change roles, assign characters, and delete accounts. Only Game Masters can access this panel.
                 </p>
-                <div id="users-list" style="margin-bottom: 20px;">
+                <div id="users-list" style="margin-bottom: 8px;">
                     ${usersHtml}
                 </div>
             </div>
@@ -807,9 +807,9 @@ function displayValidationReport(report) {
         const serviceIcon = serviceStatus === 'healthy' ? '✅' : '❌';
         const responseTime = status.response_time_ms ? ` (${status.response_time_ms.toFixed(0)}ms)` : '';
         servicesHtml += `
-            <div style="padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${serviceColor};">
-                <strong>${serviceIcon} ${name}</strong>
-                <span style="color: ${serviceColor}; margin-left: 10px;">${status.message || serviceStatus}${responseTime}</span>
+            <div style="padding: 5px 6px; margin-bottom: 4px; background: #2a2a2a; border-radius: 3px; border-left: 2px solid ${serviceColor};">
+                <strong style="font-size: 0.9em;">${serviceIcon} ${name}</strong>
+                <span style="color: ${serviceColor}; margin-left: 8px; font-size: 0.85em;">${status.message || serviceStatus}${responseTime}</span>
             </div>
         `;
     }
@@ -821,47 +821,47 @@ function displayValidationReport(report) {
         const intIcon = intStatus === 'ok' ? '✅' : intStatus === 'warning' ? '⚠️' : '❌';
         let detailsHtml = '';
         if (integration.details) {
-            detailsHtml = `<div style="color: #666; font-size: 0.85em; margin-top: 3px; padding-left: 10px;">${JSON.stringify(integration.details, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}</div>`;
+            detailsHtml = `<div style="color: #666; font-size: 0.8em; margin-top: 3px; padding-left: 8px;">${JSON.stringify(integration.details, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}</div>`;
         }
         integrationsHtml += `
-            <div style="padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${intColor};">
-                <strong>${intIcon} ${name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
-                <div style="color: #888; font-size: 0.9em; margin-top: 3px;">${integration.message || intStatus}</div>
+            <div style="padding: 5px 6px; margin-bottom: 4px; background: #2a2a2a; border-radius: 3px; border-left: 2px solid ${intColor};">
+                <strong style="font-size: 0.9em;">${intIcon} ${name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                <div style="color: #888; font-size: 0.85em; margin-top: 3px;">${integration.message || intStatus}</div>
                 ${detailsHtml}
             </div>
         `;
     }
     
     modal.innerHTML = `
-        <div style="background: #1a1a1a; padding: 20px; border-radius: 8px; max-width: 80%; max-height: 90%; overflow: auto; position: relative; min-width: 600px;">
-            <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: 10px; right: 10px; background: #ef4444; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer;">Close</button>
-            <h2 style="margin-top: 0; color: ${statusColor};">
+        <div style="background: #1a1a1a; padding: 10px; border-radius: 4px; max-width: 80%; max-height: 90%; overflow: auto; position: relative; min-width: 600px;">
+            <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: 8px; right: 8px; background: #ef4444; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; font-size: 0.85em;">Close</button>
+            <h2 style="margin-top: 0; margin-bottom: 8px; color: ${statusColor}; font-size: 1.1em;">
                 ${statusIcon} System Validation Report
             </h2>
-            <div style="margin-bottom: 15px; padding: 12px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid #4a9eff;">
-                <p style="color: #e0e0e0; margin: 0; font-size: 0.95em;">
+            <div style="margin-bottom: 8px; padding: 8px; background: #2a2a2a; border-radius: 3px; border-left: 2px solid #4a9eff;">
+                <p style="color: #e0e0e0; margin: 0; font-size: 0.85em;">
                     <strong>What this does:</strong> Checks the health and connectivity of all core services (Auth, Rules Engine, Game Master, Worlds, Being Registry, Time Management) and validates key integrations between services. Use this to diagnose system issues.
                 </p>
             </div>
-            <div style="margin-bottom: 20px; padding: 10px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${statusColor};">
-                <strong>Overall Status: <span style="color: ${statusColor};">${overallStatus.toUpperCase()}</span></strong>
-                <div style="color: #888; font-size: 0.9em; margin-top: 5px;">Validated at: ${new Date(report.timestamp || Date.now()).toLocaleString()}</div>
+            <div style="margin-bottom: 8px; padding: 6px 8px; background: #2a2a2a; border-radius: 3px; border-left: 2px solid ${statusColor};">
+                <strong style="font-size: 0.9em;">Overall Status: <span style="color: ${statusColor};">${overallStatus.toUpperCase()}</span></strong>
+                <div style="color: #888; font-size: 0.8em; margin-top: 3px;">Validated at: ${new Date(report.timestamp || Date.now()).toLocaleString()}</div>
             </div>
             
-            <h3 style="color: #e0e0e0;">Services</h3>
-            <div style="margin-bottom: 20px;">
+            <h3 style="color: #e0e0e0; margin-bottom: 6px; font-size: 1em;">Services</h3>
+            <div style="margin-bottom: 8px;">
                 ${servicesHtml}
             </div>
             
-            <h3 style="color: #e0e0e0;">Integrations</h3>
-            <div style="margin-bottom: 20px;">
+            <h3 style="color: #e0e0e0; margin-bottom: 6px; font-size: 1em;">Integrations</h3>
+            <div style="margin-bottom: 8px;">
                 ${integrationsHtml}
             </div>
             
             ${report.recommendations && report.recommendations.length > 0 ? `
-                <h3 style="color: #f59e0b;">Recommendations</h3>
-                <ul style="color: #888;">
-                    ${report.recommendations.map(r => `<li>${r}</li>`).join('')}
+                <h3 style="color: #f59e0b; margin-bottom: 6px; font-size: 1em;">Recommendations</h3>
+                <ul style="color: #888; font-size: 0.85em; margin: 0; padding-left: 20px;">
+                    ${report.recommendations.map(r => `<li style="margin-bottom: 3px;">${r}</li>`).join('')}
                 </ul>
             ` : ''}
         </div>
