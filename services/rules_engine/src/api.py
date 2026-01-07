@@ -509,12 +509,16 @@ async def _index_file_background(
                 _rules_metadata[file_id]["indexing_progress"]["stage"] = "complete"
             save_rules_metadata()
     except Exception as e:
-        print(f"Error in background indexing: {e}")
+        error_msg = str(e)
+        # Clean up error message to not expose host paths
+        if "/Users/" in error_msg:
+            error_msg = error_msg.replace("/Users/shepner/", "/app/")
+        print(f"Error in background indexing: {error_msg}")
         # Update metadata to show indexing failed
         load_rules_metadata()
         if file_id in _rules_metadata:
             _rules_metadata[file_id]["indexing_status"] = "failed"
-            _rules_metadata[file_id]["indexing_error"] = str(e)
+            _rules_metadata[file_id]["indexing_error"] = error_msg
             if "indexing_progress" in _rules_metadata[file_id]:
                 _rules_metadata[file_id]["indexing_progress"]["stage"] = "error"
             save_rules_metadata()

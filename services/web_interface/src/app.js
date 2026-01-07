@@ -1207,10 +1207,22 @@ async function initializeSession() {
 
 // Initialize session when page loads
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeSession);
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeSession();
+        // Display version number
+        const versionDisplay = document.getElementById('version-display');
+        if (versionDisplay) {
+            versionDisplay.textContent = `v${SYSTEM_VERSION}`;
+        }
+    });
 } else {
     // DOM is already loaded
     initializeSession();
+    // Display version number
+    const versionDisplay = document.getElementById('version-display');
+    if (versionDisplay) {
+        versionDisplay.textContent = `v${SYSTEM_VERSION}`;
+    }
 }
 
 // Character creation
