@@ -596,7 +596,6 @@ async function submitBeingMessage() {
                     session_id: sessionId,
                     game_system: currentSession ? currentSession.game_system_type : null
                 })
-            })
             });
             
             const typingEl = document.getElementById(typingId);
