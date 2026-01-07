@@ -1604,12 +1604,16 @@ async function initializeSession() {
             
             // Load initial game state
             await loadGameState();
+            
+            // Start auto-refresh for sessions
+            startSessionsAutoRefresh();
         } else {
             // Token is invalid, clear it and show login form
             console.log('Stored token is invalid, clearing session');
             localStorage.removeItem('authToken');
             localStorage.removeItem('username');
             authToken = null;
+            stopSessionsAutoRefresh();
         }
     } catch (error) {
         console.error('Error validating stored token:', error);

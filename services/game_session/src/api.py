@@ -91,6 +91,27 @@ async def leave_session(session_id: str, user_id: str):
     return {"message": "Left session"}
 
 
+@app.delete("/sessions/{session_id}")
+async def delete_session(session_id: str, gm_user_id: str):
+    """Delete a game session (GM only - must be the session's GM)."""
+    from .middleware import require_auth, TokenData
+    from fastapi import Depends
+    
+    # Get session to verify GM ownership
+    session = await session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Only the GM of the session can delete it
+    if session.gm_user_id != gm_user_id:
+        raise HTTPException(status_code=403, detail="Only the session's Game Master can delete it")
+    
+    success = await session_manager.delete_session(session_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to delete session")
+    return {"message": "Session deleted successfully"}
+
+
 @app.get("/health")
 async def health():
     """Health check."""
