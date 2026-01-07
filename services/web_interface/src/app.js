@@ -1421,80 +1421,200 @@ document.getElementById('manage-rules-btn')?.addEventListener('click', () => {
     }
 });
 
-// LLM Services interaction (GM only)
-document.getElementById('llm-services-btn')?.addEventListener('click', () => {
-    const panel = document.getElementById('llm-services');
-    if (panel.style.display === 'none') {
-        panel.style.display = 'block';
-    } else {
-        panel.style.display = 'none';
-    }
-});
+// LLM Services Chat (Slack-like interface)
+let currentLLMService = 'rules_engine'; // Default channel
 
-document.getElementById('submit-llm-query-btn')?.addEventListener('click', async () => {
-    const serviceSelect = document.getElementById('llm-service-select');
-    const queryInput = document.getElementById('llm-query-input');
-    const responseDiv = document.getElementById('llm-response');
+// Service configuration
+const LLM_SERVICES = {
+    rules_engine: {
+        name: "Ma'at (Rules Engine)",
+        icon: "⚖️",
+        url: RULES_ENGINE_URL + '/query',
+        color: '#10b981'
+    },
+    game_master: {
+        name: "Thoth (Game Master)",
+        icon: "📜",
+        url: GM_URL + '/query',
+        color: '#f59e0b'
+    }
+};
+
+// Load conversation history from localStorage
+function loadLLMConversationHistory(service) {
+    const key = `llm_chat_${service}`;
+    const history = localStorage.getItem(key);
+    return history ? JSON.parse(history) : [];
+}
+
+// Save conversation history to localStorage
+function saveLLMConversationHistory(service, history) {
+    const key = `llm_chat_${service}`;
+    localStorage.setItem(key, JSON.stringify(history));
+}
+
+// Add message to conversation history
+function addLLMMessage(service, role, content, metadata = {}) {
+    const history = loadLLMConversationHistory(service);
+    history.push({
+        role: role, // 'user' or 'assistant'
+        content: content,
+        timestamp: new Date().toISOString(),
+        metadata: metadata
+    });
+    // Keep only last 100 messages per service
+    if (history.length > 100) {
+        history.shift();
+    }
+    saveLLMConversationHistory(service, history);
+    return history;
+}
+
+// Render conversation history
+function renderLLMConversation(service) {
+    const messagesDiv = document.getElementById('llm-chat-messages');
+    const history = loadLLMConversationHistory(service);
     
-    if (!queryInput.value.trim()) {
-        addSystemMessage('Please enter a query.', 'error');
+    if (history.length === 0) {
+        messagesDiv.innerHTML = `
+            <div style="text-align: center; color: #888; padding: 40px 20px;">
+                <div style="font-size: 2em; margin-bottom: 8px;">${LLM_SERVICES[service].icon}</div>
+                <div style="font-weight: bold; margin-bottom: 4px;">${LLM_SERVICES[service].name}</div>
+                <div style="font-size: 0.85em;">Start a conversation by sending a message below</div>
+            </div>
+        `;
         return;
     }
     
-    const service = serviceSelect.value;
-    const query = queryInput.value.trim();
+    messagesDiv.innerHTML = history.map(msg => {
+        const isUser = msg.role === 'user';
+        const timestamp = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        return `
+            <div style="display: flex; gap: 12px; ${isUser ? 'flex-direction: row-reverse;' : ''}">
+                <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${isUser ? '#4a9eff' : LLM_SERVICES[service].color}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
+                    ${isUser ? '👤' : LLM_SERVICES[service].icon}
+                </div>
+                <div style="flex: 1; ${isUser ? 'text-align: right;' : ''}">
+                    <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; ${isUser ? 'justify-content: flex-end;' : ''}">
+                        <span style="font-weight: bold; color: ${isUser ? '#4a9eff' : LLM_SERVICES[service].color}; font-size: 0.9em;">
+                            ${isUser ? 'You' : LLM_SERVICES[service].name.split(' ')[0]}
+                        </span>
+                        <span style="font-size: 0.75em; color: #888;">${timestamp}</span>
+                    </div>
+                    <div style="background: ${isUser ? '#4a9eff20' : '#2a2a2a'}; padding: 10px 12px; border-radius: 8px; color: #e0e0e0; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word;">
+                        ${escapeHTML(msg.content).replace(/\n/g, '<br>')}
+                    </div>
+                    ${msg.metadata && msg.metadata.rules_found !== undefined ? `
+                        <div style="font-size: 0.75em; color: #888; margin-top: 4px; ${isUser ? 'text-align: right;' : ''}">
+                            Rules found: ${msg.metadata.rules_found}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
     
-    // Show loading state
-    responseDiv.innerHTML = '<div style="color: #888;">⏳ Processing query...</div>';
-    responseDiv.style.color = '#888';
+    // Auto-scroll to bottom
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// Switch to a different LLM service channel
+function switchLLMChannel(service) {
+    currentLLMService = service;
+    const serviceConfig = LLM_SERVICES[service];
+    
+    // Update header
+    document.getElementById('llm-chat-service-icon').textContent = serviceConfig.icon;
+    document.getElementById('llm-chat-service-name').textContent = serviceConfig.name;
+    
+    // Update input placeholder
+    document.getElementById('llm-chat-input').placeholder = `Message ${serviceConfig.name.split(' ')[0]}...`;
+    
+    // Update active channel in sidebar
+    document.querySelectorAll('.llm-channel-item').forEach(item => {
+        if (item.dataset.service === service) {
+            item.style.background = '#3a3a3a';
+            item.style.borderLeft = `3px solid ${serviceConfig.color}`;
+        } else {
+            item.style.background = '#2a2a2a';
+            item.style.borderLeft = 'none';
+        }
+    });
+    
+    // Render conversation history
+    renderLLMConversation(service);
+}
+
+// Submit message to LLM service
+window.submitLLMMessage = async function() {
+    const input = document.getElementById('llm-chat-input');
+    const message = input.value.trim();
+    
+    if (!message) {
+        return;
+    }
+    
+    // Clear input
+    input.value = '';
+    
+    // Add user message to history and render
+    addLLMMessage(currentLLMService, 'user', message);
+    renderLLMConversation(currentLLMService);
+    
+    // Show typing indicator
+    const messagesDiv = document.getElementById('llm-chat-messages');
+    const typingIndicator = document.createElement('div');
+    typingIndicator.id = 'llm-typing-indicator';
+    typingIndicator.style.cssText = 'display: flex; gap: 12px;';
+    typingIndicator.innerHTML = `
+        <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${LLM_SERVICES[currentLLMService].color}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
+            ${LLM_SERVICES[currentLLMService].icon}
+        </div>
+        <div style="flex: 1;">
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
+                <span style="font-weight: bold; color: ${LLM_SERVICES[currentLLMService].color}; font-size: 0.9em;">
+                    ${LLM_SERVICES[currentLLMService].name.split(' ')[0]}
+                </span>
+                <span style="font-size: 0.75em; color: #888;">typing...</span>
+            </div>
+            <div style="background: #2a2a2a; padding: 10px 12px; border-radius: 8px; color: #888;">
+                <span style="animation: blink 1s infinite;">●</span>
+            </div>
+        </div>
+    `;
+    messagesDiv.appendChild(typingIndicator);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
     
     try {
         const token = authToken || localStorage.getItem('authToken');
-        let url;
+        const serviceConfig = LLM_SERVICES[currentLLMService];
         
-        if (service === 'rules_engine') {
-            url = `${RULES_ENGINE_URL}/query`;
-        } else if (service === 'game_master') {
-            url = `${GM_URL}/query`;
-        } else {
-            throw new Error(`Unknown service: ${service}`);
-        }
-        
-        const response = await fetch(url, {
+        const response = await fetch(serviceConfig.url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                query: query
+                query: message
             })
         });
+        
+        // Remove typing indicator
+        typingIndicator.remove();
         
         if (response.ok) {
             const result = await response.json();
             
             if (result.error) {
-                responseDiv.innerHTML = `<div style="color: #ef4444; margin-bottom: 8px;"><strong>Error:</strong> ${escapeHTML(result.error)}</div>`;
-                responseDiv.style.color = '#ef4444';
+                addLLMMessage(currentLLMService, 'assistant', `Error: ${result.error}`, { error: true });
             } else {
-                let html = `<div style="color: #10b981; margin-bottom: 8px; font-weight: bold;">${escapeHTML(result.service || 'Service')}</div>`;
-                html += `<div style="color: #888; margin-bottom: 12px; font-size: 0.85em;">Query: "${escapeHTML(result.query)}"</div>`;
-                
-                if (result.response) {
-                    html += `<div style="color: #e0e0e0; line-height: 1.6; margin-bottom: 8px;">${escapeHTML(result.response).replace(/\n/g, '<br>')}</div>`;
-                }
-                
-                if (result.metadata) {
-                    html += `<div style="color: #666; margin-top: 12px; padding-top: 8px; border-top: 1px solid #444; font-size: 0.8em;">`;
-                    if (result.rules_found !== undefined) {
-                        html += `Rules found: ${result.rules_found}<br>`;
-                    }
-                    html += `</div>`;
-                }
-                
-                responseDiv.innerHTML = html;
-                responseDiv.style.color = '#e0e0e0';
+                const responseText = result.response || 'No response received';
+                addLLMMessage(currentLLMService, 'assistant', responseText, {
+                    rules_found: result.rules_found,
+                    metadata: result.metadata
+                });
             }
         } else {
             const errorText = await response.text();
@@ -1505,13 +1625,42 @@ document.getElementById('submit-llm-query-btn')?.addEventListener('click', async
             } catch {
                 errorMessage = errorText || errorMessage;
             }
-            responseDiv.innerHTML = `<div style="color: #ef4444;"><strong>Error:</strong> ${escapeHTML(errorMessage)}</div>`;
-            responseDiv.style.color = '#ef4444';
+            addLLMMessage(currentLLMService, 'assistant', `Error: ${errorMessage}`, { error: true });
         }
+        
+        // Re-render to show new message
+        renderLLMConversation(currentLLMService);
     } catch (error) {
-        console.error('Error querying LLM service:', error);
-        responseDiv.innerHTML = `<div style="color: #ef4444;"><strong>Error:</strong> ${escapeHTML(error.message)}</div>`;
-        responseDiv.style.color = '#ef4444';
+        typingIndicator.remove();
+        addLLMMessage(currentLLMService, 'assistant', `Error: ${error.message}`, { error: true });
+        renderLLMConversation(currentLLMService);
+    }
+};
+
+// Initialize LLM Services Chat
+document.getElementById('llm-services-btn')?.addEventListener('click', () => {
+    const panel = document.getElementById('llm-services');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        // Initialize with default channel
+        switchLLMChannel(currentLLMService);
+    } else {
+        panel.style.display = 'none';
+    }
+});
+
+// Channel switching
+document.querySelectorAll('.llm-channel-item').forEach(item => {
+    item.addEventListener('click', () => {
+        switchLLMChannel(item.dataset.service);
+    });
+});
+
+// Enter key to send (Shift+Enter for new line)
+document.getElementById('llm-chat-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        submitLLMMessage();
     }
 });
 
