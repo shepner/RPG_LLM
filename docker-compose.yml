@@ -125,11 +125,18 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - JWT_EXPIRATION=${JWT_EXPIRATION:-24}
+      - RULES_ENGINE_URL=http://rules_engine:8002
+      - AUTH_URL=http://auth:8000
+      - GAME_SESSION_URL=http://game_session:8003
+      - WORLDS_URL=http://worlds:8004
+      - GAME_MASTER_URL=http://game_master:8005
+      - TIME_MANAGEMENT_URL=http://time_management:8006
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
     depends_on:
       - being
+      - rules_engine
 
   web_interface:
     build:

@@ -147,7 +147,7 @@ async def roll_dice(dice: str):
 
 
 @app.post("/resolve", response_model=Resolution)
-async def resolve_action(action: str, context: dict = None):
+async def resolve_action(action: str = Body(...), context: dict = Body(None)):
     """Resolve an action using rules and LLM."""
     result = await resolver.resolve_action(action, context)
     return result
