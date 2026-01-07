@@ -115,8 +115,14 @@ services:
       dockerfile: ./services/being_registry/Dockerfile
     ports:
       - "8007:8007"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./RPG_LLM_DATA/databases/auth.db
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-24}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
     depends_on:
       - being
 
