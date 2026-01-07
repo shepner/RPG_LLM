@@ -1,14 +1,13 @@
 """Rules content indexer for semantic search."""
 
 import os
+import asyncio
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import chromadb
 from chromadb.config import Settings
 
-import os
 from shared.embedding_provider import GeminiEmbeddingProvider
-from shared.vector_store.embedding_manager import EmbeddingManager
 
 
 class RulesIndexer:
@@ -32,13 +31,12 @@ class RulesIndexer:
             metadata={"description": "Indexed rules content for semantic search"}
         )
         
-        # Initialize embedding manager
+        # Initialize embedding provider
         try:
-            embedding_provider = GeminiEmbeddingProvider()
-            self.embedding_manager = EmbeddingManager(embedding_provider)
+            self.embedding_provider = GeminiEmbeddingProvider()
         except Exception as e:
             print(f"Warning: Embedding provider not available: {e}")
-            self.embedding_manager = None
+            self.embedding_provider = None
     
     async def index_file(self, file_id: str, filename: str, content: str, metadata: Dict[str, Any]) -> None:
         """
