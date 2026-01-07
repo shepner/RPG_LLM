@@ -92,11 +92,8 @@ async def leave_session(session_id: str, user_id: str):
 
 
 @app.delete("/sessions/{session_id}")
-async def delete_session(session_id: str, gm_user_id: str):
+async def delete_session(session_id: str, gm_user_id: str = Query(...)):
     """Delete a game session (GM only - must be the session's GM)."""
-    from .middleware import require_auth, TokenData
-    from fastapi import Depends
-    
     # Get session to verify GM ownership
     session = await session_manager.get_session(session_id)
     if not session:
