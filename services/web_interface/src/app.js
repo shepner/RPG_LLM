@@ -1237,6 +1237,10 @@ window.joinSession = async function(sessionId) {
             await refreshSessions();
             // Reload characters for this session
             await loadUserCharacters();
+            // Update active prompts indicator if LLM Services panel is open
+            if (document.getElementById('llm-services')?.style.display !== 'none') {
+                await updateActivePromptsIndicator(currentLLMService);
+            }
         } else {
             alert('Failed to join session');
         }
@@ -2919,3 +2923,100 @@ window.manageRuleAssociations = async function(fileId) {
         addSystemMessage(`Error loading rule: ${error.message}`);
     }
 };
+
+// Update active prompts indicator for current service
+async function updateActivePromptsIndicator(service) {
+    const indicator = document.getElementById('llm-active-prompts-indicator');
+    const countSpan = document.getElementById('llm-active-prompts-count');
+    
+    if (!indicator || !countSpan) return;
+    
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        if (!token) {
+            indicator.style.display = 'none';
+            return;
+        }
+        
+        const serviceUrl = service === 'rules_engine' ? RULES_ENGINE_URL : GM_URL;
+        const currentSession = window.currentSession ? window.currentSession.session_id : null;
+        
+        // Get active prompts (global + session-specific)
+        const response = await fetch(`${serviceUrl}/prompts?session_id=${currentSession || ''}&include_global=true`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const prompts = await response.json();
+            const activePrompts = prompts.filter(p => {
+                // Global prompts are always active
+                if (p.scope === 'global') return true;
+                // Session-scoped prompts are active if current session is in the list
+                if (p.scope === 'session' && currentSession) {
+                    return p.session_ids.includes(currentSession);
+                }
+                return false;
+            });
+            
+            if (activePrompts.length > 0) {
+                countSpan.textContent = activePrompts.length;
+                indicator.style.display = 'block';
+                
+                // Store active prompts for viewing
+                window.activePromptsForService = activePrompts;
+            } else {
+                indicator.style.display = 'none';
+            }
+        } else {
+            indicator.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error loading active prompts:', error);
+        indicator.style.display = 'none';
+    }
+}
+
+// View active prompts
+document.getElementById('llm-view-prompts-btn')?.addEventListener('click', () => {
+    const prompts = window.activePromptsForService || [];
+    if (prompts.length === 0) {
+        addSystemMessage('No active prompts');
+        return;
+    }
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+    modal.innerHTML = `
+        <div style="background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 20px; max-width: 700px; width: 90%; max-height: 90vh; overflow-y: auto;">
+            <h3 style="color: #e0e0e0; margin: 0 0 16px 0; font-size: 1.1em; font-weight: 600;">Active System Prompts</h3>
+            <div style="color: #888; font-size: 0.85em; margin-bottom: 16px;">
+                These prompts are currently being applied to ${LLM_SERVICES[currentLLMService].name.split(' ')[0]}'s system prompt.
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                ${prompts.map(prompt => {
+                    const scopeBadge = prompt.scope === 'global' 
+                        ? '<span style="background: #10b981; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em;">Global</span>'
+                        : `<span style="background: #f59e0b; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em;">Session</span>`;
+                    const gameSystemBadge = prompt.game_system 
+                        ? `<span style="background: #8b5cf6; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; margin-left: 4px;">${escapeHTML(prompt.game_system)}</span>`
+                        : '';
+                    
+                    return `
+                        <div style="background: #1a1a1a; padding: 12px; border-radius: 4px; border-left: 3px solid ${LLM_SERVICES[currentLLMService].color};">
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                                <strong style="color: #e0e0e0;">${escapeHTML(prompt.title)}</strong>
+                                ${scopeBadge}
+                                ${gameSystemBadge}
+                            </div>
+                            <div style="color: #bbb; font-size: 0.9em; white-space: pre-wrap;">${escapeHTML(prompt.content)}</div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+                <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Close</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+});
