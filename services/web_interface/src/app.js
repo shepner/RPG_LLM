@@ -165,6 +165,8 @@ document.getElementById('register-btn').addEventListener('click', async () => {
 
 document.getElementById('logout-btn').addEventListener('click', () => {
     authToken = null;
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('username');
     disconnectWebSockets();
     document.getElementById('login-form').style.display = 'block';
     document.getElementById('user-info').style.display = 'none';
