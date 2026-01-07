@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, BackgroundTasks, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from .rule_resolver import RuleResolver
 from .models import RollResult, Resolution
 from .rules_parser import RulesParser
