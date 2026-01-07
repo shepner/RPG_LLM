@@ -305,11 +305,13 @@ document.getElementById('submit-action').addEventListener('click', async () => {
 });
 
 // Game session management
-document.getElementById('create-session-btn').addEventListener('click', async () => {
+document.getElementById('create-session-btn').addEventListener('click', () => {
     const sessionName = prompt('Enter a name for your game session:');
     if (!sessionName) return;
     
-    try {
+    // Defer all async work to prevent blocking the click handler
+    (async () => {
+        try {
         // Get current user to determine if they're GM
         const userResponse = await fetch(`${AUTH_URL}/me`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
@@ -388,15 +390,17 @@ document.getElementById('create-session-btn').addEventListener('click', async ()
                 description: `New game session "${session.name}" created`,
                 game_time: Date.now()
             });
-            await refreshSessions();
+            // Refresh in background, don't await
+            refreshSessions().catch(err => console.error('Error refreshing sessions:', err));
         } else {
             const error = await response.text();
             alert('Failed to create session: ' + error);
         }
-    } catch (error) {
-        console.error('Error creating session:', error);
-        alert('Error creating session: ' + error.message);
-    }
+        } catch (error) {
+            console.error('Error creating session:', error);
+            alert('Error creating session: ' + error.message);
+        }
+    })();
 });
 
 // Refresh button removed - sessions now auto-refresh
