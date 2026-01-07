@@ -11,9 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from .rule_resolver import RuleResolver
-from .models import RollResult, Resolution
+from .models import RollResult, Resolution, SystemPrompt, SystemPromptCreate, SystemPromptUpdate
 from .rules_parser import RulesParser
 from .rules_indexer import RulesIndexer
+from .prompt_manager import PromptManager
 
 # Import auth middleware (optional)
 try:
@@ -48,6 +49,10 @@ CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./RPG_LLM_DATA/vector_stores/rules
 RULES_DIR.mkdir(parents=True, exist_ok=True)
 RULES_METADATA_FILE = RULES_DIR / "metadata.json"
 
+# Initialize database for system prompts
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./RPG_LLM_DATA/rules_engine.db")
+prompt_manager = PromptManager(DATABASE_URL, "rules_engine")
+
 # Initialize components
 try:
     rules_parser = RulesParser(RULES_DIR)
@@ -58,6 +63,12 @@ except Exception as e:
     rules_parser = None
     rules_indexer = None
     resolver = RuleResolver()
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup."""
+    await prompt_manager.init_db()
 
 # In-memory cache of rules metadata
 _rules_metadata: Dict[str, Dict[str, Any]] = {}
@@ -163,6 +174,8 @@ class QueryRequest(BaseModel):
     """Request model for querying the rules engine."""
     query: str
     context: Optional[Dict[str, Any]] = None
+    session_id: Optional[str] = None  # For session-scoped prompts
+    game_system: Optional[str] = None  # For game system filtering
 
 
 @app.post("/query")
@@ -213,10 +226,23 @@ ADDITIONAL CONTEXT:
 Answer the GM's question about the rules. Be specific, cite relevant rules when possible, and explain how the rules apply. If the query is about a specific action or mechanic, provide details about dice rolls, modifiers, and outcomes."""
 
     try:
+        # Load active system prompts
+        active_prompts = await prompt_manager.get_active_prompts(
+            session_id=request.session_id,
+            game_system=request.game_system
+        )
+        
+        # Combine base system prompt with active prompts
+        base_system_prompt = "You are Ma'at, the Rules Engine. You interpret and apply game rules with precision and fairness. Answer GM questions clearly and cite relevant rules."
+        if active_prompts:
+            system_prompt = f"{base_system_prompt}\n\n## Additional Context and Instructions\n{active_prompts}"
+        else:
+            system_prompt = base_system_prompt
+        
         # Query LLM
         response = await resolver.llm_provider.generate(
             prompt=prompt,
-            system_prompt="You are Ma'at, the Rules Engine. You interpret and apply game rules with precision and fairness. Answer GM questions clearly and cite relevant rules.",
+            system_prompt=system_prompt,
             temperature=0.3,
             max_tokens=1000
         )
@@ -889,3 +915,67 @@ async def _index_file_background(
                 _rules_metadata[file_id]["indexing_progress"]["stage"] = "error"
             save_rules_metadata()
 
+
+
+# System Prompt Management Endpoints (GM only)
+@app.post("/prompts", response_model=SystemPrompt)
+async def create_prompt(
+    prompt_data: SystemPromptCreate,
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+):
+    """Create a new system prompt."""
+    prompt = await prompt_manager.create_prompt(prompt_data)
+    return prompt
+
+
+@app.get("/prompts", response_model=List[SystemPrompt])
+async def list_prompts(
+    session_id: Optional[str] = None,
+    game_system: Optional[str] = None,
+    include_global: bool = True,
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+):
+    """List system prompts."""
+    prompts = await prompt_manager.list_prompts(
+        session_id=session_id,
+        game_system=game_system,
+        include_global=include_global
+    )
+    return prompts
+
+
+@app.get("/prompts/{prompt_id}", response_model=SystemPrompt)
+async def get_prompt(
+    prompt_id: str,
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+):
+    """Get a system prompt by ID."""
+    prompt = await prompt_manager.get_prompt(prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return prompt
+
+
+@app.patch("/prompts/{prompt_id}", response_model=SystemPrompt)
+async def update_prompt(
+    prompt_id: str,
+    prompt_data: SystemPromptUpdate,
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+):
+    """Update a system prompt."""
+    prompt = await prompt_manager.update_prompt(prompt_id, prompt_data)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return prompt
+
+
+@app.delete("/prompts/{prompt_id}")
+async def delete_prompt(
+    prompt_id: str,
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+):
+    """Delete a system prompt."""
+    success = await prompt_manager.delete_prompt(prompt_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return {"message": "Prompt deleted successfully"}
