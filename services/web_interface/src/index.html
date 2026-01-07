@@ -31,6 +31,14 @@
 
         <main>
             <div id="game-section" style="display: none;">
+                <div class="panel" style="margin-bottom: 10px;">
+                    <h2 style="display: flex; align-items: center; justify-content: space-between;">
+                        <span>System Messages <span style="font-size: 0.6em; color: #888; font-weight: normal;">(System Notifications)</span></span>
+                        <button id="toggle-system-messages" style="padding: 2px 6px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.7em;">−</button>
+                    </h2>
+                    <div id="system-messages-log" style="min-height: 100px; max-height: 200px; overflow-y: auto; padding: 6px;"></div>
+                </div>
+                
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                     <div class="panel">
                         <h2>Game Events <span style="font-size: 0.6em; color: #888; font-weight: normal;">(Actions, World Changes, Mechanics)</span></h2>
