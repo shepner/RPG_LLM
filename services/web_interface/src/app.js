@@ -431,44 +431,56 @@ async function refreshSessions() {
         const currentUser = window.currentUser;
         const sessionsList = document.getElementById('sessions-list');
         
+        if (!sessionsList) return;
+        
         const response = await fetch(`${GAME_SESSION_URL}/sessions`, {
             headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         });
         
-        if (response.ok) {
-            const sessions = await response.json();
-            if (sessions.length > 0) {
-                sessionsList.innerHTML = sessions.map(session => {
-                    const playerCount = session.player_user_ids?.length || 0;
-                    const statusColor = session.status === 'active' ? '#10b981' : session.status === 'paused' ? '#f59e0b' : session.status === 'ended' ? '#ef4444' : '#888';
-                    const statusIcon = session.status === 'active' ? '▶️' : session.status === 'paused' ? '⏸️' : session.status === 'ended' ? '⏹️' : '⏳';
-                    const isGM = currentUser && session.gm_user_id === currentUser.user_id;
-                    const canDelete = isGM && session.status !== 'active'; // Only allow deleting non-active sessions
-                    
-                    return `
-                        <div style="padding: 6px 8px; margin-bottom: 4px; background: #2a2a2a; border-radius: 3px; border-left: 3px solid ${statusColor}; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                            <div style="flex: 1; min-width: 200px;">
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <strong style="color: #4a9eff; font-size: 0.9em;">${statusIcon} ${session.name}</strong>
-                                    ${isGM ? '<span style="color: #f59e0b; font-size: 0.75em;">(GM)</span>' : ''}
-                                </div>
-                                <div style="color: #888; font-size: 0.8em; margin-top: 2px;">
-                                    ${session.status} • ${playerCount} player${playerCount !== 1 ? 's' : ''}${session.game_system_type ? ` • ${session.game_system_type}` : ''}
-                                </div>
-                            </div>
-                            <div style="display: flex; gap: 4px; align-items: center;">
-                                <button onclick="joinSession('${session.session_id}')" style="padding: 4px 10px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Join</button>
-                                ${canDelete ? `<button onclick="deleteSession('${session.session_id}', '${session.name}')" style="padding: 4px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">🗑️</button>` : ''}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            } else {
-                sessionsList.innerHTML = '<div style="color: #888; padding: 8px; font-size: 0.85em;">No game sessions found. Create one to get started!</div>';
-            }
-        } else {
+        if (!response.ok) {
             sessionsList.innerHTML = '<div style="color: #ef4444; padding: 8px; font-size: 0.85em;">Could not load sessions.</div>';
+            return;
         }
+        
+        const sessions = await response.json();
+        const html = sessions.length === 0 
+            ? '<div style="color: #888; padding: 8px; font-size: 0.85em;">No game sessions found. Create one to get started!</div>'
+            : sessions.map(session => {
+                const playerCount = session.player_user_ids?.length || 0;
+                const statusColor = session.status === 'active' ? '#10b981' : session.status === 'paused' ? '#f59e0b' : session.status === 'ended' ? '#ef4444' : '#888';
+                const statusIcon = session.status === 'active' ? '▶️' : session.status === 'paused' ? '⏸️' : session.status === 'ended' ? '⏹️' : '⏳';
+                const isGM = currentUser && session.gm_user_id === currentUser.user_id;
+                const canDelete = isGM && session.status !== 'active';
+                // Escape quotes to prevent XSS and syntax errors
+                const sessionId = String(session.session_id).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const sessionName = String(session.name).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                
+                return `<div style="padding: 6px 8px; margin-bottom: 4px; background: #2a2a2a; border-radius: 3px; border-left: 3px solid ${statusColor}; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <strong style="color: #4a9eff; font-size: 0.9em;">${statusIcon} ${sessionName}</strong>
+                            ${isGM ? '<span style="color: #f59e0b; font-size: 0.75em;">(GM)</span>' : ''}
+                        </div>
+                        <div style="color: #888; font-size: 0.8em; margin-top: 2px;">
+                            ${session.status} • ${playerCount} player${playerCount !== 1 ? 's' : ''}${session.game_system_type ? ` • ${session.game_system_type}` : ''}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <button data-session-id="${sessionId}" class="join-session-btn" style="padding: 4px 10px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Join</button>
+                        ${canDelete ? `<button data-session-id="${sessionId}" data-session-name="${sessionName}" class="delete-session-btn" style="padding: 4px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">🗑️</button>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        
+        sessionsList.innerHTML = html;
+        
+        // Attach event listeners after DOM update (event delegation would be better, but this works)
+        sessionsList.querySelectorAll('.join-session-btn').forEach(btn => {
+            btn.addEventListener('click', () => joinSession(btn.dataset.sessionId));
+        });
+        sessionsList.querySelectorAll('.delete-session-btn').forEach(btn => {
+            btn.addEventListener('click', () => deleteSession(btn.dataset.sessionId, btn.dataset.sessionName));
+        });
     } catch (error) {
         console.error('Error refreshing sessions:', error);
         const sessionsList = document.getElementById('sessions-list');
