@@ -339,9 +339,7 @@ document.getElementById('submit-action').addEventListener('click', async () => {
                 game_time: gameTime
             });
             document.getElementById('action-input').value = '';
-            addNarrative({
-                text: `Action submitted: ${action}`
-            });
+            addSystemMessage(`Action submitted: ${action}`);
         } else {
             const error = await actionResponse.text();
             throw new Error(`Failed to submit action: ${error}`);
@@ -1752,9 +1750,6 @@ async function initializeSession() {
             
             // Start auto-refresh for sessions
             startSessionsAutoRefresh();
-            
-            // Setup system messages toggle
-            setupSystemMessagesToggle();
             
             // Setup system messages toggle
             setupSystemMessagesToggle();
