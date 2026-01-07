@@ -411,79 +411,304 @@ function setupSystemMessagesToggle() {
     });
 }
 
-// Action submission
-document.getElementById('submit-action').addEventListener('click', async () => {
-    const action = document.getElementById('action-input').value;
-    const characterId = document.getElementById('character-select').value;
+// Being chat functionality
+let currentBeingChatId = null;
+let beingChatHistory = {};
+
+// Load being chat history from localStorage
+function loadBeingChatHistory(beingId) {
+    const key = `being_chat_${beingId}`;
+    const history = localStorage.getItem(key);
+    return history ? JSON.parse(history) : [];
+}
+
+// Save being chat history to localStorage
+function saveBeingChatHistory(beingId, history) {
+    const key = `being_chat_${beingId}`;
+    localStorage.setItem(key, JSON.stringify(history));
+}
+
+// Add message to being chat history
+function addBeingChatMessage(beingId, role, content, metadata = {}) {
+    const history = loadBeingChatHistory(beingId);
+    history.push({
+        role: role, // 'user' or 'assistant'
+        content: content,
+        timestamp: new Date().toISOString(),
+        metadata: metadata
+    });
+    // Keep only last 100 messages per being
+    if (history.length > 100) {
+        history.shift();
+    }
+    saveBeingChatHistory(beingId, history);
+    return history;
+}
+
+// Render being chat conversation
+function renderBeingChat(beingId, beingName) {
+    const messagesDiv = document.getElementById('being-chat-messages');
+    const history = loadBeingChatHistory(beingId);
     
-    if (!action) {
-        alert('Please describe an action');
+    if (history.length === 0) {
+        messagesDiv.innerHTML = `
+            <div style="text-align: center; color: #888; padding: 40px 20px; font-style: italic;">
+                No messages yet. Start the conversation!
+            </div>
+        `;
         return;
     }
     
-    if (!characterId) {
-        alert('Please select a character first');
+    messagesDiv.innerHTML = history.map(msg => {
+        const isUser = msg.role === 'user';
+        const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+        return `
+            <div style="display: flex; gap: 12px; ${isUser ? 'flex-direction: row-reverse;' : ''}">
+                <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${isUser ? '#4a9eff' : '#8b5cf6'}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
+                    ${isUser ? '👤' : '🧠'}
+                </div>
+                <div style="flex: 1; ${isUser ? 'text-align: right;' : ''}">
+                    <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; ${isUser ? 'justify-content: flex-end;' : ''}">
+                        <span style="font-weight: bold; color: ${isUser ? '#4a9eff' : '#8b5cf6'}; font-size: 0.9em;">
+                            ${isUser ? 'You' : beingName}
+                        </span>
+                        <span style="font-size: 0.75em; color: #888;">${timestamp}</span>
+                    </div>
+                    <div style="background: ${isUser ? '#2a4a6a' : '#2a1a3a'}; padding: 10px 12px; border-radius: 8px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word;">
+                        ${escapeHTML(msg.content)}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// Switch being chat channel
+function switchBeingChat(beingId, beingName) {
+    currentBeingChatId = beingId;
+    
+    // Update header
+    document.getElementById('being-chat-character-name').textContent = beingName || `Character ${beingId.substring(0, 8)}`;
+    document.getElementById('being-chat-character-icon').textContent = '🧠';
+    
+    // Enable input
+    const input = document.getElementById('being-chat-input');
+    const sendBtn = document.getElementById('being-chat-send-btn');
+    input.disabled = false;
+    sendBtn.disabled = false;
+    input.placeholder = `Message ${beingName || 'character'}... (Use @name to mention others)`;
+    
+    // Render conversation
+    renderBeingChat(beingId, beingName);
+}
+
+// Submit message to being
+async function submitBeingMessage() {
+    const input = document.getElementById('being-chat-input');
+    const message = input.value.trim();
+    
+    if (!message || !currentBeingChatId) {
+        return;
+    }
+    
+    const token = authToken || localStorage.getItem('authToken');
+    if (!token) {
+        alert('Please log in first');
+        return;
+    }
+    
+    // Add user message to history
+    addBeingChatMessage(currentBeingChatId, 'user', message);
+    renderBeingChat(currentBeingChatId, document.getElementById('being-chat-character-name').textContent);
+    
+    // Clear input
+    input.value = '';
+    
+    // Show typing indicator
+    const messagesDiv = document.getElementById('being-chat-messages');
+    const typingId = `being-typing-${Date.now()}`;
+    const typingIndicator = document.createElement('div');
+    typingIndicator.id = typingId;
+    typingIndicator.innerHTML = `
+        <div style="display: flex; gap: 12px;">
+            <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: #8b5cf6; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">🧠</div>
+            <div style="flex: 1;">
+                <div style="background: #2a1a3a; padding: 10px 12px; border-radius: 8px; color: #888;">
+                    <span style="animation: pulse 1.5s ease-in-out infinite;">●</span> Thinking...
+                </div>
+            </div>
+        </div>
+    `;
+    messagesDiv.appendChild(typingIndicator);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    try {
+        const currentSession = window.currentSession;
+        const sessionId = currentSession ? currentSession.session_id : null;
+        
+        // Parse @mentions to find target_being_id
+        const mentionMatch = message.match(/@(\w+)/);
+        let targetBeingId = null;
+        
+        if (mentionMatch && sessionId) {
+            // Try to resolve mention to being_id
+            try {
+                const vicinityResponse = await fetch(`${BEING_REGISTRY_URL}/beings/vicinity/${sessionId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (vicinityResponse.ok) {
+                    const vicinityData = await vicinityResponse.json();
+                    const beings = vicinityData.beings || [];
+                    const mentionName = mentionMatch[1].toLowerCase();
+                    for (const being of beings) {
+                        const beingName = (being.name || '').toLowerCase();
+                        if (mentionName === beingName || beingName.startsWith(mentionName)) {
+                            targetBeingId = being.being_id;
+                            break;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not resolve @mention:', e);
+            }
+        }
+        
+        // Send message to being service
+        const response = await fetch(`${BEING_URL}/query`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                query: message,
+                being_id: currentBeingChatId,
+                target_being_id: targetBeingId,
+                session_id: sessionId,
+                game_system: currentSession ? currentSession.game_system_type : null
+            })
+        });
+        
+        // Remove typing indicator
+        const typingEl = document.getElementById(typingId);
+        if (typingEl) typingEl.remove();
+        
+        if (response.ok) {
+            const data = await response.json();
+            const responseText = data.response || 'No response received';
+            
+            // Add response to history
+            addBeingChatMessage(currentBeingChatId, 'assistant', responseText, {
+                target_being_id: targetBeingId,
+                mentions: data.mentions || []
+            });
+            
+            // Re-render conversation
+            renderBeingChat(currentBeingChatId, document.getElementById('being-chat-character-name').textContent);
+        } else {
+            const errorText = await response.text();
+            throw new Error(errorText || 'Failed to send message');
+        }
+    } catch (error) {
+        // Remove typing indicator
+        const typingEl = document.getElementById(typingId);
+        if (typingEl) typingEl.remove();
+        
+        console.error('Error sending message to being:', error);
+        alert('Error: ' + error.message);
+    }
+}
+
+// Load user's characters for being chat
+async function loadBeingChatCharacters() {
+    const token = authToken || localStorage.getItem('authToken');
+    if (!token) return;
+    
+    try {
+        const response = await fetch(`${BEING_REGISTRY_URL}/beings/my-characters`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const characters = data.characters || [];
+            const characterList = document.getElementById('being-character-list');
+            
+            characterList.innerHTML = characters.map(char => `
+                <div class="being-chat-item" data-being-id="${char.being_id}" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.1em;">🧠</span>
+                    <span>${char.name || char.being_id.substring(0, 8)}</span>
+                </div>
+            `).join('');
+            
+            // Add click handlers
+            document.querySelectorAll('.being-chat-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const beingId = item.dataset.beingId;
+                    const beingName = item.textContent.trim().replace('🧠', '').trim();
+                    switchBeingChat(beingId, beingName);
+                    // Update active state
+                    document.querySelectorAll('.being-chat-item').forEach(el => el.style.background = '#2a2a2a');
+                    item.style.background = '#3a2a4a';
+                });
+            });
+        }
+    } catch (error) {
+        console.error('Error loading characters:', error);
+    }
+}
+
+// Load nearby beings for being chat
+async function loadNearbyBeings() {
+    const token = authToken || localStorage.getItem('authToken');
+    const currentSession = window.currentSession;
+    
+    if (!token || !currentSession) {
+        document.getElementById('being-vicinity-list').innerHTML = '<div style="color: #888; font-size: 0.85em; padding: 8px;">Join a session to see nearby beings</div>';
         return;
     }
     
     try {
-        // Get current game time
-        const currentSession = window.currentSession;
-        if (!currentSession) {
-            alert('Please join a game session first');
-            return;
-        }
+        const response = await fetch(`${BEING_REGISTRY_URL}/beings/vicinity/${currentSession.session_id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         
-        // TODO: Get actual game time from time management service
-        const gameTime = Date.now() / 1000; // Temporary - should use actual game time
-        
-        // Submit action to being service
-        // First, get the being service endpoint from registry
-        const registryResponse = await fetch(`${BEING_REGISTRY_URL}/beings/${characterId}`, {
-            headers: {
-                'Authorization': `Bearer ${authToken}`
+        if (response.ok) {
+            const data = await response.json();
+            const beings = data.beings || [];
+            const vicinityList = document.getElementById('being-vicinity-list');
+            
+            if (beings.length === 0) {
+                vicinityList.innerHTML = '<div style="color: #888; font-size: 0.85em; padding: 8px;">No other beings nearby</div>';
+                return;
             }
-        });
-        
-        if (!registryResponse.ok) {
-            throw new Error('Could not find character');
-        }
-        
-        const registry = await registryResponse.json();
-        const beingServiceUrl = registry.service_endpoint || `http://localhost:8006`; // Default being service port
-        
-        // Submit action to being service
-        const actionResponse = await fetch(`${beingServiceUrl}/decide`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${authToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                being_id: characterId,
-                context: action,
-                game_time: gameTime
-            })
-        });
-        
-        if (actionResponse.ok) {
-            const actionResult = await actionResponse.json();
-            addEvent({
-                event_type: 'player_action',
-                description: `Character action: ${action}`,
-                game_time: gameTime
+            
+            vicinityList.innerHTML = beings.map(being => `
+                <div class="being-vicinity-item" data-being-id="${being.being_id}" style="padding: 6px 8px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.85em; display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 0.9em;">👤</span>
+                    <span>${being.name || being.being_id.substring(0, 8)}</span>
+                </div>
+            `).join('');
+            
+            // Add click handlers for nearby beings
+            document.querySelectorAll('.being-vicinity-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const beingId = item.dataset.beingId;
+                    const beingName = item.textContent.trim().replace('👤', '').trim();
+                    switchBeingChat(beingId, beingName);
+                    // Update active state
+                    document.querySelectorAll('.being-vicinity-item').forEach(el => el.style.background = '#2a2a2a');
+                    item.style.background = '#3a2a4a';
+                });
             });
-            document.getElementById('action-input').value = '';
-            addSystemMessage(`Action submitted: ${action}`);
-        } else {
-            const error = await actionResponse.text();
-            throw new Error(`Failed to submit action: ${error}`);
         }
     } catch (error) {
-        console.error('Error submitting action:', error);
-        alert('Error submitting action: ' + error.message);
+        console.error('Error loading nearby beings:', error);
+        document.getElementById('being-vicinity-list').innerHTML = '<div style="color: #888; font-size: 0.85em; padding: 8px;">Error loading nearby beings</div>';
     }
-});
+}
 
 // Game session management - defer prompt and all async work to prevent blocking
 document.getElementById('create-session-btn').addEventListener('click', () => {
