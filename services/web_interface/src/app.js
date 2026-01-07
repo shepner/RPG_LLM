@@ -1532,7 +1532,7 @@ function renderLLMConversation(service) {
                     </div>
                     ${!isUser ? `
                         <div style="margin-top: 6px; display: flex; gap: 6px; align-items: center;">
-                            <button onclick="saveMessageAsPrompt('${service}', ${JSON.stringify(msg.content).replace(/"/g, '&quot;')})" style="padding: 4px 8px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em; display: flex; align-items: center; gap: 4px;">
+                            <button class="save-prompt-btn" data-service="${service}" data-content="${escapeHTML(msg.content).replace(/"/g, '&quot;').replace(/\n/g, '\\n')}" style="padding: 4px 8px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em; display: flex; align-items: center; gap: 4px;">
                                 <span>💾</span>
                                 <span>Save as Prompt</span>
                             </button>
