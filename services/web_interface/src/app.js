@@ -1272,6 +1272,10 @@ async function loadUserInfo() {
                 if (manageRulesBtn) {
                     manageRulesBtn.style.display = 'inline-block';
                 }
+                const llmServicesBtn = document.getElementById('llm-services-btn');
+                if (llmServicesBtn) {
+                    llmServicesBtn.style.display = 'inline-block';
+                }
                 const validateSystemBtn = document.getElementById('validate-system-btn');
                 if (validateSystemBtn) {
                     validateSystemBtn.style.display = 'inline-block';
@@ -1280,6 +1284,10 @@ async function loadUserInfo() {
                 const manageRulesBtn = document.getElementById('manage-rules-btn');
                 if (manageRulesBtn) {
                     manageRulesBtn.style.display = 'none';
+                }
+                const llmServicesBtn = document.getElementById('llm-services-btn');
+                if (llmServicesBtn) {
+                    llmServicesBtn.style.display = 'none';
                 }
                 const validateSystemBtn = document.getElementById('validate-system-btn');
                 if (validateSystemBtn) {
@@ -1402,6 +1410,100 @@ document.getElementById('manage-rules-btn')?.addEventListener('click', () => {
     } else {
         panel.style.display = 'none';
         stopRulesAutoRefresh();
+    }
+});
+
+// LLM Services interaction (GM only)
+document.getElementById('llm-services-btn')?.addEventListener('click', () => {
+    const panel = document.getElementById('llm-services');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+    } else {
+        panel.style.display = 'none';
+    }
+});
+
+document.getElementById('submit-llm-query-btn')?.addEventListener('click', async () => {
+    const serviceSelect = document.getElementById('llm-service-select');
+    const queryInput = document.getElementById('llm-query-input');
+    const responseDiv = document.getElementById('llm-response');
+    
+    if (!queryInput.value.trim()) {
+        addSystemMessage('Please enter a query.', 'error');
+        return;
+    }
+    
+    const service = serviceSelect.value;
+    const query = queryInput.value.trim();
+    
+    // Show loading state
+    responseDiv.innerHTML = '<div style="color: #888;">⏳ Processing query...</div>';
+    responseDiv.style.color = '#888';
+    
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        let url;
+        
+        if (service === 'rules_engine') {
+            url = `${RULES_ENGINE_URL}/query`;
+        } else if (service === 'game_master') {
+            url = `${GM_URL}/query`;
+        } else {
+            throw new Error(`Unknown service: ${service}`);
+        }
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                query: query
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            if (result.error) {
+                responseDiv.innerHTML = `<div style="color: #ef4444; margin-bottom: 8px;"><strong>Error:</strong> ${escapeHTML(result.error)}</div>`;
+                responseDiv.style.color = '#ef4444';
+            } else {
+                let html = `<div style="color: #10b981; margin-bottom: 8px; font-weight: bold;">${escapeHTML(result.service || 'Service')}</div>`;
+                html += `<div style="color: #888; margin-bottom: 12px; font-size: 0.85em;">Query: "${escapeHTML(result.query)}"</div>`;
+                
+                if (result.response) {
+                    html += `<div style="color: #e0e0e0; line-height: 1.6; margin-bottom: 8px;">${escapeHTML(result.response).replace(/\n/g, '<br>')}</div>`;
+                }
+                
+                if (result.metadata) {
+                    html += `<div style="color: #666; margin-top: 12px; padding-top: 8px; border-top: 1px solid #444; font-size: 0.8em;">`;
+                    if (result.rules_found !== undefined) {
+                        html += `Rules found: ${result.rules_found}<br>`;
+                    }
+                    html += `</div>`;
+                }
+                
+                responseDiv.innerHTML = html;
+                responseDiv.style.color = '#e0e0e0';
+            }
+        } else {
+            const errorText = await response.text();
+            let errorMessage = 'Failed to process query';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            responseDiv.innerHTML = `<div style="color: #ef4444;"><strong>Error:</strong> ${escapeHTML(errorMessage)}</div>`;
+            responseDiv.style.color = '#ef4444';
+        }
+    } catch (error) {
+        console.error('Error querying LLM service:', error);
+        responseDiv.innerHTML = `<div style="color: #ef4444;"><strong>Error:</strong> ${escapeHTML(error.message)}</div>`;
+        responseDiv.style.color = '#ef4444';
     }
 });
 

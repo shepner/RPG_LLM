@@ -159,6 +159,90 @@ async def resolve_action(request: ResolveRequest):
     return result
 
 
+class QueryRequest(BaseModel):
+    """Request model for querying the rules engine."""
+    query: str
+    context: Optional[Dict[str, Any]] = None
+
+
+@app.post("/query")
+async def query_rules_engine(
+    request: QueryRequest,
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+):
+    """
+    Query the Rules Engine (Ma'at) with a question about rules (GM only).
+    
+    This allows GMs to test if the rules engine understands the uploaded rules
+    and can answer questions about game mechanics.
+    """
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="GM role required to query rules engine")
+    
+    if not resolver.llm_provider:
+        return {
+            "service": "Ma'at (Rules Engine)",
+            "query": request.query,
+            "response": "LLM provider not available. Cannot process queries.",
+            "error": "LLM not configured"
+        }
+    
+    # Search for relevant rules
+    relevant_rules = []
+    if rules_indexer:
+        try:
+            search_results = await rules_indexer.search(request.query, n_results=5)
+            relevant_rules = [r["content"] for r in search_results]
+        except Exception as e:
+            print(f"Warning: Error searching rules: {e}")
+    
+    # Build prompt for LLM
+    rules_context = "\n\n".join(relevant_rules) if relevant_rules else "No specific rules found for this query."
+    
+    prompt = f"""You are Ma'at, the Rules Engine for a Tabletop Role-Playing Game system. Your role is to interpret and apply game rules accurately.
+
+AVAILABLE RULES CONTEXT:
+{rules_context}
+
+GM QUERY:
+{request.query}
+
+ADDITIONAL CONTEXT:
+{request.context or "None"}
+
+Answer the GM's question about the rules. Be specific, cite relevant rules when possible, and explain how the rules apply. If the query is about a specific action or mechanic, provide details about dice rolls, modifiers, and outcomes."""
+
+    try:
+        # Query LLM
+        response = await resolver.llm_provider.generate(
+            prompt=prompt,
+            system_prompt="You are Ma'at, the Rules Engine. You interpret and apply game rules with precision and fairness. Answer GM questions clearly and cite relevant rules.",
+            temperature=0.3,
+            max_tokens=1000
+        )
+        
+        return {
+            "service": "Ma'at (Rules Engine)",
+            "query": request.query,
+            "response": response.text,
+            "rules_found": len(relevant_rules),
+            "metadata": {
+                "context_provided": request.context is not None,
+                "rules_searched": len(relevant_rules)
+            }
+        }
+    except Exception as e:
+        error_msg = str(e)
+        if "/Users/" in error_msg:
+            error_msg = error_msg.replace("/Users/shepner/", "/app/")
+        return {
+            "service": "Ma'at (Rules Engine)",
+            "query": request.query,
+            "response": None,
+            "error": f"Error processing query: {error_msg}"
+        }
+
+
 @app.post("/rules/upload")
 async def upload_rules(
     file: UploadFile = File(...), 
