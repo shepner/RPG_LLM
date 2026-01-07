@@ -2449,7 +2449,12 @@ document.getElementById('submit-character-btn')?.addEventListener('click', async
 async function loadPrompts() {
     const serviceSelect = document.getElementById('prompt-service-select');
     const service = serviceSelect ? serviceSelect.value : 'rules_engine';
-    const serviceUrl = service === 'rules_engine' ? RULES_ENGINE_URL : GM_URL;
+    const serviceUrls = {
+        'rules_engine': RULES_ENGINE_URL,
+        'game_master': GM_URL,
+        'being': BEING_URL
+    };
+    const serviceUrl = serviceUrls[service] || RULES_ENGINE_URL;
     const promptsList = document.getElementById('prompts-list');
     
     if (!promptsList) return;
@@ -2618,7 +2623,12 @@ async function showCreatePromptModal() {
         
         try {
             const token = authToken || localStorage.getItem('authToken');
-            const serviceUrl = service === 'rules_engine' ? RULES_ENGINE_URL : GM_URL;
+            const serviceUrls = {
+                'rules_engine': RULES_ENGINE_URL,
+                'game_master': GM_URL,
+                'being': BEING_URL
+            };
+            const serviceUrl = serviceUrls[service] || RULES_ENGINE_URL;
             
             const response = await fetch(`${serviceUrl}/prompts`, {
                 method: 'POST',
@@ -2950,7 +2960,12 @@ async function updateActivePromptsIndicator(service) {
             return;
         }
         
-        const serviceUrl = service === 'rules_engine' ? RULES_ENGINE_URL : GM_URL;
+        const serviceUrls = {
+            'rules_engine': RULES_ENGINE_URL,
+            'game_master': GM_URL,
+            'being': BEING_URL
+        };
+        const serviceUrl = serviceUrls[service] || RULES_ENGINE_URL;
         const currentSession = window.currentSession ? window.currentSession.session_id : null;
         
         // Get active prompts (global + session-specific)
