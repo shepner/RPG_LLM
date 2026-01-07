@@ -1759,6 +1759,7 @@ async function initializeSession() {
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         initializeSession();
+        setupSystemMessagesToggle();
         // Display version number (build timestamp)
         const versionDisplay = document.getElementById('version-display');
         if (versionDisplay) {
@@ -1770,6 +1771,7 @@ if (document.readyState === 'loading') {
 } else {
     // DOM is already loaded
     initializeSession();
+    setupSystemMessagesToggle();
     // Display version number (build timestamp)
     const versionDisplay = document.getElementById('version-display');
     if (versionDisplay) {
