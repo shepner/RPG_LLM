@@ -6,11 +6,13 @@ import hashlib
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from .rule_resolver import RuleResolver
 from .models import RollResult, Resolution
+from .rules_parser import RulesParser
+from .rules_indexer import RulesIndexer
 
 # Import auth middleware (optional)
 try:
@@ -37,12 +39,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-resolver = RuleResolver()
-
-# Rules storage directory
+# Initialize rules parser and indexer
 RULES_DIR = Path(os.getenv("RULES_DIR", "./RPG_LLM_DATA/rules"))
+CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./RPG_LLM_DATA/vector_stores/rules")
 RULES_DIR.mkdir(parents=True, exist_ok=True)
 RULES_METADATA_FILE = RULES_DIR / "metadata.json"
+
+# Initialize components
+try:
+    rules_parser = RulesParser(RULES_DIR)
+    rules_indexer = RulesIndexer(CHROMA_DB_PATH, RULES_DIR)
+    resolver = RuleResolver(rules_indexer=rules_indexer)
+except Exception as e:
+    print(f"Warning: Error initializing rules components: {e}")
+    rules_parser = None
+    rules_indexer = None
+    resolver = RuleResolver()
 
 # In-memory cache of rules metadata
 _rules_metadata: Dict[str, Dict[str, Any]] = {}
@@ -131,9 +143,8 @@ async def roll_dice(dice: str):
 
 @app.post("/resolve", response_model=Resolution)
 async def resolve_action(action: str, context: dict = None):
-    """Resolve an action using rules."""
-    # TODO: Load rules and implement full resolution
-    result = resolver.resolve_action(action, {}, context)
+    """Resolve an action using rules and LLM."""
+    result = await resolver.resolve_action(action, context)
     return result
 
 
@@ -218,6 +229,31 @@ async def upload_rules(
         }
         save_rules_metadata()
         
+        # Extract and index content for LLM use (async, non-blocking)
+        if rules_parser and rules_indexer:
+            try:
+                extracted = rules_parser.extract_content(file_path, file_ext)
+                if extracted.get("content"):
+                    # Index in background task (don't block upload response)
+                    if background_tasks:
+                        background_tasks.add_task(
+                            _index_file_background,
+                            rules_indexer,
+                            file_id,
+                            safe_filename,
+                            extracted["content"],
+                            {
+                                "file_id": file_id,
+                                "filename": safe_filename,
+                                "original_filename": file.filename,
+                                "type": file_category,
+                                "extension": file_ext
+                            }
+                        )
+            except Exception as e:
+                print(f"Warning: Failed to index file {safe_filename}: {e}")
+                # Don't fail the upload if indexing fails
+        
         return {
             "message": "File uploaded successfully",
             "file_id": file_id,
@@ -225,7 +261,8 @@ async def upload_rules(
             "size": file_size,
             "type": file.content_type,
             "category": file_category,
-            "uploaded_at": _rules_metadata[file_id]["uploaded_at"]
+            "uploaded_at": _rules_metadata[file_id]["uploaded_at"],
+            "indexed": True
         }
     except HTTPException:
         raise
@@ -326,6 +363,12 @@ async def delete_rule(
     # Delete file
     if file_path.exists():
         file_path.unlink()
+    
+    # Remove from index
+    try:
+        rules_indexer.delete_file_index(file_id)
+    except Exception as e:
+        print(f"Warning: Failed to remove file from index: {e}")
     
     # Remove from metadata
     del _rules_metadata[file_id]

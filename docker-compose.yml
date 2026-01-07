@@ -41,8 +41,13 @@ services:
       - "8002:8002"
     volumes:
       - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+      - ./credentials.json:/app/credentials.json:ro
     environment:
       - RULES_DIR=./RPG_LLM_DATA/rules
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-./credentials.json}
+      - LLM_MODEL=${LLM_MODEL:-gemini-pro}
+      - CHROMA_DB_PATH=./RPG_LLM_DATA/vector_stores/rules
 
   time_management:
     build:
