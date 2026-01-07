@@ -9,13 +9,13 @@ from .base import BaseLLMProvider, LLMResponse, LLMStreamChunk
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini LLM provider."""
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-1.0-pro", **kwargs):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3-flash-preview", **kwargs):
         """
         Initialize Gemini provider.
         
         Args:
             api_key: Gemini API key (or use GOOGLE_APPLICATION_CREDENTIALS)
-            model: Model name (gemini-1.5-flash, gemini-1.5-pro, gemini-pro, etc.)
+            model: Model name (gemini-3-flash-preview, gemini-3-pro-preview, gemini-1.0-pro, etc.)
             **kwargs: Additional configuration
         """
         super().__init__(api_key, model, **kwargs)
@@ -32,24 +32,21 @@ class GeminiProvider(BaseLLMProvider):
         # Normalize model name - remove 'models/' prefix if present, as GenerativeModel adds it
         normalized_model = model.replace('models/', '') if model.startswith('models/') else model
         
-        # Map newer model names to v1beta-compatible names if needed
-        # v1beta API may use different model names than v1
-        model_mapping = {
-            'gemini-1.5-flash': 'gemini-1.0-pro',  # Fallback for v1beta
-            'gemini-1.5-pro': 'gemini-1.0-pro',    # Fallback for v1beta
-        }
-        
-        # Use mapped model if available, otherwise use normalized model
-        final_model = model_mapping.get(normalized_model, normalized_model)
-        
+        # Use normalized model directly (Gemini 3 models are available in v1beta)
         try:
-            self.client = genai.GenerativeModel(final_model)
+            self.client = genai.GenerativeModel(normalized_model)
         except Exception as e:
-            # If model not found, try gemini-1.0-pro as fallback
-            if final_model != 'gemini-1.0-pro':
-                print(f"Warning: Model {final_model} not available, falling back to gemini-1.0-pro: {e}")
-                self.client = genai.GenerativeModel('gemini-1.0-pro')
-                self.model = 'gemini-1.0-pro'  # Update stored model name
+            # If model not found, try gemini-3-flash-preview as fallback (has free tier)
+            if normalized_model != 'gemini-3-flash-preview':
+                print(f"Warning: Model {normalized_model} not available, falling back to gemini-3-flash-preview: {e}")
+                try:
+                    self.client = genai.GenerativeModel('gemini-3-flash-preview')
+                    self.model = 'gemini-3-flash-preview'  # Update stored model name
+                except Exception as e2:
+                    # Last resort: try gemini-1.0-pro (older but stable)
+                    print(f"Warning: gemini-3-flash-preview also not available, trying gemini-1.0-pro: {e2}")
+                    self.client = genai.GenerativeModel('gemini-1.0-pro')
+                    self.model = 'gemini-1.0-pro'  # Update stored model name
             else:
                 raise
     
