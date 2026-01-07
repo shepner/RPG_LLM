@@ -2,13 +2,16 @@
 // Version: 1.0.0
 
 // Constants
-const AUTH_URL = 'http://localhost:8001';
-const GAME_SESSION_URL = 'http://localhost:8002';
-const RULES_ENGINE_URL = 'http://localhost:8003';
-const BEING_REGISTRY_URL = 'http://localhost:8005';
-const GM_URL = 'http://localhost:8004';
-const WORLDS_URL = 'http://localhost:8006';
-const TIME_MANAGEMENT_URL = 'http://localhost:8007';
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:5',message:'Service URL constants defined',data:{AUTH_URL:'http://localhost:8000',GAME_SESSION_URL:'http://localhost:8001'},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
+// #endregion
+const AUTH_URL = 'http://localhost:8000';
+const GAME_SESSION_URL = 'http://localhost:8001';
+const RULES_ENGINE_URL = 'http://localhost:8002';
+const BEING_REGISTRY_URL = 'http://localhost:8007';
+const GM_URL = 'http://localhost:8005';
+const WORLDS_URL = 'http://localhost:8004';
+const TIME_MANAGEMENT_URL = 'http://localhost:8003';
 
 // Custom Modal Dialogs - Non-blocking replacements for prompt() and confirm()
 function showCustomModal(options) {
@@ -143,20 +146,36 @@ let gmWS = null;
 
 // Authentication - login function
 async function performLogin() {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:145',message:'performLogin entry',data:{AUTH_URL:AUTH_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:149',message:'username/password extracted',data:{hasUsername:!!username,hasPassword:!!password},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     
     if (!username || !password) {
         alert('Please enter both username and password');
         return;
     }
     
+    const loginUrl = `${AUTH_URL}/login`;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:155',message:'before fetch login',data:{loginUrl:loginUrl,AUTH_URL:AUTH_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    
     try {
-        const response = await fetch(`${AUTH_URL}/login`, {
+        const response = await fetch(loginUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:162',message:'after fetch login',data:{status:response.status,statusText:response.statusText,ok:response.ok,url:response.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         
         if (response.ok) {
             const data = await response.json();
