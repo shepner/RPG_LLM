@@ -542,9 +542,16 @@ window.joinSession = async function(sessionId) {
 
 // Load user info and set up UI
 async function loadUserInfo() {
+    // Get token from localStorage if not in memory
+    const token = authToken || localStorage.getItem('authToken');
+    if (!token) {
+        console.log('No auth token available for loadUserInfo');
+        return;
+    }
+    
     try {
         const userResponse = await fetch(`${AUTH_URL}/me`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (userResponse.ok) {
