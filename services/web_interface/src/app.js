@@ -580,9 +580,14 @@ function displayValidationReport(report) {
             <h2 style="margin-top: 0; color: ${statusColor};">
                 ${statusIcon} System Validation Report
             </h2>
+            <div style="margin-bottom: 15px; padding: 12px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid #4a9eff;">
+                <p style="color: #e0e0e0; margin: 0; font-size: 0.95em;">
+                    <strong>What this does:</strong> Checks the health and connectivity of all core services (Auth, Rules Engine, Game Master, Worlds, Being Registry, Time Management) and validates key integrations between services. Use this to diagnose system issues.
+                </p>
+            </div>
             <div style="margin-bottom: 20px; padding: 10px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${statusColor};">
                 <strong>Overall Status: <span style="color: ${statusColor};">${overallStatus.toUpperCase()}</span></strong>
-                <div style="color: #888; font-size: 0.9em; margin-top: 5px;">Validated at: ${new Date(report.timestamp).toLocaleString()}</div>
+                <div style="color: #888; font-size: 0.9em; margin-top: 5px;">Validated at: ${new Date(report.timestamp || Date.now()).toLocaleString()}</div>
             </div>
             
             <h3 style="color: #e0e0e0;">Services</h3>
