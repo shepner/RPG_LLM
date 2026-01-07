@@ -489,28 +489,22 @@ async function showUserManagementModal() {
             const roleIcon = user.role === 'gm' ? '👑' : '👤';
             
             return `
-                <div id="user-${user.user_id}" style="padding: 8px; margin-bottom: 6px; background: #2a2a2a; border-radius: 3px; border-left: 3px solid ${roleColor};">
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
-                        <div style="flex: 1;">
-                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
-                                <strong style="color: ${roleColor}; font-size: 1em;">${roleIcon} ${user.username}</strong>
-                                ${isCurrentUser ? '<span style="color: #888; font-size: 0.8em;">(You)</span>' : ''}
-                            </div>
-                            <div style="color: #888; font-size: 0.85em; margin-bottom: 6px;">${user.email}</div>
-                            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                                <select id="role-${user.user_id}" style="padding: 4px 6px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.85em;">
-                                    <option value="player" ${user.role === 'player' ? 'selected' : ''}>Player</option>
-                                    <option value="gm" ${user.role === 'gm' ? 'selected' : ''}>Game Master</option>
-                                </select>
-                                <button onclick="updateUserRole('${user.user_id}')" style="padding: 4px 10px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Update Role</button>
-                                <button onclick="manageUserCharacters('${user.user_id}', '${user.username}')" style="padding: 4px 10px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">📋 Manage Characters</button>
-                                ${!isCurrentUser ? `<button onclick="deleteUser('${user.user_id}', '${user.username}')" style="padding: 4px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">🗑️ Delete</button>` : '<span style="color: #888; font-size: 0.8em;">(Cannot delete yourself)</span>'}
-                            </div>
-                        </div>
+                <div id="user-${user.user_id}" style="padding: 6px 8px; margin-bottom: 4px; background: #2a2a2a; border-radius: 3px; border-left: 3px solid ${roleColor}; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 6px; min-width: 150px; flex: 1;">
+                        <strong style="color: ${roleColor}; font-size: 0.9em;">${roleIcon} ${user.username}</strong>
+                        ${isCurrentUser ? '<span style="color: #888; font-size: 0.75em;">(You)</span>' : ''}
                     </div>
-                    <div style="color: #666; font-size: 0.75em; margin-top: 4px;">
-                        Created: ${new Date(user.created_at).toLocaleString()}
+                    <div style="color: #888; font-size: 0.8em; min-width: 180px; flex: 1;">${user.email}</div>
+                    <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                        <select id="role-${user.user_id}" style="padding: 3px 6px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.8em;">
+                            <option value="player" ${user.role === 'player' ? 'selected' : ''}>Player</option>
+                            <option value="gm" ${user.role === 'gm' ? 'selected' : ''}>GM</option>
+                        </select>
+                        <button onclick="updateUserRole('${user.user_id}')" style="padding: 3px 8px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Update</button>
+                        <button onclick="manageUserCharacters('${user.user_id}', '${user.username}')" style="padding: 3px 8px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">📋</button>
+                        ${!isCurrentUser ? `<button onclick="deleteUser('${user.user_id}', '${user.username}')" style="padding: 3px 8px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">🗑️</button>` : '<span style="color: #666; font-size: 0.75em;">-</span>'}
                     </div>
+                    <div style="color: #666; font-size: 0.75em; min-width: 140px; text-align: right;">${new Date(user.created_at).toLocaleDateString()}</div>
                 </div>
             `;
         }).join('');
