@@ -2667,7 +2667,13 @@ async function showCreatePromptModal() {
 }
 
 window.editPrompt = async function(promptId, service) {
-    const serviceUrl = service === 'rules_engine' ? RULES_ENGINE_URL : GM_URL;
+    const serviceUrls = {
+        'rules_engine': RULES_ENGINE_URL,
+        'game_master': GM_URL,
+        'being': BEING_URL,
+        'worlds': WORLDS_URL
+    };
+    const serviceUrl = serviceUrls[service] || RULES_ENGINE_URL;
     const serviceName = service === 'rules_engine' ? "Ma'at (Rules Engine)" : "Thoth (Game Master)";
     
     try {
@@ -2809,7 +2815,13 @@ window.editPrompt = async function(promptId, service) {
 };
 
 window.deletePrompt = async function(promptId, service) {
-    const serviceUrl = service === 'rules_engine' ? RULES_ENGINE_URL : GM_URL;
+    const serviceUrls = {
+        'rules_engine': RULES_ENGINE_URL,
+        'game_master': GM_URL,
+        'being': BEING_URL,
+        'worlds': WORLDS_URL
+    };
+    const serviceUrl = serviceUrls[service] || RULES_ENGINE_URL;
     const confirmed = await customConfirm(
         'Are you sure you want to delete this system prompt? This action cannot be undone.',
         'Delete System Prompt'
