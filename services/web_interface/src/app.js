@@ -761,10 +761,22 @@ function setupValidateSystemButton() {
         if (!validateBtn.hasAttribute('data-listener-attached')) {
             validateBtn.setAttribute('data-listener-attached', 'true');
             validateBtn.addEventListener('click', async () => {
+                const token = authToken || localStorage.getItem('authToken');
+                if (!token) {
+                    alert('You must be logged in to check system health.');
+                    return;
+                }
+                
+                // Show loading state
+                const originalText = validateBtn.textContent;
+                validateBtn.disabled = true;
+                validateBtn.textContent = '⏳ Checking...';
+                validateBtn.style.opacity = '0.7';
+                
                 try {
                     const response = await fetch(`${BEING_REGISTRY_URL}/system/validate`, {
                         headers: {
-                            'Authorization': `Bearer ${authToken}`
+                            'Authorization': `Bearer ${token}`
                         }
                     });
                     
@@ -772,12 +784,24 @@ function setupValidateSystemButton() {
                         const report = await response.json();
                         displayValidationReport(report);
                     } else {
-                        const error = await response.text();
-                        alert('Failed to validate system: ' + error);
+                        const errorText = await response.text();
+                        let errorMessage = 'Failed to check system health';
+                        try {
+                            const errorJson = JSON.parse(errorText);
+                            errorMessage = errorJson.detail || errorMessage;
+                        } catch {
+                            errorMessage = errorText || errorMessage;
+                        }
+                        alert(`System Health Check Failed:\n\n${errorMessage}\n\nStatus: ${response.status}`);
                     }
                 } catch (error) {
                     console.error('Error validating system:', error);
-                    alert('Error validating system: ' + error.message);
+                    alert(`System Health Check Error:\n\n${error.message}\n\nThis might indicate a network issue or that the Being Registry service is not available.`);
+                } finally {
+                    // Restore button state
+                    validateBtn.disabled = false;
+                    validateBtn.textContent = originalText;
+                    validateBtn.style.opacity = '1';
                 }
             });
         }
@@ -809,21 +833,30 @@ function displayValidationReport(report) {
     }
     
     let integrationsHtml = '';
-    for (const [name, integration] of Object.entries(report.integrations || {})) {
-        const intStatus = integration.status || 'unknown';
-        const intColor = intStatus === 'ok' ? '#10b981' : intStatus === 'warning' ? '#f59e0b' : '#ef4444';
-        const intIcon = intStatus === 'ok' ? '✅' : intStatus === 'warning' ? '⚠️' : '❌';
-        let detailsHtml = '';
-        if (integration.details) {
-            detailsHtml = `<div style="color: #666; font-size: 0.8em; margin-top: 3px; padding-left: 8px;">${JSON.stringify(integration.details, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}</div>`;
+    if (report.integrations && Object.keys(report.integrations).length > 0) {
+        for (const [name, integration] of Object.entries(report.integrations)) {
+            const intStatus = (typeof integration === 'object' && integration.healthy !== undefined) 
+                ? (integration.healthy ? 'ok' : 'error')
+                : (typeof integration === 'object' && integration.status) 
+                    ? integration.status 
+                    : 'unknown';
+            const intColor = intStatus === 'ok' || intStatus === 'healthy' ? '#10b981' : intStatus === 'warning' ? '#f59e0b' : '#ef4444';
+            const intIcon = intStatus === 'ok' || intStatus === 'healthy' ? '✅' : intStatus === 'warning' ? '⚠️' : '❌';
+            const intObj = typeof integration === 'object' ? integration : { message: integration };
+            let detailsHtml = '';
+            if (intObj.details) {
+                detailsHtml = `<div style="color: #666; font-size: 0.8em; margin-top: 3px; padding-left: 8px;">${JSON.stringify(intObj.details, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}</div>`;
+            }
+            integrationsHtml += `
+                <div style="padding: 5px 6px; margin-bottom: 4px; background: #2a2a2a; border-radius: 3px; border-left: 2px solid ${intColor};">
+                    <strong style="font-size: 0.9em;">${intIcon} ${name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                    <div style="color: #888; font-size: 0.85em; margin-top: 3px;">${intObj.message || intStatus}</div>
+                    ${detailsHtml}
+                </div>
+            `;
         }
-        integrationsHtml += `
-            <div style="padding: 5px 6px; margin-bottom: 4px; background: #2a2a2a; border-radius: 3px; border-left: 2px solid ${intColor};">
-                <strong style="font-size: 0.9em;">${intIcon} ${name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
-                <div style="color: #888; font-size: 0.85em; margin-top: 3px;">${integration.message || intStatus}</div>
-                ${detailsHtml}
-            </div>
-        `;
+    } else {
+        integrationsHtml = '<div style="color: #888; font-size: 0.85em; padding: 6px;">No integration data available</div>';
     }
     
     modal.innerHTML = `
