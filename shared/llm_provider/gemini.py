@@ -9,13 +9,13 @@ from .base import BaseLLMProvider, LLMResponse, LLMStreamChunk
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini LLM provider."""
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-pro", **kwargs):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-1.5-flash", **kwargs):
         """
         Initialize Gemini provider.
         
         Args:
             api_key: Gemini API key (or use GOOGLE_APPLICATION_CREDENTIALS)
-            model: Model name (gemini-pro, gemini-pro-vision, etc.)
+            model: Model name (gemini-1.5-flash, gemini-1.5-pro, gemini-pro, etc.)
             **kwargs: Additional configuration
         """
         super().__init__(api_key, model, **kwargs)
