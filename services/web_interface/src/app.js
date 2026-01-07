@@ -2537,15 +2537,21 @@ async function loadPrompts() {
     }
 }
 
-async function showCreatePromptModal() {
+async function showCreatePromptModal(prefillContent = null, prefillService = null) {
     const serviceSelect = document.getElementById('prompt-service-select');
-    const service = serviceSelect ? serviceSelect.value : 'rules_engine';
+    const service = prefillService || (serviceSelect ? serviceSelect.value : 'rules_engine');
     const serviceNames = {
         'rules_engine': "Ma'at (Rules Engine)",
         'game_master': "Thoth (Game Master)",
-        'being': "Atman (Being Service)"
+        'being': "Atman (Being Service)",
+        'worlds': "Gaia (Worlds Service)"
     };
     const serviceName = serviceNames[service] || serviceNames['rules_engine'];
+    
+    // Update service selector if prefillService is provided
+    if (prefillService && serviceSelect) {
+        serviceSelect.value = prefillService;
+    }
     
     // Get available sessions for session-scoped prompts
     let sessions = [];
@@ -2568,11 +2574,11 @@ async function showCreatePromptModal() {
             <h3 style="color: #e0e0e0; margin: 0 0 16px 0; font-size: 1.1em; font-weight: 600;">Create System Prompt for ${serviceName}</h3>
             <div style="margin-bottom: 12px;">
                 <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Title:</label>
-                <input type="text" id="prompt-title-input" placeholder="Prompt title" style="width: 100%; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
+                <input type="text" id="prompt-title-input" placeholder="Prompt title" value="${prefillContent ? 'Saved from chat' : ''}" style="width: 100%; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; box-sizing: border-box;">
             </div>
             <div style="margin-bottom: 12px;">
                 <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Content:</label>
-                <textarea id="prompt-content-input" placeholder="Enter the prompt content that will be embedded into the LLM's system prompt..." style="width: 100%; min-height: 150px; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                <textarea id="prompt-content-input" placeholder="Enter the prompt content that will be embedded into the LLM's system prompt..." style="width: 100%; min-height: 150px; padding: 8px 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px; font-size: 0.95em; font-family: inherit; resize: vertical; box-sizing: border-box;">${prefillContent ? escapeHTML(prefillContent) : ''}</textarea>
             </div>
             <div style="margin-bottom: 12px;">
                 <label style="display: block; color: #bbb; margin-bottom: 4px; font-size: 0.9em;">Scope:</label>
