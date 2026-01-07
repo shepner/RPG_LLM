@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, BackgroundTasks, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from .rule_resolver import RuleResolver
