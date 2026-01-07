@@ -760,6 +760,39 @@ async function listRules() {
                     const categoryIcon = category === 'image' ? '🖼️' : category === 'document' ? (rule.is_epub ? '📚' : '📄') : '📝';
                     const categoryColor = category === 'image' ? '#4a9eff' : category === 'document' ? '#f59e0b' : '#10b981';
                     
+                    // Indexing status indicator
+                    const indexingStatus = rule.indexing_status || 'pending';
+                    let statusBadge = '';
+                    if (rule.is_text || rule.is_document || rule.is_pdf || rule.is_epub) {
+                        let statusColor = '#888';
+                        let statusText = 'Pending';
+                        let statusIcon = '⏳';
+                        
+                        if (indexingStatus === 'indexing') {
+                            statusColor = '#f59e0b';
+                            statusText = 'Indexing...';
+                            statusIcon = '🔄';
+                        } else if (indexingStatus === 'indexed') {
+                            statusColor = '#10b981';
+                            statusText = 'Indexed';
+                            statusIcon = '✅';
+                        } else if (indexingStatus === 'failed') {
+                            statusColor = '#ef4444';
+                            statusText = 'Indexing Failed';
+                            statusIcon = '❌';
+                        } else {
+                            statusText = 'Pending Indexing';
+                        }
+                        
+                        statusBadge = `<span style="color: ${statusColor}; margin-left: 10px; font-size: 0.85em; font-weight: bold;">${statusIcon} ${statusText}</span>`;
+                        if (rule.indexed_at) {
+                            statusBadge += `<span style="color: #666; margin-left: 5px; font-size: 0.75em;">(${new Date(rule.indexed_at).toLocaleString()})</span>`;
+                        }
+                        if (indexingStatus === 'failed' && rule.indexing_error) {
+                            statusBadge += `<div style="color: #ef4444; font-size: 0.75em; margin-top: 3px;">Error: ${rule.indexing_error.substring(0, 100)}</div>`;
+                        }
+                    }
+                    
                     return `
                         <div style="padding: 10px; margin-bottom: 8px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${categoryColor};">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -767,6 +800,7 @@ async function listRules() {
                                     <strong style="color: ${categoryColor};">${categoryIcon} ${rule.filename || rule.original_filename}</strong>
                                     <span style="color: #888; margin-left: 10px; font-size: 0.9em;">${sizeKB} KB</span>
                                     <span style="color: #666; margin-left: 10px; font-size: 0.85em;">(${category})</span>
+                                    ${statusBadge}
                                 </div>
                                 <div>
                                     ${rule.is_text ? `<button onclick="viewRule('${rule.file_id}')" style="padding: 4px 8px; margin-right: 5px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">View</button>` : ''}

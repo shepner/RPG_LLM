@@ -115,7 +115,10 @@ def load_rules_metadata():
                         "is_epub": is_epub,
                         "is_document": file_ext in {'.pdf', '.epub'},
                         "uploaded_at": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
-                        "uploaded_by": None
+                        "uploaded_by": None,
+                        "indexing_status": "pending",
+                        "indexed_at": None,
+                        "indexing_error": None
                     }
                     save_rules_metadata()
 
@@ -225,7 +228,10 @@ async def upload_rules(
             "is_epub": is_epub,
             "is_document": is_document,
             "uploaded_at": datetime.now().isoformat(),
-            "uploaded_by": token_data.user_id if token_data else None
+            "uploaded_by": token_data.user_id if token_data else None,
+            "indexing_status": "pending",  # pending, indexing, indexed, failed
+            "indexed_at": None,
+            "indexing_error": None
         }
         save_rules_metadata()
         
@@ -365,10 +371,11 @@ async def delete_rule(
         file_path.unlink()
     
     # Remove from index
-    try:
-        rules_indexer.delete_file_index(file_id)
-    except Exception as e:
-        print(f"Warning: Failed to remove file from index: {e}")
+    if rules_indexer:
+        try:
+            rules_indexer.delete_file_index(file_id)
+        except Exception as e:
+            print(f"Warning: Failed to remove file from index: {e}")
     
     # Remove from metadata
     del _rules_metadata[file_id]
@@ -393,7 +400,28 @@ async def _index_file_background(
 ):
     """Background task to index a file."""
     try:
+        # Update metadata to show indexing in progress
+        load_rules_metadata()
+        if file_id in _rules_metadata:
+            _rules_metadata[file_id]["indexing_status"] = "indexing"
+            _rules_metadata[file_id]["indexed_at"] = None
+            save_rules_metadata()
+        
+        # Perform indexing
         await indexer.index_file(file_id, filename, content, metadata)
+        
+        # Update metadata to show indexing complete
+        load_rules_metadata()
+        if file_id in _rules_metadata:
+            _rules_metadata[file_id]["indexing_status"] = "indexed"
+            _rules_metadata[file_id]["indexed_at"] = datetime.now().isoformat()
+            save_rules_metadata()
     except Exception as e:
         print(f"Error in background indexing: {e}")
+        # Update metadata to show indexing failed
+        load_rules_metadata()
+        if file_id in _rules_metadata:
+            _rules_metadata[file_id]["indexing_status"] = "failed"
+            _rules_metadata[file_id]["indexing_error"] = str(e)
+            save_rules_metadata()
 
