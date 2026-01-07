@@ -130,6 +130,8 @@ def load_rules_metadata():
                         "is_document": file_ext in {'.pdf', '.epub'},
                         "uploaded_at": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
                         "uploaded_by": None,
+                        "game_system": None,  # Optional: tag with game system (D&D, Pathfinder, etc.)
+                        "session_ids": [],  # Optional: list of session IDs this file is associated with (empty = global)
                         "indexing_status": "pending",
                         "indexed_at": None,
                         "indexing_error": None
@@ -550,6 +552,46 @@ async def delete_rule(
     return {
         "message": "Rules file deleted successfully",
         "file_id": file_id,
+        "deleted_items": deleted_items
+    }
+
+
+class RuleFileAssociationUpdate(BaseModel):
+    """Update rule file associations."""
+    game_system: Optional[str] = None
+    session_ids: Optional[List[str]] = None
+
+
+@app.patch("/rules/{file_id}/associations")
+async def update_rule_associations(
+    file_id: str,
+    associations: RuleFileAssociationUpdate,
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+):
+    """Update game system and session associations for a rule file (GM only)."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="GM role required to update rule associations")
+    
+    load_rules_metadata()
+    if file_id not in _rules_metadata:
+        raise HTTPException(status_code=404, detail="Rules file not found")
+    
+    metadata = _rules_metadata[file_id]
+    
+    # Update associations
+    if associations.game_system is not None:
+        metadata["game_system"] = associations.game_system if associations.game_system else None
+    if associations.session_ids is not None:
+        metadata["session_ids"] = associations.session_ids if associations.session_ids else []
+    
+    save_rules_metadata()
+    
+    return {
+        "message": "Rule file associations updated successfully",
+        "file_id": file_id,
+        "game_system": metadata.get("game_system"),
+        "session_ids": metadata.get("session_ids", [])
+    }
         "filename": metadata.get("filename", "unknown"),
         "deleted_from": deleted_items
     }
