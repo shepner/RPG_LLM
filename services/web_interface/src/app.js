@@ -8,7 +8,8 @@ const WORLDS_URL = 'http://localhost:8004';
 const GM_URL = 'http://localhost:8005';
 const BEING_REGISTRY_URL = 'http://localhost:8007';
 
-const SYSTEM_VERSION = '1.0.0';
+// Get version from build-time generated file, or fallback to default
+const SYSTEM_VERSION = (typeof window !== 'undefined' && window.BUILD_VERSION) || 'dev';
 
 let authToken = null;
 let worldsWS = null;
@@ -1576,10 +1577,12 @@ if (document.readyState === 'loading') {
 } else {
     // DOM is already loaded
     initializeSession();
-    // Display version number
+    // Display version number (build timestamp)
     const versionDisplay = document.getElementById('version-display');
     if (versionDisplay) {
-        versionDisplay.textContent = `v${SYSTEM_VERSION}`;
+        const version = SYSTEM_VERSION === 'dev' ? 'dev' : `build-${SYSTEM_VERSION}`;
+        versionDisplay.textContent = version;
+        versionDisplay.title = `Build time: ${SYSTEM_VERSION === 'dev' ? 'Development mode' : SYSTEM_VERSION.replace(/-/g, ' ')}`;
     }
 }
 
