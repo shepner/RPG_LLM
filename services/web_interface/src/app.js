@@ -1532,7 +1532,7 @@ function renderLLMConversation(service) {
 }
 
 // Switch to a different LLM service channel
-function switchLLMChannel(service) {
+async function switchLLMChannel(service) {
     currentLLMService = service;
     const serviceConfig = LLM_SERVICES[service];
     

@@ -112,9 +112,15 @@
                         <!-- Main Chat Area -->
                         <div style="flex: 1; display: flex; flex-direction: column; background: #1a1a1a; border-radius: 3px; overflow: hidden;">
                             <!-- Chat Header -->
-                            <div id="llm-chat-header" style="padding: 10px 12px; background: #2a2a2a; border-bottom: 1px solid #444; display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                                <span id="llm-chat-service-icon" style="font-size: 1.2em;">⚖️</span>
-                                <span id="llm-chat-service-name" style="font-weight: bold; color: #e0e0e0;">Ma'at (Rules Engine)</span>
+                            <div id="llm-chat-header" style="padding: 10px 12px; background: #2a2a2a; border-bottom: 1px solid #444; flex-shrink: 0;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <span id="llm-chat-service-icon" style="font-size: 1.2em;">⚖️</span>
+                                    <span id="llm-chat-service-name" style="font-weight: bold; color: #e0e0e0;">Ma'at (Rules Engine)</span>
+                                </div>
+                                <div id="llm-active-prompts-indicator" style="font-size: 0.75em; color: #888; padding: 4px 8px; background: #1a1a1a; border-radius: 3px; display: none;">
+                                    <strong>Active Prompts:</strong> <span id="llm-active-prompts-count">0</span>
+                                    <button id="llm-view-prompts-btn" style="margin-left: 8px; padding: 2px 6px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em;">View</button>
+                                </div>
                                 <span style="font-size: 0.8em; color: #888; margin-left: auto;">Chat with LLM services</span>
                             </div>
                             
