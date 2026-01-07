@@ -1069,6 +1069,70 @@ window.deleteRule = async function(fileId) {
     }
 };
 
+// Initialize session on page load
+async function initializeSession() {
+    // Check if we have a stored token
+    const storedToken = localStorage.getItem('authToken');
+    const storedUsername = localStorage.getItem('username');
+    
+    if (!storedToken) {
+        // No token, show login form
+        return;
+    }
+    
+    // Validate token by checking user info
+    try {
+        const response = await fetch(`${AUTH_URL}/me`, {
+            headers: { 'Authorization': `Bearer ${storedToken}` }
+        });
+        
+        if (response.ok) {
+            // Token is valid, restore session
+            authToken = storedToken;
+            const user = await response.json();
+            
+            // Update UI to show logged-in state
+            if (storedUsername) {
+                document.getElementById('username-display').textContent = storedUsername;
+            } else {
+                document.getElementById('username-display').textContent = user.username;
+            }
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('user-info').style.display = 'block';
+            document.getElementById('game-section').style.display = 'block';
+            
+            // Load user info to show role and enable GM features
+            await loadUserInfo();
+            
+            // Connect WebSockets
+            connectWebSockets();
+            
+            // Load initial game state
+            await loadGameState();
+        } else {
+            // Token is invalid, clear it and show login form
+            console.log('Stored token is invalid, clearing session');
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('username');
+            authToken = null;
+        }
+    } catch (error) {
+        console.error('Error validating stored token:', error);
+        // On error, clear token and show login form
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('username');
+        authToken = null;
+    }
+}
+
+// Initialize session when page loads
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeSession);
+} else {
+    // DOM is already loaded
+    initializeSession();
+}
+
 // Character creation
 document.getElementById('create-character-btn')?.addEventListener('click', () => {
     const panel = document.getElementById('character-creation');
