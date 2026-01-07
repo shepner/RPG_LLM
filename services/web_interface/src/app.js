@@ -468,6 +468,24 @@ function stopSessionsAutoRefresh() {
     }
 }
 
+// Use event delegation for session buttons to avoid re-attaching listeners
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('join-session-btn')) {
+        const sessionId = e.target.dataset.sessionId;
+        if (sessionId) {
+            e.preventDefault();
+            joinSession(sessionId);
+        }
+    } else if (e.target.classList.contains('delete-session-btn')) {
+        const sessionId = e.target.dataset.sessionId;
+        const sessionName = e.target.dataset.sessionName;
+        if (sessionId && sessionName) {
+            e.preventDefault();
+            deleteSession(sessionId, sessionName);
+        }
+    }
+});
+
 async function refreshSessions() {
     try {
         const token = authToken || localStorage.getItem('authToken');
@@ -515,15 +533,8 @@ async function refreshSessions() {
                 </div>`;
             }).join('');
         
+        // Single DOM update
         sessionsList.innerHTML = html;
-        
-        // Attach event listeners after DOM update (event delegation would be better, but this works)
-        sessionsList.querySelectorAll('.join-session-btn').forEach(btn => {
-            btn.addEventListener('click', () => joinSession(btn.dataset.sessionId));
-        });
-        sessionsList.querySelectorAll('.delete-session-btn').forEach(btn => {
-            btn.addEventListener('click', () => deleteSession(btn.dataset.sessionId, btn.dataset.sessionName));
-        });
     } catch (error) {
         console.error('Error refreshing sessions:', error);
         const sessionsList = document.getElementById('sessions-list');
