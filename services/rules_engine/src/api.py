@@ -382,3 +382,18 @@ async def health():
     """Health check."""
     return {"status": "healthy"}
 
+
+# Background task helper
+async def _index_file_background(
+    indexer: RulesIndexer,
+    file_id: str,
+    filename: str,
+    content: str,
+    metadata: Dict[str, Any]
+):
+    """Background task to index a file."""
+    try:
+        await indexer.index_file(file_id, filename, content, metadata)
+    except Exception as e:
+        print(f"Error in background indexing: {e}")
+
