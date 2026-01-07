@@ -1524,6 +1524,11 @@ function switchLLMChannel(service) {
     currentLLMService = service;
     const serviceConfig = LLM_SERVICES[service];
     
+    // Remove any typing indicators (from any channel)
+    document.querySelectorAll('[id^="llm-typing-indicator-"]').forEach(indicator => {
+        indicator.remove();
+    });
+    
     // Update header
     document.getElementById('llm-chat-service-icon').textContent = serviceConfig.icon;
     document.getElementById('llm-chat-service-name').textContent = serviceConfig.name;
