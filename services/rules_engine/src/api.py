@@ -247,41 +247,33 @@ async def upload_rules(
         
         # Extract and index content for LLM use (async, non-blocking)
         if rules_parser and rules_indexer and (is_text or is_pdf or is_epub):
-            try:
-                extracted = rules_parser.extract_content(file_path, file_ext)
-                if extracted.get("content"):
-                    # Update status to "indexing" immediately so progress can be shown
-                    _rules_metadata[file_id]["indexing_status"] = "indexing"
-                    _rules_metadata[file_id]["indexing_progress"] = {
-                        "current": 0,
-                        "total": 0,
-                        "percentage": 0,
-                        "stage": "starting"
-                    }
-                    save_rules_metadata()
-                    
-                    # Index in background task (don't block upload response)
-                    background_tasks.add_task(
-                        _index_file_background,
-                        rules_indexer,
-                        file_id,
-                        safe_filename,
-                        extracted["content"],
-                        {
-                            "file_id": file_id,
-                            "filename": safe_filename,
-                            "original_filename": file.filename,
-                            "type": file_category,
-                            "extension": file_ext
-                        }
-                    )
-            except Exception as e:
-                print(f"Warning: Failed to start indexing for file {safe_filename}: {e}")
-                # Reset status if indexing failed to start
-                _rules_metadata[file_id]["indexing_status"] = "pending"
-                _rules_metadata[file_id]["indexing_error"] = str(e)
-                save_rules_metadata()
-                # Don't fail the upload if indexing fails
+            # Update status to "indexing" immediately so progress can be shown
+            _rules_metadata[file_id]["indexing_status"] = "indexing"
+            _rules_metadata[file_id]["indexing_progress"] = {
+                "current": 0,
+                "total": 100,
+                "percentage": 0,
+                "stage": "starting"
+            }
+            save_rules_metadata()
+            
+            # Extract and index in background task (don't block upload response)
+            background_tasks.add_task(
+                _extract_and_index_file_background,
+                rules_parser,
+                rules_indexer,
+                file_id,
+                safe_filename,
+                file_path,
+                file_ext,
+                {
+                    "file_id": file_id,
+                    "filename": safe_filename,
+                    "original_filename": file.filename,
+                    "type": file_category,
+                    "extension": file_ext
+                }
+            )
         
         return {
             "message": "File uploaded successfully",
@@ -549,6 +541,96 @@ async def health():
 
 
 # Background task helper
+async def _extract_and_index_file_background(
+    parser: RulesParser,
+    indexer: RulesIndexer,
+    file_id: str,
+    filename: str,
+    file_path: Path,
+    file_ext: str,
+    metadata: Dict[str, Any]
+):
+    """Background task to extract content and index a file with progress tracking."""
+    
+    def update_progress(current: int, total: int, stage: str):
+        """Update progress in metadata."""
+        # #region agent log
+        import json
+        try:
+            with open('/Users/shepner/RPG_LLM/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"location": "api.py:update_progress", "message": "Progress update", "data": {"file_id": file_id, "current": current, "total": total, "stage": stage, "percentage": int((current / total * 100)) if total > 0 else 0}, "timestamp": __import__('time').time(), "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
+        except: pass
+        # #endregion
+        load_rules_metadata()
+        if file_id in _rules_metadata:
+            _rules_metadata[file_id]["indexing_status"] = "indexing"
+            percentage = int((current / total * 100)) if total > 0 else 0
+            _rules_metadata[file_id]["indexing_progress"] = {
+                "current": current,
+                "total": total,
+                "percentage": percentage,
+                "stage": stage
+            }
+            save_rules_metadata()
+    
+    try:
+        # Update metadata to show extraction starting
+        load_rules_metadata()
+        if file_id in _rules_metadata:
+            _rules_metadata[file_id]["indexing_status"] = "indexing"
+            _rules_metadata[file_id]["indexed_at"] = None
+            _rules_metadata[file_id]["indexing_progress"] = {
+                "current": 0,
+                "total": 100,
+                "percentage": 0,
+                "stage": "extracting"
+            }
+            save_rules_metadata()
+        
+        # Extract content (this can be slow for large PDFs)
+        extracted = parser.extract_content(file_path, file_ext)
+        
+        if not extracted.get("content"):
+            raise ValueError("No content extracted from file")
+        
+        # Update progress: extraction complete (5% of total work)
+        update_progress(5, 100, "extracting")
+        
+        # Perform indexing with progress callback
+        # The indexer uses 0-100, we map it to 5-100 (extraction is 0-5%)
+        def map_progress(c, t, s):
+            # Map indexer progress (0-100) to overall progress (5-100)
+            mapped = 5 + int((c * 95 / 100)) if c <= 100 else 100
+            update_progress(mapped, 100, s)
+        
+        await indexer.index_file(file_id, filename, extracted["content"], metadata, progress_callback=map_progress)
+        
+        # Update metadata to show indexing complete
+        load_rules_metadata()
+        if file_id in _rules_metadata:
+            _rules_metadata[file_id]["indexing_status"] = "indexed"
+            _rules_metadata[file_id]["indexed_at"] = datetime.now().isoformat()
+            # Keep progress info but mark as complete
+            if "indexing_progress" in _rules_metadata[file_id]:
+                _rules_metadata[file_id]["indexing_progress"]["stage"] = "complete"
+                _rules_metadata[file_id]["indexing_progress"]["percentage"] = 100
+            save_rules_metadata()
+    except Exception as e:
+        error_msg = str(e)
+        # Clean up error message to not expose host paths
+        if "/Users/" in error_msg:
+            error_msg = error_msg.replace("/Users/shepner/", "/app/")
+        print(f"Error in background extraction/indexing: {error_msg}")
+        # Update metadata to show indexing failed
+        load_rules_metadata()
+        if file_id in _rules_metadata:
+            _rules_metadata[file_id]["indexing_status"] = "failed"
+            _rules_metadata[file_id]["indexing_error"] = error_msg
+            if "indexing_progress" in _rules_metadata[file_id]:
+                _rules_metadata[file_id]["indexing_progress"]["stage"] = "error"
+            save_rules_metadata()
+
+
 async def _index_file_background(
     indexer: RulesIndexer,
     file_id: str,
@@ -556,17 +638,18 @@ async def _index_file_background(
     content: str,
     metadata: Dict[str, Any]
 ):
-    """Background task to index a file with progress tracking."""
+    """Background task to index a file with progress tracking (legacy - content already extracted)."""
     
     def update_progress(current: int, total: int, stage: str):
         """Update progress in metadata."""
         load_rules_metadata()
         if file_id in _rules_metadata:
             _rules_metadata[file_id]["indexing_status"] = "indexing"
+            percentage = int((current / total * 100)) if total > 0 else 0
             _rules_metadata[file_id]["indexing_progress"] = {
                 "current": current,
                 "total": total,
-                "percentage": int((current / total * 100)) if total > 0 else 0,
+                "percentage": percentage,
                 "stage": stage
             }
             save_rules_metadata()
@@ -579,7 +662,7 @@ async def _index_file_background(
             _rules_metadata[file_id]["indexed_at"] = None
             _rules_metadata[file_id]["indexing_progress"] = {
                 "current": 0,
-                "total": 0,
+                "total": 100,
                 "percentage": 0,
                 "stage": "starting"
             }

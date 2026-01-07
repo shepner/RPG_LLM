@@ -1496,6 +1496,9 @@ function startIndexingProgressPoll(fileId) {
             
             if (response.ok) {
                 const progressData = await response.json();
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:startIndexingProgressPoll',message:'Progress poll response',data:{fileId,status:progressData.indexing_status,progress:progressData.indexing_progress,percentage:progressData.indexing_progress?.percentage},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
                 
                 // Update the rule in the list if still indexing or pending
                 if (progressData.indexing_status === 'indexing' || progressData.indexing_status === 'pending') {
@@ -1599,9 +1602,10 @@ async function listRules() {
                             const stage = progress.stage || 'indexing';
                             const stageLabels = {
                                 'starting': 'Starting...',
-                                'chunking': 'Chunking content...',
-                                'generating_embeddings': 'Generating embeddings...',
-                                'preparing_data': 'Preparing data...',
+                                'extracting': 'Extracting content from file...',
+                                'chunking': 'Chunking content (respecting paragraphs)...',
+                                'generating_embeddings': 'Generating embeddings (this may take a while)...',
+                                'preparing_data': 'Preparing data for storage...',
                                 'storing': 'Storing in database...',
                                 'complete': 'Complete',
                                 'error': 'Error'

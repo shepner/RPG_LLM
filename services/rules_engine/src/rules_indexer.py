@@ -98,26 +98,30 @@ class RulesIndexer:
             return
         
         # Chunk content for better retrieval (split by paragraphs or sections)
+        if progress_callback:
+            progress_callback(0, 100, "chunking")
+        
         chunks = self._chunk_content(content, chunk_size=1000, overlap=200)
         total_chunks = len(chunks)
         
-        # Report progress: chunking complete
+        # Report progress: chunking complete (10% of total work)
         if progress_callback:
-            progress_callback(0, total_chunks, "chunking")
+            progress_callback(10, 100, "chunking")
         
         # Generate embeddings and store
         try:
-            # Report progress: generating embeddings
+            # Report progress: generating embeddings (10-60% of total work)
             if progress_callback:
-                progress_callback(0, total_chunks, "generating_embeddings")
+                progress_callback(10, 100, "generating_embeddings")
             
             # Generate embeddings for all chunks at once
+            # This is the longest step, so we'll update progress incrementally if possible
             embeddings_response = await self.embedding_provider.generate(chunks)
             embeddings = embeddings_response.embeddings
             
-            # Report progress: embeddings generated
+            # Report progress: embeddings generated (60% of total work)
             if progress_callback:
-                progress_callback(total_chunks // 2, total_chunks, "preparing_data")
+                progress_callback(60, 100, "preparing_data")
             
             # Prepare data for batch insert
             chunk_ids = []
@@ -132,9 +136,9 @@ class RulesIndexer:
                     "filename": filename
                 })
             
-            # Report progress: data prepared, now storing
+            # Report progress: data prepared, now storing (80% of total work)
             if progress_callback:
-                progress_callback(int(total_chunks * 0.9), total_chunks, "storing")
+                progress_callback(80, 100, "storing")
             
             # Add to ChromaDB collection
             self.collection.add(
@@ -144,41 +148,109 @@ class RulesIndexer:
                 metadatas=chunk_metadatas
             )
             
-            # Report progress: complete
+            # Report progress: complete (100%)
             if progress_callback:
-                progress_callback(total_chunks, total_chunks, "complete")
+                progress_callback(100, 100, "complete")
         except Exception as e:
             print(f"Warning: Failed to index file {filename}: {e}")
             if progress_callback:
-                progress_callback(0, total_chunks, "error")
+                progress_callback(0, 100, "error")
             raise
     
     def _chunk_content(self, content: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-        """Split content into overlapping chunks."""
+        """Split content into overlapping chunks, respecting paragraph breaks."""
         chunks = []
-        words = content.split()
         
+        # First, split by paragraphs (double newlines, or single newline followed by whitespace)
+        paragraphs = []
+        for para in content.split('\n\n'):
+            para = para.strip()
+            if para:
+                paragraphs.append(para)
+        
+        # If no paragraph breaks found, try single newlines
+        if len(paragraphs) == 1:
+            paragraphs = [p.strip() for p in content.split('\n') if p.strip()]
+        
+        # If still no breaks, split by sentences (period, exclamation, question mark)
+        if len(paragraphs) == 1:
+            import re
+            sentences = re.split(r'([.!?]\s+)', paragraphs[0])
+            paragraphs = []
+            current_sentence = ""
+            for part in sentences:
+                current_sentence += part
+                if part.strip() and part.strip()[-1] in '.!?':
+                    paragraphs.append(current_sentence.strip())
+                    current_sentence = ""
+            if current_sentence.strip():
+                paragraphs.append(current_sentence.strip())
+        
+        # Now chunk paragraphs, respecting chunk_size
         current_chunk = []
         current_length = 0
         
-        for word in words:
-            word_length = len(word) + 1  # +1 for space
+        for para in paragraphs:
+            para_length = len(para) + 2  # +2 for paragraph separator
             
-            if current_length + word_length > chunk_size and current_chunk:
-                # Save current chunk
-                chunks.append(' '.join(current_chunk))
+            # If adding this paragraph would exceed chunk_size, save current chunk
+            if current_length + para_length > chunk_size and current_chunk:
+                chunks.append('\n\n'.join(current_chunk))
                 
-                # Start new chunk with overlap
-                overlap_words = current_chunk[-overlap:] if len(current_chunk) > overlap else current_chunk
-                current_chunk = overlap_words
-                current_length = sum(len(w) + 1 for w in current_chunk)
+                # Start new chunk with overlap (last paragraph or part of it)
+                if len(current_chunk) > 0:
+                    # Use last paragraph as overlap if it's not too long
+                    last_para = current_chunk[-1]
+                    if len(last_para) <= chunk_size // 2:
+                        current_chunk = [last_para]
+                        current_length = len(last_para) + 2
+                    else:
+                        # Split long paragraph by words for overlap
+                        words = last_para.split()
+                        overlap_words = words[-overlap:] if len(words) > overlap else words
+                        current_chunk = [' '.join(overlap_words)]
+                        current_length = len(current_chunk[0]) + 2
+                else:
+                    current_chunk = []
+                    current_length = 0
             
-            current_chunk.append(word)
-            current_length += word_length
+            # If single paragraph exceeds chunk_size, split it by words
+            if para_length > chunk_size:
+                words = para.split()
+                word_chunk = []
+                word_length = 0
+                
+                for word in words:
+                    word_len = len(word) + 1  # +1 for space
+                    if word_length + word_len > chunk_size and word_chunk:
+                        current_chunk.append(' '.join(word_chunk))
+                        current_length += len(current_chunk[-1]) + 2
+                        
+                        # Check if we need to save chunk
+                        if current_length > chunk_size:
+                            chunks.append('\n\n'.join(current_chunk))
+                            # Overlap
+                            overlap_words = word_chunk[-overlap:] if len(word_chunk) > overlap else word_chunk
+                            current_chunk = [' '.join(overlap_words)]
+                            current_length = len(current_chunk[0]) + 2
+                        
+                        word_chunk = []
+                        word_length = 0
+                    
+                    word_chunk.append(word)
+                    word_length += word_len
+                
+                if word_chunk:
+                    current_chunk.append(' '.join(word_chunk))
+                    current_length += len(current_chunk[-1]) + 2
+            else:
+                # Paragraph fits, add it
+                current_chunk.append(para)
+                current_length += para_length
         
         # Add final chunk
         if current_chunk:
-            chunks.append(' '.join(current_chunk))
+            chunks.append('\n\n'.join(current_chunk))
         
         return chunks if chunks else [content]
     
