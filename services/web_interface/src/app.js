@@ -350,96 +350,97 @@ document.getElementById('submit-action').addEventListener('click', async () => {
     }
 });
 
-// Game session management
+// Game session management - use setTimeout to defer async work completely
 document.getElementById('create-session-btn').addEventListener('click', () => {
     const sessionName = prompt('Enter a name for your game session:');
     if (!sessionName) return;
     
-    // Defer all async work to prevent blocking the click handler
-    (async () => {
+    // Defer all async work using setTimeout to prevent blocking
+    setTimeout(async () => {
         try {
-        // Get current user to determine if they're GM
-        const userResponse = await fetch(`${AUTH_URL}/me`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        
-        if (!userResponse.ok) {
-            alert('Could not get user info. Please log in again.');
-            return;
-        }
-        
-        const user = await userResponse.json();
-        const isGM = user.role === 'gm';
-        
-        if (!isGM) {
-            const fixFirst = confirm('Only Game Masters can create sessions. Your role is: ' + user.role + '\n\nWould you like to check if you should be the first GM?');
-            if (fixFirst) {
-                try {
-                    const fixResponse = await fetch(`${AUTH_URL}/users/fix-first-user`, {
-                        method: 'POST',
-                        headers: { 
-                            'Authorization': `Bearer ${authToken}`,
-                            'Content-Type': 'application/json'
+            const token = authToken || localStorage.getItem('authToken');
+            // Get current user to determine if they're GM
+            const userResponse = await fetch(`${AUTH_URL}/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!userResponse.ok) {
+                alert('Could not get user info. Please log in again.');
+                return;
+            }
+            
+            const user = await userResponse.json();
+            const isGM = user.role === 'gm';
+            
+            if (!isGM) {
+                const fixFirst = confirm('Only Game Masters can create sessions. Your role is: ' + user.role + '\n\nWould you like to check if you should be the first GM?');
+                if (fixFirst) {
+                    try {
+                        const fixResponse = await fetch(`${AUTH_URL}/users/fix-first-user`, {
+                            method: 'POST',
+                            headers: { 
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        if (fixResponse.ok) {
+                            const result = await fixResponse.json();
+                            alert(result.message + '\n\nPlease refresh the page and try again.');
+                            window.location.reload();
+                            return;
+                        } else {
+                            let errorMsg = 'Could not auto-upgrade';
+                            try {
+                                const errorText = await fixResponse.text();
+                                const errorJson = JSON.parse(errorText);
+                                errorMsg = errorJson.detail || errorJson.message || errorText;
+                            } catch {
+                                errorMsg = await fixResponse.text() || 'Unknown error';
+                            }
+                            alert('Could not auto-upgrade: ' + errorMsg + '\n\nPlease ask an existing Game Master to upgrade your account.');
                         }
-                    });
-                    
-                    if (fixResponse.ok) {
-                        const result = await fixResponse.json();
-                        alert(result.message + '\n\nPlease refresh the page and try again.');
-                        window.location.reload();
-                        return;
-                    } else {
-                        let errorMsg = 'Could not auto-upgrade';
-                        try {
-                            const errorText = await fixResponse.text();
-                            const errorJson = JSON.parse(errorText);
-                            errorMsg = errorJson.detail || errorJson.message || errorText;
-                        } catch {
-                            errorMsg = await fixResponse.text() || 'Unknown error';
+                    } catch (e) {
+                        console.error('Fix first user error:', e);
+                        const errorMsg = e.message || String(e);
+                        if (errorMsg.includes('CORS') || errorMsg.includes('fetch')) {
+                            alert('Network error: Could not connect to server. Please check that all services are running.');
+                        } else {
+                            alert('Error checking GM status: ' + errorMsg + '\n\nPlease ask an existing Game Master to upgrade your account.');
                         }
-                        alert('Could not auto-upgrade: ' + errorMsg + '\n\nPlease ask an existing Game Master to upgrade your account.');
-                    }
-                } catch (e) {
-                    console.error('Fix first user error:', e);
-                    const errorMsg = e.message || String(e);
-                    if (errorMsg.includes('CORS') || errorMsg.includes('fetch')) {
-                        alert('Network error: Could not connect to server. Please check that all services are running.');
-                    } else {
-                        alert('Error checking GM status: ' + errorMsg + '\n\nPlease ask an existing Game Master to upgrade your account.');
                     }
                 }
+                return;
             }
-            return;
-        }
-        
-        const response = await fetch(`${GAME_SESSION_URL}/sessions?gm_user_id=${user.user_id}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({
-                name: sessionName,
-                description: `Game session: ${sessionName}`,
-                game_system_type: 'custom',
-                time_mode_preference: 'real-time'
-            })
-        });
-        
-        if (response.ok) {
-            const session = await response.json();
-            addSystemMessage(`Created game session: ${session.name} (ID: ${session.session_id})`);
-            // Refresh in background, don't await
-            refreshSessions().catch(err => console.error('Error refreshing sessions:', err));
-        } else {
-            const error = await response.text();
-            alert('Failed to create session: ' + error);
-        }
+            
+            const response = await fetch(`${GAME_SESSION_URL}/sessions?gm_user_id=${user.user_id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    name: sessionName,
+                    description: `Game session: ${sessionName}`,
+                    game_system_type: 'custom',
+                    time_mode_preference: 'real-time'
+                })
+            });
+            
+            if (response.ok) {
+                const session = await response.json();
+                addSystemMessage(`Created game session: ${session.name} (ID: ${session.session_id})`);
+                // Refresh in background, don't await
+                refreshSessions().catch(err => console.error('Error refreshing sessions:', err));
+            } else {
+                const error = await response.text();
+                alert('Failed to create session: ' + error);
+            }
         } catch (error) {
             console.error('Error creating session:', error);
             alert('Error creating session: ' + error.message);
         }
-    })();
+    }, 0);
 });
 
 // Refresh button removed - sessions now auto-refresh
