@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from .registry import Registry
 from .models import BeingRegistry
 from .character_creator import CharacterCreator
+from .system_validator import SystemValidator
 
 # Import auth middleware (optional)
 try:
@@ -70,6 +71,7 @@ def get_registry():
 
 registry = None  # Will be initialized on first use
 character_creator = CharacterCreator()
+system_validator = SystemValidator()
 
 
 class CharacterCreateRequest(BaseModel):
@@ -179,4 +181,27 @@ async def get_being(being_id: str):
 async def health():
     """Health check."""
     return {"status": "healthy"}
+
+
+@app.get("/system/validate")
+async def validate_system(
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+):
+    """
+    Validate system functionality (GM only).
+    
+    Checks:
+    - All services are responding
+    - Atman-Ma'at integration (Being Service ↔ Rules Engine)
+    - Rules indexing status
+    - Overall system health
+    """
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="GM role required to validate system")
+    
+    try:
+        validation_report = await system_validator.validate_all()
+        return validation_report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")
 
