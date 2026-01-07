@@ -1548,6 +1548,15 @@ function renderLLMConversation(service) {
         `;
     }).join('');
     
+    // Add event listeners to "Save as Prompt" buttons
+    messagesDiv.querySelectorAll('.save-prompt-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const service = btn.dataset.service;
+            const content = btn.dataset.content.replace(/\\n/g, '\n');
+            saveMessageAsPrompt(service, content);
+        });
+    });
+    
     // Auto-scroll to bottom
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
