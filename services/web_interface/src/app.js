@@ -498,6 +498,111 @@ function setupManageUsersButton() {
     }
 }
 
+// Setup validate system button (GM only)
+function setupValidateSystemButton() {
+    const validateBtn = document.getElementById('validate-system-btn');
+    if (validateBtn && window.currentUser?.role === 'gm') {
+        validateBtn.style.display = 'inline-block';
+        if (!validateBtn.hasAttribute('data-listener-attached')) {
+            validateBtn.setAttribute('data-listener-attached', 'true');
+            validateBtn.addEventListener('click', async () => {
+                try {
+                    const response = await fetch(`${BEING_REGISTRY_URL}/system/validate`, {
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const report = await response.json();
+                        displayValidationReport(report);
+                    } else {
+                        const error = await response.text();
+                        alert('Failed to validate system: ' + error);
+                    }
+                } catch (error) {
+                    console.error('Error validating system:', error);
+                    alert('Error validating system: ' + error.message);
+                }
+            });
+        }
+    } else if (validateBtn) {
+        validateBtn.style.display = 'none';
+    }
+}
+
+function displayValidationReport(report) {
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center; overflow-y: auto;';
+    
+    const overallStatus = report.overall_status;
+    const statusColor = overallStatus === 'healthy' ? '#10b981' : overallStatus === 'degraded' ? '#f59e0b' : '#ef4444';
+    const statusIcon = overallStatus === 'healthy' ? '✅' : overallStatus === 'degraded' ? '⚠️' : '❌';
+    
+    let servicesHtml = '';
+    for (const [name, status] of Object.entries(report.services || {})) {
+        const serviceStatus = status.status || 'unknown';
+        const serviceColor = serviceStatus === 'healthy' ? '#10b981' : '#ef4444';
+        const serviceIcon = serviceStatus === 'healthy' ? '✅' : '❌';
+        const responseTime = status.response_time_ms ? ` (${status.response_time_ms.toFixed(0)}ms)` : '';
+        servicesHtml += `
+            <div style="padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${serviceColor};">
+                <strong>${serviceIcon} ${name}</strong>
+                <span style="color: ${serviceColor}; margin-left: 10px;">${status.message || serviceStatus}${responseTime}</span>
+            </div>
+        `;
+    }
+    
+    let integrationsHtml = '';
+    for (const [name, integration] of Object.entries(report.integrations || {})) {
+        const intStatus = integration.status || 'unknown';
+        const intColor = intStatus === 'ok' ? '#10b981' : intStatus === 'warning' ? '#f59e0b' : '#ef4444';
+        const intIcon = intStatus === 'ok' ? '✅' : intStatus === 'warning' ? '⚠️' : '❌';
+        let detailsHtml = '';
+        if (integration.details) {
+            detailsHtml = `<div style="color: #666; font-size: 0.85em; margin-top: 3px; padding-left: 10px;">${JSON.stringify(integration.details, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')}</div>`;
+        }
+        integrationsHtml += `
+            <div style="padding: 8px; margin-bottom: 5px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${intColor};">
+                <strong>${intIcon} ${name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                <div style="color: #888; font-size: 0.9em; margin-top: 3px;">${integration.message || intStatus}</div>
+                ${detailsHtml}
+            </div>
+        `;
+    }
+    
+    modal.innerHTML = `
+        <div style="background: #1a1a1a; padding: 20px; border-radius: 8px; max-width: 80%; max-height: 90%; overflow: auto; position: relative; min-width: 600px;">
+            <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: 10px; right: 10px; background: #ef4444; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer;">Close</button>
+            <h2 style="margin-top: 0; color: ${statusColor};">
+                ${statusIcon} System Validation Report
+            </h2>
+            <div style="margin-bottom: 20px; padding: 10px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${statusColor};">
+                <strong>Overall Status: <span style="color: ${statusColor};">${overallStatus.toUpperCase()}</span></strong>
+                <div style="color: #888; font-size: 0.9em; margin-top: 5px;">Validated at: ${new Date(report.timestamp).toLocaleString()}</div>
+            </div>
+            
+            <h3 style="color: #e0e0e0;">Services</h3>
+            <div style="margin-bottom: 20px;">
+                ${servicesHtml}
+            </div>
+            
+            <h3 style="color: #e0e0e0;">Integrations</h3>
+            <div style="margin-bottom: 20px;">
+                ${integrationsHtml}
+            </div>
+            
+            ${report.recommendations && report.recommendations.length > 0 ? `
+                <h3 style="color: #f59e0b;">Recommendations</h3>
+                <ul style="color: #888;">
+                    ${report.recommendations.map(r => `<li>${r}</li>`).join('')}
+                </ul>
+            ` : ''}
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
 // Make joinSession available globally
 window.joinSession = async function(sessionId) {
     try {
