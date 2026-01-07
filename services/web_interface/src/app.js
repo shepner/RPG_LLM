@@ -759,6 +759,163 @@ async function loadBeingChatCharacters() {
     }
 }
 
+// Load all beings for GM (with intelligent sorting)
+let allBeingsCache = [];
+async function loadAllBeings() {
+    const token = authToken || localStorage.getItem('authToken');
+    const currentUser = window.currentUser;
+    
+    // Only show for GMs
+    if (!token || !currentUser || currentUser.role !== 'gm') {
+        const allBeingsSection = document.getElementById('all-beings-section');
+        if (allBeingsSection) {
+            allBeingsSection.style.display = 'none';
+        }
+        return;
+    }
+    
+    try {
+        // Use auth service endpoint which has better ownership info
+        const response = await fetch(`${AUTH_URL}/beings/list`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const beings = data.characters || [];
+            allBeingsCache = beings;
+            
+            // Sort intelligently
+            const currentSession = window.currentSession;
+            const sortedBeings = sortBeingsIntelligently(beings, currentSession);
+            
+            renderAllBeings(sortedBeings);
+            
+            // Show section
+            const allBeingsSection = document.getElementById('all-beings-section');
+            if (allBeingsSection) {
+                allBeingsSection.style.display = 'block';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading all beings:', error);
+    }
+}
+
+// Intelligent sorting for beings
+function sortBeingsIntelligently(beings, currentSession) {
+    const currentSessionId = currentSession ? currentSession.session_id : null;
+    
+    return [...beings].sort((a, b) => {
+        // 1. Current session beings first
+        const aInCurrentSession = a.session_id === currentSessionId;
+        const bInCurrentSession = b.session_id === currentSessionId;
+        if (aInCurrentSession && !bInCurrentSession) return -1;
+        if (!aInCurrentSession && bInCurrentSession) return 1;
+        
+        // 2. Then by session (group by session)
+        if (a.session_id && !b.session_id) return -1;
+        if (!a.session_id && b.session_id) return 1;
+        if (a.session_id && b.session_id && a.session_id !== b.session_id) {
+            return a.session_id.localeCompare(b.session_id);
+        }
+        
+        // 3. Then by name (alphabetical)
+        const aName = (a.name || a.being_id || '').toLowerCase();
+        const bName = (b.name || b.being_id || '').toLowerCase();
+        return aName.localeCompare(bName);
+    });
+}
+
+// Render all beings list
+function renderAllBeings(beings, searchFilter = '') {
+    const allBeingsList = document.getElementById('all-beings-list');
+    if (!allBeingsList) return;
+    
+    // Filter by search if provided
+    let filteredBeings = beings;
+    if (searchFilter) {
+        const searchLower = searchFilter.toLowerCase();
+        filteredBeings = beings.filter(being => {
+            const name = (being.name || being.being_id || '').toLowerCase();
+            const owner = (being.owner_username || '').toLowerCase();
+            const sessionId = (being.session_id || '').toLowerCase();
+            return name.includes(searchLower) || owner.includes(searchLower) || sessionId.includes(searchLower);
+        });
+    }
+    
+    if (filteredBeings.length === 0) {
+        allBeingsList.innerHTML = '<div style="color: #888; font-size: 0.85em; padding: 8px;">No beings found</div>';
+        return;
+    }
+    
+    const currentSession = window.currentSession;
+    const currentSessionId = currentSession ? currentSession.session_id : null;
+    
+    // Group by session for better organization
+    const grouped = {};
+    filteredBeings.forEach(being => {
+        const sessionKey = being.session_id || 'no-session';
+        if (!grouped[sessionKey]) {
+            grouped[sessionKey] = [];
+        }
+        grouped[sessionKey].push(being);
+    });
+    
+    let html = '';
+    const sessionKeys = Object.keys(grouped).sort((a, b) => {
+        // Current session first
+        if (a === currentSessionId) return -1;
+        if (b === currentSessionId) return 1;
+        return a.localeCompare(b);
+    });
+    
+    sessionKeys.forEach(sessionKey => {
+        const sessionBeings = grouped[sessionKey];
+        const isCurrentSession = sessionKey === currentSessionId;
+        const sessionLabel = isCurrentSession ? 'Current Session' : (sessionKey === 'no-session' ? 'No Session' : `Session ${sessionKey.substring(0, 8)}`);
+        
+        html += `<div style="font-size: 0.7em; color: #666; padding: 4px 8px; margin-top: 8px; ${sessionKeys.indexOf(sessionKey) > 0 ? 'border-top: 1px solid #333; padding-top: 8px;' : ''}">${sessionLabel}</div>`;
+        
+        sessionBeings.forEach(being => {
+            const beingName = being.name || being.being_id.substring(0, 8);
+            const ownerInfo = being.owner_username ? ` (${being.owner_username})` : '';
+            html += `
+                <div class="being-chat-item all-being-item" data-being-id="${being.being_id}" data-type="being" style="padding: 6px 8px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.85em; display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 0.9em;">🧠</span>
+                    <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(beingName)}${ownerInfo}</span>
+                </div>
+            `;
+        });
+    });
+    
+    allBeingsList.innerHTML = html;
+    
+    // Add click handlers
+    document.querySelectorAll('.all-being-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const beingId = item.dataset.beingId;
+            const beingName = item.textContent.trim().replace('🧠', '').trim().split(' (')[0];
+            switchBeingChat(beingId, beingName, 'being');
+            // Update active state
+            document.querySelectorAll('.being-chat-item').forEach(el => el.style.background = '#2a2a2a');
+            item.style.background = '#3a2a4a';
+        });
+    });
+}
+
+// Setup search for all beings
+function setupAllBeingsSearch() {
+    const searchInput = document.getElementById('all-beings-search');
+    if (!searchInput) return;
+    
+    searchInput.addEventListener('input', (e) => {
+        const searchFilter = e.target.value.trim();
+        const sortedBeings = sortBeingsIntelligently(allBeingsCache, window.currentSession);
+        renderAllBeings(sortedBeings, searchFilter);
+    });
+}
+
 // Load nearby beings for being chat
 async function loadNearbyBeings() {
     const token = authToken || localStorage.getItem('authToken');
@@ -1565,6 +1722,7 @@ window.joinSession = async function(sessionId) {
             // Reload being chat data
             loadBeingChatCharacters();
             loadNearbyBeings();
+            loadAllBeings();
             // Update active prompts indicator if LLM service is active in being chat
             if (currentChatType === 'llm' && currentBeingChatId) {
                 await updateActivePromptsIndicator(currentBeingChatId);
@@ -1714,6 +1872,10 @@ async function loadGameState() {
     // Load being chat characters and nearby beings
     loadBeingChatCharacters();
     loadNearbyBeings();
+    
+    // Load all beings for GM
+    loadAllBeings();
+    setupAllBeingsSearch();
 }
 
 // Load user's characters
