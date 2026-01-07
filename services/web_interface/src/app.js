@@ -1530,6 +1530,14 @@ function renderLLMConversation(service) {
                     <div style="background: ${isUser ? '#4a9eff20' : '#2a2a2a'}; padding: 10px 12px; border-radius: 8px; color: #e0e0e0; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word;">
                         ${escapeHTML(msg.content).replace(/\n/g, '<br>')}
                     </div>
+                    ${!isUser ? `
+                        <div style="margin-top: 6px; display: flex; gap: 6px; align-items: center;">
+                            <button onclick="saveMessageAsPrompt('${service}', ${JSON.stringify(msg.content).replace(/"/g, '&quot;')})" style="padding: 4px 8px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em; display: flex; align-items: center; gap: 4px;">
+                                <span>💾</span>
+                                <span>Save as Prompt</span>
+                            </button>
+                        </div>
+                    ` : ''}
                     ${msg.metadata && msg.metadata.rules_found !== undefined ? `
                         <div style="font-size: 0.75em; color: #888; margin-top: 4px; ${isUser ? 'text-align: right;' : ''}">
                             Rules found: ${msg.metadata.rules_found}
@@ -2458,7 +2466,8 @@ async function loadPrompts() {
     const serviceUrls = {
         'rules_engine': RULES_ENGINE_URL,
         'game_master': GM_URL,
-        'being': BEING_URL
+        'being': BEING_URL,
+        'worlds': WORLDS_URL
     };
     const serviceUrl = serviceUrls[service] || RULES_ENGINE_URL;
     const promptsList = document.getElementById('prompts-list');
