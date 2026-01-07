@@ -28,7 +28,7 @@ class SystemPromptDB(Base):
     game_system = Column(String)  # Optional game system tag
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-    metadata = Column(JSON, default={})
+    prompt_metadata = Column(JSON, default={})  # Renamed from 'metadata' to avoid SQLAlchemy conflict
 
 
 class PromptManager:
@@ -68,7 +68,7 @@ class PromptManager:
                 scope=prompt_data.scope,
                 session_ids=json.dumps(prompt_data.session_ids) if prompt_data.session_ids else "[]",
                 game_system=prompt_data.game_system,
-                metadata=prompt_data.metadata
+                prompt_metadata=prompt_data.metadata
             )
             session.add(prompt_db)
             await session.commit()
@@ -166,7 +166,7 @@ class PromptManager:
             if prompt_data.game_system is not None:
                 prompt_db.game_system = prompt_data.game_system
             if prompt_data.metadata is not None:
-                prompt_db.metadata = prompt_data.metadata
+                prompt_db.prompt_metadata = prompt_data.metadata
             
             prompt_db.updated_at = datetime.now()
             
@@ -245,6 +245,6 @@ class PromptManager:
             game_system=prompt_db.game_system,
             created_at=prompt_db.created_at,
             updated_at=prompt_db.updated_at,
-            metadata=prompt_db.metadata or {}
+            metadata=prompt_db.prompt_metadata or {}
         )
 
