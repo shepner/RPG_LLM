@@ -239,7 +239,8 @@ async def upload_rules(
             "uploaded_by": token_data.user_id if token_data else None,
             "indexing_status": "pending",  # pending, indexing, indexed, failed
             "indexed_at": None,
-            "indexing_error": None
+            "indexing_error": None,
+            "indexing_progress": None  # {current, total, percentage, stage}
         }
         save_rules_metadata()
         
@@ -445,23 +446,46 @@ async def _index_file_background(
     content: str,
     metadata: Dict[str, Any]
 ):
-    """Background task to index a file."""
+    """Background task to index a file with progress tracking."""
+    
+    def update_progress(current: int, total: int, stage: str):
+        """Update progress in metadata."""
+        load_rules_metadata()
+        if file_id in _rules_metadata:
+            _rules_metadata[file_id]["indexing_status"] = "indexing"
+            _rules_metadata[file_id]["indexing_progress"] = {
+                "current": current,
+                "total": total,
+                "percentage": int((current / total * 100)) if total > 0 else 0,
+                "stage": stage
+            }
+            save_rules_metadata()
+    
     try:
         # Update metadata to show indexing in progress
         load_rules_metadata()
         if file_id in _rules_metadata:
             _rules_metadata[file_id]["indexing_status"] = "indexing"
             _rules_metadata[file_id]["indexed_at"] = None
+            _rules_metadata[file_id]["indexing_progress"] = {
+                "current": 0,
+                "total": 0,
+                "percentage": 0,
+                "stage": "starting"
+            }
             save_rules_metadata()
         
-        # Perform indexing
-        await indexer.index_file(file_id, filename, content, metadata)
+        # Perform indexing with progress callback
+        await indexer.index_file(file_id, filename, content, metadata, progress_callback=update_progress)
         
         # Update metadata to show indexing complete
         load_rules_metadata()
         if file_id in _rules_metadata:
             _rules_metadata[file_id]["indexing_status"] = "indexed"
             _rules_metadata[file_id]["indexed_at"] = datetime.now().isoformat()
+            # Keep progress info but mark as complete
+            if "indexing_progress" in _rules_metadata[file_id]:
+                _rules_metadata[file_id]["indexing_progress"]["stage"] = "complete"
             save_rules_metadata()
     except Exception as e:
         print(f"Error in background indexing: {e}")
@@ -470,5 +494,7 @@ async def _index_file_background(
         if file_id in _rules_metadata:
             _rules_metadata[file_id]["indexing_status"] = "failed"
             _rules_metadata[file_id]["indexing_error"] = str(e)
+            if "indexing_progress" in _rules_metadata[file_id]:
+                _rules_metadata[file_id]["indexing_progress"]["stage"] = "error"
             save_rules_metadata()
 

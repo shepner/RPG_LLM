@@ -38,7 +38,14 @@ class RulesIndexer:
             print(f"Warning: Embedding provider not available: {e}")
             self.embedding_provider = None
     
-    async def index_file(self, file_id: str, filename: str, content: str, metadata: Dict[str, Any]) -> None:
+    async def index_file(
+        self, 
+        file_id: str, 
+        filename: str, 
+        content: str, 
+        metadata: Dict[str, Any],
+        progress_callback: Optional[callable] = None
+    ) -> None:
         """
         Index a rules file's content for semantic search.
         
@@ -47,6 +54,7 @@ class RulesIndexer:
             filename: Original filename
             content: Extracted text content
             metadata: Additional metadata (file type, category, etc.)
+            progress_callback: Optional callback function(current, total) for progress updates
         """
         if not content or len(content.strip()) == 0:
             return
@@ -57,12 +65,25 @@ class RulesIndexer:
         
         # Chunk content for better retrieval (split by paragraphs or sections)
         chunks = self._chunk_content(content, chunk_size=1000, overlap=200)
+        total_chunks = len(chunks)
+        
+        # Report progress: chunking complete
+        if progress_callback:
+            progress_callback(0, total_chunks, "chunking")
         
         # Generate embeddings and store
         try:
+            # Report progress: generating embeddings
+            if progress_callback:
+                progress_callback(0, total_chunks, "generating_embeddings")
+            
             # Generate embeddings for all chunks at once
             embeddings_response = await self.embedding_provider.generate(chunks)
             embeddings = embeddings_response.embeddings
+            
+            # Report progress: embeddings generated
+            if progress_callback:
+                progress_callback(total_chunks // 2, total_chunks, "preparing_data")
             
             # Prepare data for batch insert
             chunk_ids = []
@@ -73,9 +94,13 @@ class RulesIndexer:
                 chunk_metadatas.append({
                     **metadata,
                     "chunk_index": i,
-                    "total_chunks": len(chunks),
+                    "total_chunks": total_chunks,
                     "filename": filename
                 })
+            
+            # Report progress: data prepared, now storing
+            if progress_callback:
+                progress_callback(int(total_chunks * 0.9), total_chunks, "storing")
             
             # Add to ChromaDB collection
             self.collection.add(
@@ -84,8 +109,15 @@ class RulesIndexer:
                 documents=chunks,
                 metadatas=chunk_metadatas
             )
+            
+            # Report progress: complete
+            if progress_callback:
+                progress_callback(total_chunks, total_chunks, "complete")
         except Exception as e:
             print(f"Warning: Failed to index file {filename}: {e}")
+            if progress_callback:
+                progress_callback(0, total_chunks, "error")
+            raise
     
     def _chunk_content(self, content: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
         """Split content into overlapping chunks."""

@@ -855,6 +855,9 @@ document.getElementById('list-rules-btn')?.addEventListener('click', async () =>
     await listRules();
 });
 
+// Track active polling intervals for indexing progress
+const indexingProgressPollers = new Map();
+
 async function listRules() {
     try {
         const response = await fetch(`${RULES_ENGINE_URL}/rules/list`, {
@@ -868,6 +871,12 @@ async function listRules() {
             const rulesList = document.getElementById('rules-list');
             if (data.rules && data.rules.length > 0) {
                 rulesList.innerHTML = data.rules.map(rule => {
+                    // Start polling for progress if file is indexing
+                    if (rule.indexed_status === 'indexing' && !indexingProgressPollers.has(rule.file_id)) {
+                        startIndexingProgressPoll(rule.file_id);
+                    } else if (rule.indexed_status !== 'indexing' && indexingProgressPollers.has(rule.file_id)) {
+                        stopIndexingProgressPoll(rule.file_id);
+                    }
                     const sizeKB = ((rule.size || 0) / 1024).toFixed(1);
                     const category = rule.category || 'unknown';
                     const categoryIcon = category === 'image' ? '🖼️' : category === 'document' ? (rule.is_epub ? '📚' : '📄') : '📝';
