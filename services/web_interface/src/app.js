@@ -819,10 +819,17 @@ async function loadUserCharacters() {
     }
 }
 
-// Rules management (GM only)
+// Rules management (GM only) - with auto-refresh
 document.getElementById('manage-rules-btn')?.addEventListener('click', () => {
     const panel = document.getElementById('rules-management');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        startRulesAutoRefresh();
+        listRules(); // Load immediately
+    } else {
+        panel.style.display = 'none';
+        stopRulesAutoRefresh();
+    }
 });
 
 document.getElementById('upload-rules-btn')?.addEventListener('click', async () => {
