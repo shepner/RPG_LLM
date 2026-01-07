@@ -849,7 +849,7 @@ document.getElementById('upload-rules-btn')?.addEventListener('click', async () 
             fileInput.value = '';
             await listRules();
             // Start polling for progress immediately if file needs indexing
-            if (result.file_id) {
+            if (result.file_id && (result.category === 'text' || result.category === 'document')) {
                 setTimeout(() => {
                     startIndexingProgressPoll(result.file_id);
                 }, 500);
@@ -870,6 +870,57 @@ document.getElementById('list-rules-btn')?.addEventListener('click', async () =>
 
 // Track active polling intervals for indexing progress
 const indexingProgressPollers = new Map();
+
+// Indexing progress polling functions
+function startIndexingProgressPoll(fileId) {
+    if (indexingProgressPollers.has(fileId)) {
+        return; // Already polling
+    }
+    
+    const pollInterval = setInterval(async () => {
+        try {
+            const token = authToken || localStorage.getItem('authToken');
+            const response = await fetch(`${RULES_ENGINE_URL}/rules/${fileId}/indexing-progress`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                const progressData = await response.json();
+                
+                // Update the rule in the list if still indexing or pending
+                if (progressData.indexing_status === 'indexing' || progressData.indexing_status === 'pending') {
+                    // Trigger a refresh of the rules list to show updated progress
+                    listRules();
+                } else {
+                    // Stop polling when indexing is complete or failed
+                    stopIndexingProgressPoll(fileId);
+                    listRules(); // Refresh to show final status
+                }
+            } else if (response.status === 404) {
+                // File not found, stop polling
+                stopIndexingProgressPoll(fileId);
+            } else {
+                // Other error, continue polling but less frequently
+                console.warn('Error polling indexing progress:', response.status);
+            }
+        } catch (error) {
+            console.error('Error polling indexing progress:', error);
+            // Don't stop polling on network errors, they might be temporary
+        }
+    }, 1000); // Poll every second
+    
+    indexingProgressPollers.set(fileId, pollInterval);
+}
+
+function stopIndexingProgressPoll(fileId) {
+    const pollInterval = indexingProgressPollers.get(fileId);
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        indexingProgressPollers.delete(fileId);
+    }
+}
 
 async function listRules() {
     try {

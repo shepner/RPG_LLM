@@ -246,28 +246,41 @@ async def upload_rules(
         save_rules_metadata()
         
         # Extract and index content for LLM use (async, non-blocking)
-        if rules_parser and rules_indexer:
+        if rules_parser and rules_indexer and (is_text or is_pdf or is_epub):
             try:
                 extracted = rules_parser.extract_content(file_path, file_ext)
                 if extracted.get("content"):
+                    # Update status to "indexing" immediately so progress can be shown
+                    _rules_metadata[file_id]["indexing_status"] = "indexing"
+                    _rules_metadata[file_id]["indexing_progress"] = {
+                        "current": 0,
+                        "total": 0,
+                        "percentage": 0,
+                        "stage": "starting"
+                    }
+                    save_rules_metadata()
+                    
                     # Index in background task (don't block upload response)
-                    if background_tasks:
-                        background_tasks.add_task(
-                            _index_file_background,
-                            rules_indexer,
-                            file_id,
-                            safe_filename,
-                            extracted["content"],
-                            {
-                                "file_id": file_id,
-                                "filename": safe_filename,
-                                "original_filename": file.filename,
-                                "type": file_category,
-                                "extension": file_ext
-                            }
-                        )
+                    background_tasks.add_task(
+                        _index_file_background,
+                        rules_indexer,
+                        file_id,
+                        safe_filename,
+                        extracted["content"],
+                        {
+                            "file_id": file_id,
+                            "filename": safe_filename,
+                            "original_filename": file.filename,
+                            "type": file_category,
+                            "extension": file_ext
+                        }
+                    )
             except Exception as e:
-                print(f"Warning: Failed to index file {safe_filename}: {e}")
+                print(f"Warning: Failed to start indexing for file {safe_filename}: {e}")
+                # Reset status if indexing failed to start
+                _rules_metadata[file_id]["indexing_status"] = "pending"
+                _rules_metadata[file_id]["indexing_error"] = str(e)
+                save_rules_metadata()
                 # Don't fail the upload if indexing fails
         
         return {
