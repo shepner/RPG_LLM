@@ -726,9 +726,8 @@ async function loadGameState() {
         
         if (userResponse.ok) {
             const user = await userResponse.json();
-            addNarrative({
-                text: `Welcome, ${user.username}! You are logged in as a ${user.role}.`
-            });
+            // Don't add system messages to narrative - narrative is for game story only
+            console.log(`User logged in: ${user.username} (${user.role})`);
         }
         
         // List game sessions (no auth required for listing)
@@ -737,15 +736,8 @@ async function loadGameState() {
             
             if (sessionsResponse.ok) {
                 const sessions = await sessionsResponse.json();
-                if (sessions.length > 0) {
-                    addNarrative({
-                        text: `Found ${sessions.length} game session(s). Select one to join or create a new one.`
-                    });
-                } else {
-                    addNarrative({
-                        text: 'No active game sessions. Create a new session to start playing!'
-                    });
-                }
+                // Don't add system messages to narrative - just log for debugging
+                console.log(`Found ${sessions.length} game session(s)`);
             } else {
                 console.warn('Could not list sessions:', sessionsResponse.status);
             }
@@ -754,12 +746,9 @@ async function loadGameState() {
             // Don't show error to user, just log it
         }
         
-        // Add welcome message
-        addEvent({
-            event_type: 'system',
-            description: 'System initialized. Ready to play!',
-            game_time: Date.now()
-        });
+        // System initialization - this is a system event, not a game event
+        // Game Events should only show actual game mechanics (actions, world changes, etc.)
+        console.log('System initialized. Ready to play!');
         
     } catch (error) {
         console.error('Error loading game state:', error);
@@ -1393,9 +1382,8 @@ document.getElementById('submit-character-btn')?.addEventListener('click', async
             // Reload characters
             await loadUserCharacters();
             
-            addNarrative({
-                text: `Character "${name || 'Auto-generated'}" created successfully!`
-            });
+            // Character creation is a system action, not narrative
+            console.log(`Character "${name || 'Auto-generated'}" created successfully!`);
         } else {
             const error = await response.text();
             alert('Failed to create character: ' + error);
