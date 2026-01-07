@@ -350,13 +350,15 @@ document.getElementById('submit-action').addEventListener('click', async () => {
     }
 });
 
-// Game session management - use setTimeout to defer async work completely
+// Game session management - defer prompt and all async work to prevent blocking
 document.getElementById('create-session-btn').addEventListener('click', () => {
-    const sessionName = prompt('Enter a name for your game session:');
-    if (!sessionName) return;
-    
-    // Defer all async work using setTimeout to prevent blocking
-    setTimeout(async () => {
+    // Return immediately from click handler, defer everything
+    setTimeout(() => {
+        const sessionName = prompt('Enter a name for your game session:');
+        if (!sessionName) return;
+        
+        // Defer all async work using another setTimeout
+        setTimeout(async () => {
         try {
             const token = authToken || localStorage.getItem('authToken');
             // Get current user to determine if they're GM
