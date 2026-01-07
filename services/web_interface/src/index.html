@@ -14,8 +14,8 @@
             <h1>TTRPG LLM System <span id="version-display" style="font-size: 0.5em; color: #666; font-weight: normal; cursor: help;" title="Build timestamp">loading...</span></h1>
             <div id="auth-section">
                <form id="login-form" onsubmit="event.preventDefault(); performLogin();">
-                   <input type="text" id="username" placeholder="Username" required>
-                   <input type="password" id="password" placeholder="Password" required>
+                   <input type="text" id="username" placeholder="Username" autocomplete="username" required>
+                   <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
                    <button type="submit" id="login-btn">Login</button>
                    <button type="button" id="register-btn">Register</button>
                </form>
