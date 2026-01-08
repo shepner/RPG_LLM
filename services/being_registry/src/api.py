@@ -363,6 +363,78 @@ async def get_being(
     return entry
 
 
+@app.post("/beings/{being_id}/query")
+async def query_being(
+    being_id: str,
+    request: Request,
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
+    """
+    Route query to the being's isolated instance service (Phase 3: Service Discovery).
+    This endpoint acts as a router, forwarding requests to the dynamically assigned being_instance service.
+    """
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    global registry
+    if registry is None:
+        registry = get_registry()
+    
+    # Get being entry to find service endpoint
+    entry = registry.get_being(being_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Being not found")
+    
+    # Get service endpoint (either from isolated container or fallback to shared service)
+    service_endpoint = entry.service_endpoint if entry.service_endpoint else None
+    
+    if not service_endpoint:
+        # Fallback to shared being service if no isolated container
+        service_endpoint = os.getenv("BEING_URL", "http://localhost:8006")
+        logger.warning(f"Being {being_id} has no isolated container, using shared service at {service_endpoint}")
+    
+    # Forward the request to the being instance service
+    try:
+        import httpx
+        import json
+        
+        # Get request body
+        body = await request.body()
+        request_data = json.loads(body) if body else {}
+        
+        # Forward request with auth header
+        auth_header = request.headers.get("Authorization", "")
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if auth_header:
+            headers["Authorization"] = auth_header
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{service_endpoint}/query",
+                json=request_data,
+                headers=headers
+            )
+            
+            # Return the response from the being instance
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=response.text or f"Error from being instance: {response.status_code}"
+                )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Request to being instance timed out")
+    except httpx.RequestError as e:
+        logger.error(f"Error forwarding request to being instance {service_endpoint}: {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to connect to being instance: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error querying being {being_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
 @app.delete("/beings/{being_id}")
 async def delete_being(
     being_id: str,
