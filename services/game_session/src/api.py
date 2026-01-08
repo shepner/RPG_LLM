@@ -10,8 +10,7 @@ from .session_manager import SessionManager
 from .models import GameSession, SessionCreate, SessionUpdate, SessionState, SessionStatus
 
 # Import WebSocket manager
-sys.path.insert(0, '/app/shared/websocket')
-from manager import WebSocketManager
+from shared.websocket.manager import WebSocketManager
 
 app = FastAPI(title="Game Session Service")
 
