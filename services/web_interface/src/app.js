@@ -730,12 +730,14 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
         // Also handle at form level to prevent form submission
         const form = newInput.closest('form');
         if (form) {
-            // Remove inline onsubmit handler that might interfere
-            form.onsubmit = (e) => {
+            // Remove any inline onsubmit handler and set our own
+            form.onsubmit = null;
+            form.addEventListener('submit', (e) => {
                 e.preventDefault();
-                // Let keyHandler handle Enter key
+                // Only submit if Enter was pressed without modifiers (handled by keyHandler)
+                // For Ctrl+Enter, Shift+Enter, etc., don't submit
                 return false;
-            };
+            }, true);
             
             const formHandler = (e) => {
                 // Only prevent if it's Enter without modifiers
