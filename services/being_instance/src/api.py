@@ -185,10 +185,23 @@ async def query_being(
                         registry_entry = registry_response.json()
                         character_name = registry_entry.get("name")
                         
-                        logger.info(f"Fetched character name for {BEING_ID}: '{character_name}'")
+                        # Log the raw response for debugging
+                        logger.info(f"Fetched character data for {BEING_ID}: name='{character_name}', type={type(character_name)}, full_entry={registry_entry}")
+                        
+                        # Check if name is None, empty, or starts with "Character "
+                        is_generic_name = (
+                            not character_name or 
+                            (isinstance(character_name, str) and (
+                                character_name.strip() == "" or 
+                                character_name.startswith("Character ") or
+                                len(character_name) < 3  # Too short to be a real name
+                            ))
+                        )
+                        
+                        logger.info(f"Name check for {BEING_ID}: name='{character_name}', is_generic={is_generic_name}")
                         
                         # If no name, this is a new character in conversational creation mode
-                        if not character_name or (isinstance(character_name, str) and character_name.startswith("Character ")):
+                        if is_generic_name:
                             return """You are a new character being created in a Tabletop Role-Playing Game. You are helping your creator define who you are through conversation. 
 
 IMPORTANT: You are NOT a service or assistant. You are the CHARACTER being created. You do not have a name yet, but you will receive one from your creator.

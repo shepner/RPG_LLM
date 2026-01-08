@@ -601,6 +601,49 @@ async def delete_being(
     # Get the being entry to check ownership
     entry = registry.get_being(being_id)
     if not entry:
+        # Try auto-registration if being exists in auth service
+        logger.info(f"Being {being_id} not found in registry for deletion, attempting auto-registration")
+        try:
+            if AUTH_AVAILABLE and token_data:
+                import httpx
+                auth_url = os.getenv("AUTH_URL", "http://auth:8000")
+                auth_header = http_request.headers.get("Authorization", "")
+                
+                # Check if being exists in auth service
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    list_response = await client.get(
+                        f"{auth_url}/beings/list",
+                        headers={"Authorization": auth_header} if auth_header else {}
+                    )
+                    
+                    if list_response.status_code == 200:
+                        list_data = list_response.json()
+                        characters = list_data.get("characters", [])
+                        being_info = next((c for c in characters if c.get("being_id") == being_id), None)
+                        
+                        if being_info:
+                            # Auto-register then delete
+                            owner_id = being_info.get("owner_id")
+                            entry = registry.register_being(
+                                being_id=being_id,
+                                owner_id=owner_id,
+                                session_id=None,
+                                name=being_info.get("name")
+                            )
+                            logger.info(f"Auto-registered being {being_id} for deletion")
+                        else:
+                            raise HTTPException(status_code=404, detail="Being not found")
+                    else:
+                        raise HTTPException(status_code=404, detail="Being not found")
+            else:
+                raise HTTPException(status_code=404, detail="Being not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error auto-registering being {being_id} for deletion: {e}", exc_info=True)
+            raise HTTPException(status_code=404, detail="Being not found")
+    
+    if not entry:
         raise HTTPException(status_code=404, detail="Being not found")
     
     # Check if user has permission to delete (owner or GM)
