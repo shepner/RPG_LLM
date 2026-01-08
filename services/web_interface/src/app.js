@@ -923,8 +923,8 @@ async function submitBeingMessage() {
             if (currentBeing && (!currentBeing.name || currentBeing.name.startsWith('Character '))) {
                 // Try to extract name from user's message or character's response
                 const namePatterns = [
-                    // Match "your name is Bob" or "your name is now Bob" - extract just the name
-                    /(?:your name is|my name is|i'm|i am|call me|name's|name is|i go by|you can call me)\s+(?:now\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
+                    // Match "your name is/shall be/will be Bob" - extract just the name
+                    /(?:your name (?:is|shall be|will be)|my name is|i'm|i am|call me|name's|name is|i go by|you can call me|you shall be called|you will be called)\s+(?:now\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
                     /^([A-Z][a-zA-Z]+)(?:\s+here|$)/,  // "Bob" or "Bob here"
                     /^([A-Z][a-zA-Z]+)(?:\s+is my name|$)/,  // "Bob is my name"
                     // Match quoted names - extract just the name part
