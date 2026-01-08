@@ -1314,6 +1314,287 @@ async function refreshSessions() {
     }
 }
 
+// Manage session function (GM only)
+window.manageSession = async function(sessionId) {
+    const token = authToken || localStorage.getItem('authToken');
+    const currentUser = window.currentUser;
+    
+    if (!token || !currentUser) {
+        alert('Please log in first');
+        return;
+    }
+    
+    try {
+        // Get session details
+        const sessionResponse = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!sessionResponse.ok) {
+            throw new Error('Could not load session details');
+        }
+        
+        const session = await sessionResponse.json();
+        
+        // Verify user is GM of this session
+        if (session.gm_user_id !== currentUser.user_id) {
+            alert('Only the Game Master of this session can manage it.');
+            return;
+        }
+        
+        // Get all users for player selection
+        const usersResponse = await fetch(`${AUTH_URL}/users`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!usersResponse.ok) {
+            throw new Error('Could not load users');
+        }
+        
+        const allUsers = await usersResponse.json();
+        const players = allUsers.filter(u => u.user_id !== session.gm_user_id && u.role === 'player');
+        const currentPlayerIds = session.player_user_ids || [];
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 2000; display: flex; align-items: center; justify-content: center;';
+        modal.innerHTML = `
+            <div style="background: #1a1a1a; border: 1px solid #444; border-radius: 8px; padding: 25px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 5px 25px rgba(0, 0, 0, 0.7);">
+                <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="position: absolute; top: 15px; right: 15px; background: #ef4444; color: white; border: none; border-radius: 4px; padding: 8px 15px; cursor: pointer; font-size: 0.9em;">✕ Close</button>
+                <h3 style="margin-top: 0; margin-bottom: 20px; color: #e0e0e0; font-size: 1.4em;">Manage Session: ${escapeHTML(session.name)}</h3>
+                
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Session Information -->
+                    <div style="background: #2a2a2a; padding: 15px; border-radius: 4px;">
+                        <h4 style="margin: 0 0 12px 0; color: #4a9eff; font-size: 1.1em;">Session Information</h4>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div>
+                                <label style="display: block; color: #888; font-size: 0.85em; margin-bottom: 4px;">Name:</label>
+                                <input type="text" id="session-edit-name" value="${escapeHTML(session.name)}" style="width: 100%; padding: 6px 8px; background: #1a1a1a; border: 1px solid #444; border-radius: 3px; color: #e0e0e0; font-size: 0.9em;">
+                            </div>
+                            <div>
+                                <label style="display: block; color: #888; font-size: 0.85em; margin-bottom: 4px;">Description:</label>
+                                <textarea id="session-edit-description" rows="3" style="width: 100%; padding: 6px 8px; background: #1a1a1a; border: 1px solid #444; border-radius: 3px; color: #e0e0e0; font-size: 0.9em; resize: vertical;">${escapeHTML(session.description || '')}</textarea>
+                            </div>
+                            <div>
+                                <label style="display: block; color: #888; font-size: 0.85em; margin-bottom: 4px;">Game System:</label>
+                                <input type="text" id="session-edit-game-system" value="${escapeHTML(session.game_system_type || '')}" placeholder="D&D 5e, Pathfinder, custom, etc." style="width: 100%; padding: 6px 8px; background: #1a1a1a; border: 1px solid #444; border-radius: 3px; color: #e0e0e0; font-size: 0.9em;">
+                            </div>
+                            <div>
+                                <label style="display: block; color: #888; font-size: 0.85em; margin-bottom: 4px;">Status:</label>
+                                <select id="session-edit-status" style="width: 100%; padding: 6px 8px; background: #1a1a1a; border: 1px solid #444; border-radius: 3px; color: #e0e0e0; font-size: 0.9em;">
+                                    <option value="created" ${session.status === 'created' ? 'selected' : ''}>Created</option>
+                                    <option value="active" ${session.status === 'active' ? 'selected' : ''}>Active</option>
+                                    <option value="paused" ${session.status === 'paused' ? 'selected' : ''}>Paused</option>
+                                    <option value="ended" ${session.status === 'ended' ? 'selected' : ''}>Ended</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; color: #888; font-size: 0.85em; margin-bottom: 4px;">Time Mode:</label>
+                                <select id="session-edit-time-mode" style="width: 100%; padding: 6px 8px; background: #1a1a1a; border: 1px solid #444; border-radius: 3px; color: #e0e0e0; font-size: 0.9em;">
+                                    <option value="real-time" ${session.time_mode_preference === 'real-time' ? 'selected' : ''}>Real-time</option>
+                                    <option value="turn-based" ${session.time_mode_preference === 'turn-based' ? 'selected' : ''}>Turn-based</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Player Management -->
+                    <div style="background: #2a2a2a; padding: 15px; border-radius: 4px;">
+                        <h4 style="margin: 0 0 12px 0; color: #10b981; font-size: 1.1em;">Players (${currentPlayerIds.length})</h4>
+                        <div id="session-players-list" style="margin-bottom: 12px; max-height: 200px; overflow-y: auto;">
+                            ${currentPlayerIds.length === 0 
+                                ? '<div style="color: #888; font-size: 0.85em; padding: 8px;">No players in this session</div>'
+                                : currentPlayerIds.map(playerId => {
+                                    const player = allUsers.find(u => u.user_id === playerId);
+                                    return player ? `
+                                        <div style="padding: 6px 8px; margin-bottom: 4px; background: #1a1a1a; border-radius: 3px; display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="color: #e0e0e0; font-size: 0.9em;">${escapeHTML(player.username)} (${escapeHTML(player.email)})</span>
+                                            <button onclick="removePlayerFromSession('${sessionId}', '${playerId}', '${escapeHTML(player.username)}')" style="padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em;">Remove</button>
+                                        </div>
+                                    ` : '';
+                                }).join('')}
+                        </div>
+                        <div>
+                            <label style="display: block; color: #888; font-size: 0.85em; margin-bottom: 4px;">Add Player:</label>
+                            <select id="session-add-player-select" style="width: 100%; padding: 6px 8px; background: #1a1a1a; border: 1px solid #444; border-radius: 3px; color: #e0e0e0; font-size: 0.9em;">
+                                <option value="">Select a player...</option>
+                                ${players.filter(p => !currentPlayerIds.includes(p.user_id)).map(p => 
+                                    `<option value="${p.user_id}">${escapeHTML(p.username)} (${escapeHTML(p.email)})</option>`
+                                ).join('')}
+                            </select>
+                            <button onclick="addPlayerToSession('${sessionId}')" style="margin-top: 8px; padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Add Player</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
+                        <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Cancel</button>
+                        <button onclick="saveSessionChanges('${sessionId}')" style="padding: 8px 16px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em; font-weight: bold;">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } catch (error) {
+        console.error('Error loading session management:', error);
+        alert('Error loading session management: ' + error.message);
+    }
+};
+
+// Save session changes
+window.saveSessionChanges = async function(sessionId) {
+    const token = authToken || localStorage.getItem('authToken');
+    const currentUser = window.currentUser;
+    
+    if (!token || !currentUser) {
+        alert('Please log in first');
+        return;
+    }
+    
+    try {
+        const name = document.getElementById('session-edit-name').value.trim();
+        if (!name) {
+            alert('Session name is required');
+            return;
+        }
+        
+        const description = document.getElementById('session-edit-description').value.trim();
+        const gameSystem = document.getElementById('session-edit-game-system').value.trim();
+        const status = document.getElementById('session-edit-status').value;
+        const timeMode = document.getElementById('session-edit-time-mode').value;
+        
+        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}?gm_user_id=${currentUser.user_id}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: name,
+                description: description || null,
+                game_system_type: gameSystem || null,
+                status: status,
+                time_mode_preference: timeMode
+            })
+        });
+        
+        if (response.ok) {
+            addSystemMessage('Session updated successfully', 'success');
+            document.querySelector('div[style*="position: fixed"][style*="z-index: 2000"]')?.remove();
+            await refreshSessions();
+        } else {
+            const errorText = await response.text();
+            let errorMessage = 'Failed to update session';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            alert(errorMessage);
+        }
+    } catch (error) {
+        console.error('Error saving session changes:', error);
+        alert('Error saving session changes: ' + error.message);
+    }
+};
+
+// Add player to session
+window.addPlayerToSession = async function(sessionId) {
+    const token = authToken || localStorage.getItem('authToken');
+    const currentUser = window.currentUser;
+    
+    if (!token || !currentUser) {
+        alert('Please log in first');
+        return;
+    }
+    
+    const select = document.getElementById('session-add-player-select');
+    const userId = select.value;
+    
+    if (!userId) {
+        alert('Please select a player');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}/players/${userId}?gm_user_id=${currentUser.user_id}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            addSystemMessage('Player added to session', 'success');
+            // Reload the management modal
+            document.querySelector('div[style*="position: fixed"][style*="z-index: 2000"]')?.remove();
+            await manageSession(sessionId);
+            await refreshSessions();
+        } else {
+            const errorText = await response.text();
+            let errorMessage = 'Failed to add player';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            alert(errorMessage);
+        }
+    } catch (error) {
+        console.error('Error adding player:', error);
+        alert('Error adding player: ' + error.message);
+    }
+};
+
+// Remove player from session
+window.removePlayerFromSession = async function(sessionId, userId, username) {
+    const token = authToken || localStorage.getItem('authToken');
+    const currentUser = window.currentUser;
+    
+    if (!token || !currentUser) {
+        alert('Please log in first');
+        return;
+    }
+    
+    const confirmed = await customConfirm(
+        `Remove "${username}" from this session?`,
+        'Remove Player'
+    );
+    
+    if (!confirmed) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}/players/${userId}?gm_user_id=${currentUser.user_id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            addSystemMessage(`Player "${username}" removed from session`, 'success');
+            // Reload the management modal
+            document.querySelector('div[style*="position: fixed"][style*="z-index: 2000"]')?.remove();
+            await manageSession(sessionId);
+            await refreshSessions();
+        } else {
+            const errorText = await response.text();
+            let errorMessage = 'Failed to remove player';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            alert(errorMessage);
+        }
+    } catch (error) {
+        console.error('Error removing player:', error);
+        alert('Error removing player: ' + error.message);
+    }
+};
+
 // Delete session function - use non-blocking custom confirm
 window.deleteSession = async function(sessionId, sessionName) {
     const confirmed = await customConfirm(
