@@ -3368,6 +3368,34 @@ function renderCharactersList(characters) {
     }).join('');
 }
 
+// Toggle message visibility for players (GM only)
+window.toggleMessageVisibility = function(beingId, messageTimestamp, makeVisible) {
+    const currentUser = window.currentUser;
+    if (!currentUser || currentUser.role !== 'gm') {
+        return; // Only GMs can toggle visibility
+    }
+    
+    const history = loadBeingChatHistory(beingId);
+    const messageIndex = history.findIndex(msg => msg.timestamp === messageTimestamp);
+    
+    if (messageIndex !== -1) {
+        history[messageIndex].visible_to_players = makeVisible;
+        saveBeingChatHistory(beingId, history);
+        
+        // Re-render the chat
+        const beingName = document.getElementById('being-chat-character-name')?.textContent || 'Character';
+        renderBeingChat(beingId, beingName);
+        
+        // Show feedback
+        addSystemMessage(
+            makeVisible 
+                ? `Message made visible to players` 
+                : `Message hidden from players`,
+            makeVisible ? 'success' : 'info'
+        );
+    }
+};
+
 // View character details (reuse character record viewer)
 window.viewCharacterDetails = async function(beingId) {
     const token = authToken || localStorage.getItem('authToken');
