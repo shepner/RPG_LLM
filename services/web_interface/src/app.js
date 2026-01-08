@@ -492,18 +492,18 @@ function renderLLMConversationForBeingChat(service) {
         const isUser = msg.role === 'user';
         const timestamp = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         return `
-            <div style="display: flex; gap: 12px; ${isUser ? 'flex-direction: row-reverse;' : ''}">
-                <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${isUser ? '#4a9eff' : serviceConfig.color}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
+            <div style="display: flex; gap: 6px; ${isUser ? 'flex-direction: row-reverse;' : ''}">
+                <div style="flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: ${isUser ? '#4a9eff' : serviceConfig.color}; display: flex; align-items: center; justify-content: center; font-size: 0.9em;">
                     ${isUser ? '👤' : serviceConfig.icon}
                 </div>
-                <div style="flex: 1; ${isUser ? 'text-align: right;' : ''}">
-                    <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; ${isUser ? 'justify-content: flex-end;' : ''}">
-                        <span style="font-weight: bold; color: ${isUser ? '#4a9eff' : serviceConfig.color}; font-size: 0.9em;">
+                <div style="flex: 1; ${isUser ? 'text-align: right;' : ''} min-width: 0;">
+                    <div style="display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; ${isUser ? 'justify-content: flex-end;' : ''}">
+                        <span style="font-weight: bold; color: ${isUser ? '#4a9eff' : serviceConfig.color}; font-size: 0.8em;">
                             ${isUser ? 'You' : serviceConfig.name.split(' ')[0]}
                         </span>
-                        <span style="font-size: 0.75em; color: #888;">${timestamp}</span>
+                        <span style="font-size: 0.7em; color: #888;">${timestamp}</span>
                     </div>
-                    <div style="background: ${isUser ? '#2a4a6a' : '#2a2a2a'}; padding: 10px 12px; border-radius: 8px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word;">
+                    <div style="background: ${isUser ? '#2a4a6a' : '#2a2a2a'}; padding: 6px 8px; border-radius: 4px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; font-size: 0.85em; line-height: 1.4;">
                         ${escapeHTML(msg.content)}
                     </div>
                     ${!isUser && msg.metadata && msg.metadata.rules_found !== undefined ? `
@@ -585,6 +585,21 @@ function renderBeingChat(beingId, beingName) {
     }).join('');
     
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// Toggle message visibility for players (GM only)
+window.toggleMessageVisibility = function(beingId, messageIndex, timestamp, isVisible) {
+    const history = loadBeingChatHistory(beingId);
+    const message = history.find(msg => msg.timestamp === timestamp);
+    
+    if (message && message.sender_role === 'gm') {
+        message.visible_to_players = isVisible;
+        saveBeingChatHistory(beingId, history);
+        
+        // Re-render chat to reflect change
+        const beingName = document.getElementById('being-chat-character-name')?.textContent || 'Character';
+        renderBeingChat(beingId, beingName);
+    }
 }
 
 // Switch being chat channel (handles both beings and LLM services)
