@@ -1607,6 +1607,9 @@ async function refreshSessions() {
         
         // Update current session indicator
         updateCurrentSessionIndicator();
+        
+        // Setup toggle button if not already set up
+        setupSessionsListToggle();
     } catch (error) {
         console.error('Error refreshing sessions:', error);
         const sessionsList = document.getElementById('sessions-list');
