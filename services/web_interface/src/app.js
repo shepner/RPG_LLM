@@ -1970,6 +1970,25 @@ async function loadUserCharacters() {
 }
 
 // Rules management (GM only) - with auto-refresh
+document.getElementById('manage-characters-btn')?.addEventListener('click', () => {
+    const panel = document.getElementById('character-management');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        loadCharactersForManagement();
+    } else {
+        panel.style.display = 'none';
+    }
+});
+
+// Setup character search and filter
+document.getElementById('character-search')?.addEventListener('input', (e) => {
+    filterCharactersList(e.target.value, document.getElementById('character-filter').value);
+});
+
+document.getElementById('character-filter')?.addEventListener('change', (e) => {
+    filterCharactersList(document.getElementById('character-search').value, e.target.value);
+});
+
 document.getElementById('manage-rules-btn')?.addEventListener('click', () => {
     const panel = document.getElementById('rules-management');
     if (panel.style.display === 'none') {
