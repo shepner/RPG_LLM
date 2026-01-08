@@ -1777,7 +1777,7 @@ window.saveSessionChanges = async function(sessionId) {
         const status = document.getElementById('session-edit-status').value;
         const timeMode = document.getElementById('session-edit-time-mode').value;
         
-        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}?gm_user_id=${currentUser.user_id}`, {
+        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}`, {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
