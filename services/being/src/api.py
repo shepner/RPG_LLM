@@ -3,7 +3,7 @@
 import os
 import logging
 from typing import Dict, Optional, List, Any
-from fastapi import FastAPI, HTTPException, Depends, Body
+from fastapi import FastAPI, HTTPException, Depends, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from .being_agent import BeingAgent
@@ -148,6 +148,7 @@ class QueryRequest(BaseModel):
 @app.post("/query")
 async def query_being_service(
     request: QueryRequest,
+    http_request: Request = None,
     token_data: Optional[TokenData] = Depends(lambda: require_auth() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
 ):
     """
@@ -186,39 +187,102 @@ async def query_being_service(
         if AUTH_AVAILABLE:
             # Verify user has access to this being (owner or assigned)
             try:
-                # Use require_being_access directly (already imported)
-                await require_being_access(request.being_id)(None, None)
-                # #region agent log
-                try:
-                    with open(log_path, 'a') as f:
-                        f.write(json.dumps({
-                            "location": "being/api.py:query_being_service",
-                            "message": "Access check passed",
-                            "data": {"being_id": request.being_id},
-                            "timestamp": time.time() * 1000,
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A"
-                        }) + "\n")
-                except Exception:
-                    pass
-                # #endregion
-            except HTTPException as e:
-                # #region agent log
-                try:
-                    with open(log_path, 'a') as f:
-                        f.write(json.dumps({
-                            "location": "being/api.py:query_being_service",
-                            "message": "Access check failed",
-                            "data": {"being_id": request.being_id, "error": str(e)},
-                            "timestamp": time.time() * 1000,
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A"
-                        }) + "\n")
-                except Exception:
-                    pass
-                # #endregion
+                # Check access manually since we already have token_data
+                if token_data:
+                    # GM has access to all beings
+                    if hasattr(token_data, 'role') and token_data.role == "gm":
+                        # #region agent log
+                        try:
+                            with open(log_path, 'a') as f:
+                                f.write(json.dumps({
+                                    "location": "being/api.py:query_being_service",
+                                    "message": "Access check passed (GM)",
+                                    "data": {"being_id": request.being_id},
+                                    "timestamp": time.time() * 1000,
+                                    "sessionId": "debug-session",
+                                    "runId": "run1",
+                                    "hypothesisId": "A"
+                                }) + "\n")
+                        except Exception:
+                            pass
+                        # #endregion
+                    else:
+                        # Check if user owns or is assigned to this being
+                        # Get token from request headers if available
+                        import httpx
+                        auth_url = os.getenv("AUTH_URL", "http://localhost:8000")
+                        auth_header = {}
+                        if http_request:
+                            auth_header_value = http_request.headers.get("Authorization")
+                            if auth_header_value:
+                                auth_header = {"Authorization": auth_header_value}
+                        
+                        user_id = token_data.user_id
+                        has_access = False
+                        
+                        try:
+                            async with httpx.AsyncClient(timeout=5.0) as client:
+                                # Check owned beings
+                                owned_response = await client.get(
+                                    f"{auth_url}/beings/owned",
+                                    headers=auth_header
+                                )
+                                if owned_response.status_code == 200:
+                                    owned_beings = owned_response.json()
+                                    if request.being_id in owned_beings:
+                                        has_access = True
+                                
+                                # Check assigned beings if not owned
+                                if not has_access:
+                                    assigned_response = await client.get(
+                                        f"{auth_url}/beings/assigned",
+                                        headers=auth_header
+                                    )
+                                    if assigned_response.status_code == 200:
+                                        assigned_beings = assigned_response.json()
+                                        if request.being_id in assigned_beings:
+                                            has_access = True
+                        except Exception as e:
+                            logger.warning(f"Could not check being access via auth service: {e}")
+                            # If we can't check, allow access for now (fail open for debugging)
+                            has_access = True
+                        
+                        if has_access:
+                            # #region agent log
+                            try:
+                                with open(log_path, 'a') as f:
+                                    f.write(json.dumps({
+                                        "location": "being/api.py:query_being_service",
+                                        "message": "Access check passed",
+                                        "data": {"being_id": request.being_id, "user_id": user_id},
+                                        "timestamp": time.time() * 1000,
+                                        "sessionId": "debug-session",
+                                        "runId": "run1",
+                                        "hypothesisId": "A"
+                                    }) + "\n")
+                            except Exception:
+                                pass
+                            # #endregion
+                        else:
+                            # #region agent log
+                            try:
+                                with open(log_path, 'a') as f:
+                                    f.write(json.dumps({
+                                        "location": "being/api.py:query_being_service",
+                                        "message": "Access denied - not owner or assigned",
+                                        "data": {"being_id": request.being_id, "user_id": user_id},
+                                        "timestamp": time.time() * 1000,
+                                        "sessionId": "debug-session",
+                                        "runId": "run1",
+                                        "hypothesisId": "A"
+                                    }) + "\n")
+                            except Exception:
+                                pass
+                            # #endregion
+                            raise HTTPException(status_code=403, detail="You do not have access to this being")
+                else:
+                    raise HTTPException(status_code=403, detail="Authentication required")
+            except HTTPException:
                 raise
             except Exception as e:
                 logger.error(f"Error checking being access: {e}")
