@@ -164,19 +164,99 @@ async def query_being_service(
     memory_manager = None
     
     if request.being_id:
+        # #region agent log
+        import json
+        import time
+        log_path = os.getenv("DEBUG_LOG_PATH", "/Users/shepner/RPG_LLM/.cursor/debug.log")
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    "location": "being/api.py:query_being_service",
+                    "message": "Processing query for being",
+                    "data": {"being_id": request.being_id, "query": request.query[:50]},
+                    "timestamp": time.time() * 1000,
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A"
+                }) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        
         if AUTH_AVAILABLE:
             # Verify user has access to this being (owner or assigned)
             try:
                 # Use require_being_access directly (already imported)
                 await require_being_access(request.being_id)(None, None)
-            except HTTPException:
+                # #region agent log
+                try:
+                    with open(log_path, 'a') as f:
+                        f.write(json.dumps({
+                            "location": "being/api.py:query_being_service",
+                            "message": "Access check passed",
+                            "data": {"being_id": request.being_id},
+                            "timestamp": time.time() * 1000,
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A"
+                        }) + "\n")
+                except Exception:
+                    pass
+                # #endregion
+            except HTTPException as e:
+                # #region agent log
+                try:
+                    with open(log_path, 'a') as f:
+                        f.write(json.dumps({
+                            "location": "being/api.py:query_being_service",
+                            "message": "Access check failed",
+                            "data": {"being_id": request.being_id, "error": str(e)},
+                            "timestamp": time.time() * 1000,
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A"
+                        }) + "\n")
+                except Exception:
+                    pass
+                # #endregion
                 raise
             except Exception as e:
                 logger.error(f"Error checking being access: {e}")
+                # #region agent log
+                try:
+                    with open(log_path, 'a') as f:
+                        f.write(json.dumps({
+                            "location": "being/api.py:query_being_service",
+                            "message": "Access check exception",
+                            "data": {"being_id": request.being_id, "error": str(e)},
+                            "timestamp": time.time() * 1000,
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A"
+                        }) + "\n")
+                except Exception:
+                    pass
+                # #endregion
                 raise HTTPException(status_code=403, detail="You do not have access to this being")
         
         agent = get_agent(request.being_id)
         memory_manager = get_memory_manager(request.being_id)
+        
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    "location": "being/api.py:query_being_service",
+                    "message": "Agent and memory manager retrieved",
+                    "data": {"being_id": request.being_id, "has_llm": agent.llm_provider is not None},
+                    "timestamp": time.time() * 1000,
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A"
+                }) + "\n")
+        except Exception:
+            pass
+        # #endregion
     else:
         # Use a generic agent for query purposes (not tied to a specific being)
         agent = BeingAgent("query-temp")
@@ -293,12 +373,44 @@ ADDITIONAL CONTEXT:
 Answer the question about consciousness, decision-making, autonomous behavior, or being service responsibilities. Be helpful and provide insights."""
             response_agent = agent
         
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    "location": "being/api.py:query_being_service",
+                    "message": "Calling LLM provider",
+                    "data": {"being_id": request.being_id, "prompt_length": len(prompt)},
+                    "timestamp": time.time() * 1000,
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A"
+                }) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        
         response = await response_agent.llm_provider.generate(
             prompt=prompt,
             system_prompt=system_prompt,
             temperature=0.7,
             max_tokens=1000
         )
+        
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    "location": "being/api.py:query_being_service",
+                    "message": "LLM response received",
+                    "data": {"being_id": request.being_id, "response_length": len(response.text) if response else 0},
+                    "timestamp": time.time() * 1000,
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A"
+                }) + "\n")
+        except Exception:
+            pass
+        # #endregion
         
         # Store conversation in memory
         if target_being_id:
@@ -360,6 +472,25 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
             }
         }
     except Exception as e:
+        # #region agent log
+        import json
+        import time
+        log_path = os.getenv("DEBUG_LOG_PATH", "/Users/shepner/RPG_LLM/.cursor/debug.log")
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    "location": "being/api.py:query_being_service",
+                    "message": "Exception in query",
+                    "data": {"being_id": request.being_id if request else None, "error": str(e), "error_type": type(e).__name__},
+                    "timestamp": time.time() * 1000,
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A"
+                }) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        
         error_msg = str(e)
         if "/Users/" in error_msg:
             error_msg = error_msg.replace("/Users/shepner/", "/app/")
