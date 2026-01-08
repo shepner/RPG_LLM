@@ -3156,6 +3156,207 @@ function escapeHTML(str) {
     return div.innerHTML;
 }
 
+// Character Management Functions
+let allCharactersForManagement = [];
+
+async function loadCharactersForManagement() {
+    const token = authToken || localStorage.getItem('authToken');
+    const currentUser = window.currentUser;
+    if (!token) return;
+    
+    try {
+        const charactersList = document.getElementById('characters-list');
+        charactersList.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">Loading characters...</div>';
+        
+        let characters = [];
+        
+        if (currentUser && currentUser.role === 'gm') {
+            // GM can see all characters
+            const response = await fetch(`${AUTH_URL}/beings/list`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                characters = data.characters || [];
+            }
+        } else {
+            // Regular users see their owned and assigned characters
+            const ownedResponse = await fetch(`${BEING_REGISTRY_URL}/beings/my-characters`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (ownedResponse.ok) {
+                const data = await ownedResponse.json();
+                characters = data.characters || [];
+            }
+        }
+        
+        allCharactersForManagement = characters;
+        renderCharactersList(characters);
+    } catch (error) {
+        console.error('Error loading characters:', error);
+        document.getElementById('characters-list').innerHTML = 
+            '<div style="text-align: center; color: #ef4444; padding: 20px;">Error loading characters</div>';
+    }
+}
+
+function filterCharactersList(searchTerm, filterType) {
+    let filtered = [...allCharactersForManagement];
+    const currentUser = window.currentUser;
+    const currentSession = window.currentSession;
+    
+    // Apply filter
+    if (filterType === 'owned' && currentUser) {
+        filtered = filtered.filter(c => c.owner_id === currentUser.user_id);
+    } else if (filterType === 'assigned' && currentUser) {
+        filtered = filtered.filter(c => {
+            const assigned = c.assigned_user_ids || [];
+            return assigned.includes(currentUser.user_id);
+        });
+    } else if (filterType === 'session' && currentSession) {
+        filtered = filtered.filter(c => c.session_id === currentSession.session_id);
+    }
+    
+    // Apply search
+    if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        filtered = filtered.filter(c => {
+            const name = (c.name || c.being_id || '').toLowerCase();
+            const owner = (c.owner_username || '').toLowerCase();
+            const beingId = (c.being_id || '').toLowerCase();
+            return name.includes(searchLower) || owner.includes(searchLower) || beingId.includes(searchLower);
+        });
+    }
+    
+    renderCharactersList(filtered);
+}
+
+function renderCharactersList(characters) {
+    const charactersList = document.getElementById('characters-list');
+    if (!charactersList) return;
+    
+    if (characters.length === 0) {
+        charactersList.innerHTML = '<div style="text-align: center; color: #888; padding: 40px 20px; font-style: italic;">No characters found</div>';
+        return;
+    }
+    
+    const currentUser = window.currentUser;
+    const currentSession = window.currentSession;
+    
+    charactersList.innerHTML = characters.map(char => {
+        const isOwner = currentUser && char.owner_id === currentUser.user_id;
+        const isAssigned = currentUser && (char.assigned_user_ids || []).includes(currentUser.user_id);
+        const isInSession = currentSession && char.session_id === currentSession.session_id;
+        const canDelete = isOwner || (currentUser && currentUser.role === 'gm');
+        
+        return `
+            <div style="padding: 10px; margin-bottom: 6px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${isOwner ? '#10b981' : isAssigned ? '#4a9eff' : '#888'};">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                            <span style="font-size: 1.2em;">🧠</span>
+                            <strong style="color: #e0e0e0; font-size: 1em;">${escapeHTML(char.name || `Character ${char.being_id.substring(0, 8)}`)}</strong>
+                            ${isOwner ? '<span style="color: #10b981; font-size: 0.75em;">(Owner)</span>' : ''}
+                            ${isAssigned && !isOwner ? '<span style="color: #4a9eff; font-size: 0.75em;">(Assigned)</span>' : ''}
+                            ${isInSession ? '<span style="color: #f59e0b; font-size: 0.75em;">(In Session)</span>' : ''}
+                        </div>
+                        <div style="font-size: 0.85em; color: #888; margin-bottom: 4px;">
+                            <div>ID: <code style="font-size: 0.9em; color: #666;">${char.being_id.substring(0, 16)}...</code></div>
+                            ${char.owner_username ? `<div>Owner: ${escapeHTML(char.owner_username)}</div>` : ''}
+                            ${char.session_id ? `<div>Session: <code style="font-size: 0.9em; color: #666;">${char.session_id.substring(0, 16)}...</code></div>` : '<div>No Session</div>'}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                        <button onclick="viewCharacterDetails('${char.being_id}')" style="padding: 6px 12px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">View</button>
+                        <button onclick="openCharacterChat('${char.being_id}', '${escapeHTML(char.name || `Character ${char.being_id.substring(0, 8)}`)}')" style="padding: 6px 12px; background: #8b5cf6; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Chat</button>
+                        ${canDelete ? `<button onclick="deleteCharacter('${char.being_id}', '${escapeHTML(char.name || `Character ${char.being_id.substring(0, 8)}`)}')" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Delete</button>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// View character details (reuse character record viewer)
+window.viewCharacterDetails = async function(beingId) {
+    const token = authToken || localStorage.getItem('authToken');
+    if (!token) {
+        alert('Please log in first');
+        return;
+    }
+    
+    try {
+        // Try to get character data from being registry
+        // For now, we'll create a minimal character data structure
+        // In the future, we could add an endpoint to get full character data
+        const registryResponse = await fetch(`${BEING_REGISTRY_URL}/beings/${beingId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        let characterData = {
+            being_id: beingId,
+            registry: null,
+            character_data: null
+        };
+        
+        if (registryResponse.ok) {
+            const registry = await registryResponse.json();
+            characterData.registry = registry;
+            characterData.character_data = {
+                flavor: {
+                    name: registry.name || `Character ${beingId.substring(0, 8)}`
+                },
+                mechanics: {}
+            };
+        }
+        
+        showCharacterRecord(characterData);
+    } catch (error) {
+        console.error('Error loading character details:', error);
+        alert('Error loading character details: ' + error.message);
+    }
+};
+
+// Open character chat
+window.openCharacterChat = function(beingId, beingName) {
+    // Hide character management panel
+    document.getElementById('character-management').style.display = 'none';
+    
+    // Switch to character chat
+    switchBeingChat(beingId, beingName, 'being');
+    
+    // Scroll to character conversations panel
+    const conversationsPanel = document.querySelector('.panel h2')?.parentElement;
+    if (conversationsPanel && conversationsPanel.querySelector('h2')?.textContent.includes('Character Conversations')) {
+        conversationsPanel.scrollIntoView({ behavior: 'smooth' });
+    }
+};
+
+// Delete character
+window.deleteCharacter = async function(beingId, characterName) {
+    const confirmed = await customConfirm(
+        `Are you sure you want to delete "${characterName}"?\n\nThis will:\n- Permanently delete the character\n- Remove all associated data\n- Cannot be undone!`,
+        'Delete Character'
+    );
+    if (!confirmed) {
+        return;
+    }
+    
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        
+        // Delete from being registry (if endpoint exists)
+        // For now, we'll just show an error that deletion isn't implemented yet
+        // TODO: Add delete endpoint to being_registry service
+        alert('Character deletion is not yet implemented. This feature requires a delete endpoint in the being registry service.');
+        
+        // Reload characters list
+        await loadCharactersForManagement();
+    } catch (error) {
+        console.error('Error deleting character:', error);
+        alert('Error deleting character: ' + error.message);
+    }
+};
+
 // System Prompts Management Functions
 async function loadPrompts() {
     const serviceSelect = document.getElementById('prompt-service-select');
