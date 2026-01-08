@@ -602,26 +602,26 @@ function renderBeingChat(beingId, beingName) {
         const messageId = `msg-${beingId}-${index}-${msg.timestamp}`;
         
         return `
-            <div style="display: flex; gap: 6px; ${isUser ? 'flex-direction: row-reverse;' : ''}" data-message-index="${index}" data-message-timestamp="${msg.timestamp}">
+            <div style="display: flex; gap: 4px; ${isUser ? 'flex-direction: row-reverse;' : ''}" data-message-index="${index}" data-message-timestamp="${msg.timestamp}">
                 ${isGM && isGMMessage ? `
-                    <div style="flex-shrink: 0; display: flex; align-items: flex-start; padding-top: 2px;">
+                    <div style="flex-shrink: 0; display: flex; align-items: flex-start; padding-top: 1px;">
                         <input type="checkbox" id="${messageId}" ${msg.visible_to_players ? 'checked' : ''} 
                             onchange="toggleMessageVisibility('${beingId}', ${index}, '${msg.timestamp}', this.checked)"
-                            style="cursor: pointer; width: 16px; height: 16px; margin: 0;"
+                            style="cursor: pointer; width: 14px; height: 14px; margin: 0;"
                             title="${msg.visible_to_players ? 'Visible to players' : 'Hidden from players'}">
                     </div>
                 ` : ''}
-                <div style="flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; display: flex; align-items: center; justify-content: center; font-size: 0.9em;">
+                <div style="flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; display: flex; align-items: center; justify-content: center; font-size: 0.75em;">
                     ${isUser ? (isGMMessage ? '👑' : '👤') : '🧠'}
                 </div>
                 <div style="flex: 1; ${isUser ? 'text-align: right;' : ''} min-width: 0;">
-                    <div style="display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; ${isUser ? 'justify-content: flex-end;' : ''}">
-                        <span style="font-weight: bold; color: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; font-size: 0.8em;">
+                    <div style="display: flex; align-items: baseline; gap: 4px; margin-bottom: 1px; ${isUser ? 'justify-content: flex-end;' : ''}">
+                        <span style="font-weight: bold; color: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; font-size: 0.7em;">
                             ${isUser ? (isGMMessage ? 'GM' : 'You') : beingName}
                         </span>
-                        <span style="font-size: 0.7em; color: #888;">${timestamp}</span>
+                        <span style="font-size: 0.65em; color: #888;">${timestamp}</span>
                     </div>
-                    <div style="background: ${isUser ? (isGMMessage ? '#3a2a1a' : '#2a4a6a') : '#2a1a3a'}; padding: 6px 8px; border-radius: 4px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; font-size: 0.85em; line-height: 1.4;">
+                    <div style="background: ${isUser ? (isGMMessage ? '#3a2a1a' : '#2a4a6a') : '#2a1a3a'}; padding: 4px 6px; border-radius: 3px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; font-size: 0.8em; line-height: 1.3;">
                         ${escapeHTML(msg.content)}
                     </div>
                 </div>
@@ -715,6 +715,9 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
         
         newInput.addEventListener('keydown', keyHandler);
         
+        // Setup @mention autocomplete
+        setupMentionAutocomplete(newInput);
+        
         // Prevent form submission on Enter (handled by keyHandler above)
         const form = newInput.closest('form');
         if (form) {
@@ -726,6 +729,162 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
         
         // Keep focus in input
         newInput.focus();
+    }
+}
+
+// @mention autocomplete
+let mentionAutocompleteData = [];
+let mentionAutocompleteVisible = false;
+let mentionAutocompleteSelectedIndex = -1;
+
+async function loadMentionAutocompleteData() {
+    const token = authToken || localStorage.getItem('authToken');
+    const currentSession = window.currentSession;
+    
+    if (!token || !currentSession) {
+        mentionAutocompleteData = [];
+        return;
+    }
+    
+    try {
+        // Get all beings in session (for @mentions)
+        const response = await fetch(`${BEING_REGISTRY_URL}/beings/vicinity/${currentSession.session_id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const beings = data.beings || [];
+            // Also include LLM services for mentions
+            const llmServices = Object.keys(LLM_SERVICES).map(serviceId => ({
+                being_id: serviceId,
+                name: LLM_SERVICES[serviceId].name,
+                type: 'llm'
+            }));
+            mentionAutocompleteData = [...beings, ...llmServices].filter(b => 
+                b.being_id !== currentBeingChatId // Don't show current being
+            );
+        }
+    } catch (error) {
+        console.error('Error loading mention autocomplete data:', error);
+        mentionAutocompleteData = [];
+    }
+}
+
+function setupMentionAutocomplete(input) {
+    let autocompleteDiv = document.getElementById('mention-autocomplete');
+    if (!autocompleteDiv) {
+        autocompleteDiv = document.createElement('div');
+        autocompleteDiv.id = 'mention-autocomplete';
+        autocompleteDiv.style.cssText = 'display: none; position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 4px; background: #2a2a2a; border: 1px solid #555; border-radius: 4px; max-height: 150px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 8px rgba(0,0,0,0.3);';
+        input.parentElement.appendChild(autocompleteDiv);
+    }
+    
+    // Load autocomplete data when input is focused
+    input.addEventListener('focus', () => {
+        loadMentionAutocompleteData();
+    });
+    
+    input.addEventListener('input', (e) => {
+        const value = e.target.value;
+        const cursorPos = e.target.selectionStart;
+        const textBeforeCursor = value.substring(0, cursorPos);
+        const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+        
+        if (mentionMatch) {
+            const query = mentionMatch[1].toLowerCase();
+            const matches = mentionAutocompleteData.filter(b => {
+                const name = (b.name || '').toLowerCase();
+                return name.includes(query) || name.startsWith(query);
+            }).slice(0, 5); // Limit to 5 matches
+            
+            if (matches.length > 0) {
+                mentionAutocompleteSelectedIndex = -1;
+                renderMentionAutocomplete(matches, autocompleteDiv, input, cursorPos, mentionMatch.index);
+            } else {
+                hideMentionAutocomplete(autocompleteDiv);
+            }
+        } else {
+            hideMentionAutocomplete(autocompleteDiv);
+        }
+    });
+    
+    input.addEventListener('keydown', (e) => {
+        if (!mentionAutocompleteVisible) return;
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            mentionAutocompleteSelectedIndex = Math.min(mentionAutocompleteSelectedIndex + 1, document.querySelectorAll('#mention-autocomplete .mention-item').length - 1);
+            updateMentionAutocompleteSelection();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            mentionAutocompleteSelectedIndex = Math.max(mentionAutocompleteSelectedIndex - 1, -1);
+            updateMentionAutocompleteSelection();
+        } else if (e.key === 'Enter' && mentionAutocompleteSelectedIndex >= 0) {
+            e.preventDefault();
+            const items = document.querySelectorAll('#mention-autocomplete .mention-item');
+            if (items[mentionAutocompleteSelectedIndex]) {
+                items[mentionAutocompleteSelectedIndex].click();
+            }
+        } else if (e.key === 'Escape') {
+            hideMentionAutocomplete(autocompleteDiv);
+        }
+    });
+    
+    // Hide autocomplete when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!autocompleteDiv.contains(e.target) && e.target !== input) {
+            hideMentionAutocomplete(autocompleteDiv);
+        }
+    });
+}
+
+function renderMentionAutocomplete(matches, autocompleteDiv, input, cursorPos, mentionStart) {
+    mentionAutocompleteVisible = true;
+    autocompleteDiv.innerHTML = matches.map((being, index) => `
+        <div class="mention-item" data-being-id="${being.being_id}" data-being-name="${being.name}" data-mention-start="${mentionStart}" style="padding: 6px 10px; cursor: pointer; font-size: 0.85em; ${index === mentionAutocompleteSelectedIndex ? 'background: #3a3a3a;' : ''}" 
+            onmouseenter="this.style.background='#3a3a3a'"
+            onmouseleave="if (${index} !== ${mentionAutocompleteSelectedIndex}) this.style.background='transparent'">
+            <span style="color: #8b5cf6;">@</span>
+            <span style="color: #e0e0e0;">${escapeHTML(being.name || being.being_id.substring(0, 8))}</span>
+            ${being.type === 'llm' ? '<span style="color: #888; font-size: 0.8em; margin-left: 6px;">(Service)</span>' : ''}
+        </div>
+    `).join('');
+    
+    autocompleteDiv.style.display = 'block';
+    
+    // Add click handlers
+    autocompleteDiv.querySelectorAll('.mention-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const beingName = item.dataset.beingName;
+            const mentionStart = parseInt(item.dataset.mentionStart);
+            const currentValue = input.value;
+            const textBefore = currentValue.substring(0, mentionStart);
+            const textAfter = currentValue.substring(cursorPos);
+            input.value = textBefore + '@' + beingName + ' ' + textAfter;
+            input.focus();
+            input.setSelectionRange(mentionStart + beingName.length + 2, mentionStart + beingName.length + 2);
+            hideMentionAutocomplete(autocompleteDiv);
+        });
+    });
+}
+
+function updateMentionAutocompleteSelection() {
+    const items = document.querySelectorAll('#mention-autocomplete .mention-item');
+    items.forEach((item, index) => {
+        if (index === mentionAutocompleteSelectedIndex) {
+            item.style.background = '#3a3a3a';
+        } else {
+            item.style.background = 'transparent';
+        }
+    });
+}
+
+function hideMentionAutocomplete(autocompleteDiv) {
+    mentionAutocompleteVisible = false;
+    mentionAutocompleteSelectedIndex = -1;
+    if (autocompleteDiv) {
+        autocompleteDiv.style.display = 'none';
     }
 }
 
@@ -849,11 +1008,13 @@ async function submitBeingMessage() {
         const sessionId = currentSession ? currentSession.session_id : null;
         
         // Parse @mentions to find target_being_id
-        const mentionMatch = message.match(/@(\w+)/);
+        // Match @name (with optional space after) - supports multi-word names
+        const mentionMatches = [...message.matchAll(/@([A-Za-z][A-Za-z0-9\s]*?)(?:\s|$)/g)];
         let targetBeingId = null;
+        const mentions = [];
         
-        if (mentionMatch && sessionId) {
-            // Try to resolve mention to being_id
+        if (mentionMatches.length > 0 && sessionId) {
+            // Try to resolve mentions to being_ids
             try {
                 const vicinityResponse = await fetch(`${BEING_REGISTRY_URL}/beings/vicinity/${sessionId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -861,12 +1022,28 @@ async function submitBeingMessage() {
                 if (vicinityResponse.ok) {
                     const vicinityData = await vicinityResponse.json();
                     const beings = vicinityData.beings || [];
-                    const mentionName = mentionMatch[1].toLowerCase();
-                    for (const being of beings) {
-                        const beingName = (being.name || '').toLowerCase();
-                        if (mentionName === beingName || beingName.startsWith(mentionName)) {
-                            targetBeingId = being.being_id;
-                            break;
+                    // Also check LLM services for mentions
+                    const allBeings = [...beings, ...Object.keys(LLM_SERVICES).map(serviceId => ({
+                        being_id: serviceId,
+                        name: LLM_SERVICES[serviceId].name,
+                        type: 'llm'
+                    }))];
+                    
+                    for (const match of mentionMatches) {
+                        const mentionName = match[1].trim().toLowerCase();
+                        for (const being of allBeings) {
+                            const beingName = (being.name || '').toLowerCase();
+                            // Match exact name or name starting with mention
+                            if (mentionName === beingName || beingName.startsWith(mentionName) || beingName.includes(mentionName)) {
+                                if (!targetBeingId) {
+                                    targetBeingId = being.being_id; // First mention is the target
+                                }
+                                mentions.push({
+                                    being_id: being.being_id,
+                                    name: being.name || being.being_id.substring(0, 8)
+                                });
+                                break;
+                            }
                         }
                     }
                 }
@@ -925,8 +1102,24 @@ async function submitBeingMessage() {
             // Add response to history
             addBeingChatMessage(currentBeingChatId, 'assistant', responseText, {
                 target_being_id: targetBeingId,
-                mentions: data.mentions || []
+                mentions: mentions.length > 0 ? mentions : (data.mentions || [])
             });
+            
+            // If message was sent to another being (via @mention), also add it to that being's chat history
+            if (targetBeingId && targetBeingId !== currentBeingChatId) {
+                // Store message in target being's history so they can see it when they open their chat
+                const targetBeingName = mentions.find(m => m.being_id === targetBeingId)?.name || `Character ${targetBeingId.substring(0, 8)}`;
+                addBeingChatMessage(targetBeingId, 'user', message, {
+                    source_being_id: currentBeingChatId,
+                    visible_to_players: false
+                });
+                addBeingChatMessage(targetBeingId, 'assistant', responseText, {
+                    source_being_id: currentBeingChatId,
+                    conversation_type: 'being_to_being'
+                });
+                // Notify user that message was sent to mentioned being
+                addSystemMessage(`Message sent to @${targetBeingName}`, 'info');
+            }
             
             // Check if character name was provided in the message and update registry
             // This handles the case where user provides name like "My name is Bob" or "Call me Bob"
