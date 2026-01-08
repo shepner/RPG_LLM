@@ -496,6 +496,74 @@ async def list_all_beings(
     return {"characters": all_beings}
 
 
+@app.post("/beings/{being_id}/migrate")
+async def migrate_being_to_container(
+    being_id: str,
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+):
+    """
+    Migrate an existing being to an isolated container (Phase 4: Migration).
+    GM only.
+    """
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    global registry
+    if registry is None:
+        registry = get_registry()
+    
+    # Get being entry
+    entry = registry.get_being(being_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Being not found")
+    
+    # Check if already has container
+    if entry.service_endpoint and entry.container_status == ContainerStatus.RUNNING:
+        return {
+            "message": f"Being {being_id} already has a running container",
+            "container_id": entry.container_id,
+            "service_endpoint": entry.service_endpoint
+        }
+    
+    # Create container for this being
+    try:
+        from .orchestrator import ContainerOrchestrator
+        orchestrator = ContainerOrchestrator()
+        
+        result = await orchestrator.create_container(being_id)
+        if result:
+            container_id, port = result
+            service_endpoint = f"http://localhost:{port}"
+            
+            # Start container and wait for health
+            started = await orchestrator.start_container(container_id, wait_for_health=True, timeout=30)
+            if started:
+                container_status = ContainerStatus.RUNNING
+            else:
+                container_status = ContainerStatus.ERROR
+            
+            # Update registry
+            registry.update_status(being_id, container_status, container_id)
+            registry.update_service_endpoint(being_id, service_endpoint)
+            entry.container_id = container_id
+            entry.container_status = container_status
+            entry.service_endpoint = service_endpoint
+            
+            logger.info(f"Migrated being {being_id} to container {container_id} on port {port}")
+            
+            return {
+                "message": f"Being {being_id} migrated to container successfully",
+                "container_id": container_id,
+                "service_endpoint": service_endpoint,
+                "status": container_status.value
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create container")
+    except Exception as e:
+        logger.error(f"Error migrating being {being_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.get("/health")
 async def health():
     """Health check."""
