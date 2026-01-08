@@ -11,6 +11,10 @@ from .character_creator import CharacterCreator
 from .system_validator import SystemValidator
 
 # Import auth middleware (optional)
+# Initialize logger first to ensure it's always available
+import logging
+logger = logging.getLogger(__name__)
+
 try:
     import sys
     import os
@@ -20,27 +24,25 @@ try:
         sys.path.insert(0, auth_src_path)
         # Also add parent directory so relative imports work
         sys.path.insert(0, '/app/services/auth')
-    
-    # Import with absolute path to avoid relative import issues
-    import importlib.util
-    middleware_path = os.path.join(auth_src_path, 'middleware.py')
-    if os.path.exists(middleware_path):
-        spec = importlib.util.spec_from_file_location("auth_middleware", middleware_path)
-        auth_middleware = importlib.util.module_from_spec(spec)
-        # Set up the module's __package__ to help with relative imports
-        auth_middleware.__package__ = 'src'
-        sys.modules['auth_middleware'] = auth_middleware
-        spec.loader.exec_module(auth_middleware)
         
-        from auth_middleware import require_auth, require_gm, get_current_user, TokenData
-        AUTH_AVAILABLE = True
-        import logging
-        logger = logging.getLogger(__name__)
+        # Import with absolute path to avoid relative import issues
+        import importlib.util
+        middleware_path = os.path.join(auth_src_path, 'middleware.py')
+        if os.path.exists(middleware_path):
+            spec = importlib.util.spec_from_file_location("auth_middleware", middleware_path)
+            auth_middleware = importlib.util.module_from_spec(spec)
+            # Set up the module's __package__ to help with relative imports
+            auth_middleware.__package__ = 'src'
+            sys.modules['auth_middleware'] = auth_middleware
+            spec.loader.exec_module(auth_middleware)
+            
+            from auth_middleware import require_auth, require_gm, get_current_user, TokenData
+            AUTH_AVAILABLE = True
+        else:
+            raise ImportError(f"Middleware file not found at {middleware_path}")
     else:
-        raise ImportError(f"Middleware file not found at {middleware_path}")
+        raise ImportError(f"Auth service path not found at {auth_src_path}")
 except (ImportError, Exception) as e:
-    import logging
-    logger = logging.getLogger(__name__)
     logger.warning(f"Auth middleware not available: {e}")
     AUTH_AVAILABLE = False
     def require_auth():
