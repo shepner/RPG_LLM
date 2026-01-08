@@ -1282,6 +1282,7 @@ async function refreshSessions() {
                 const statusIcon = session.status === 'active' ? '▶️' : session.status === 'paused' ? '⏸️' : session.status === 'ended' ? '⏹️' : '⏳';
                 const isGM = currentUser && session.gm_user_id === currentUser.user_id;
                 const canDelete = isGM && session.status !== 'active';
+                const currentSession = window.currentSession || null;
                 const isCurrentSession = currentSession && session.session_id === currentSession.session_id;
                 const isPlayer = currentUser && session.player_user_ids && session.player_user_ids.includes(currentUser.user_id);
                 const canLeave = isCurrentSession && (isPlayer || isGM);
