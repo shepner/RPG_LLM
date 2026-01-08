@@ -100,11 +100,34 @@ class GeminiProvider(BaseLLMProvider):
                 "total_tokens": 0,
             }
         
+        # Extract text from response - handle cases where text might be None
+        response_text = None
+        if hasattr(response, 'text') and response.text:
+            response_text = response.text
+        elif response.candidates and len(response.candidates) > 0:
+            # Try to get text from first candidate
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'content') and candidate.content:
+                if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                    # Extract text from parts
+                    text_parts = [part.text for part in candidate.content.parts if hasattr(part, 'text') and part.text]
+                    if text_parts:
+                        response_text = ''.join(text_parts)
+            
+            # Check for safety filters or blocked content
+            if hasattr(candidate, 'finish_reason'):
+                finish_reason = candidate.finish_reason.name if hasattr(candidate.finish_reason, 'name') else str(candidate.finish_reason)
+                if finish_reason in ['SAFETY', 'RECITATION', 'OTHER']:
+                    response_text = f"[Response blocked by safety filter: {finish_reason}]"
+        
+        if response_text is None:
+            raise ValueError("Gemini API returned empty response. Check API response structure and safety settings.")
+        
         return LLMResponse(
-            text=response.text,
+            text=response_text,
             model=self.model,
             usage=usage_metadata,
-            finish_reason=response.candidates[0].finish_reason.name if response.candidates else None,
+            finish_reason=response.candidates[0].finish_reason.name if response.candidates and len(response.candidates) > 0 else None,
             metadata={}
         )
     

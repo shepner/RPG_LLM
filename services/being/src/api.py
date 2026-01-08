@@ -460,6 +460,7 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
         # #endregion
         
         try:
+            logger.info(f"Calling LLM for being {request.being_id}, prompt length: {len(prompt)}, system prompt length: {len(system_prompt) if system_prompt else 0}")
             response = await response_agent.llm_provider.generate(
                 prompt=prompt,
                 system_prompt=system_prompt,
@@ -467,19 +468,23 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
                 max_tokens=1000
             )
             
+            logger.info(f"LLM response received for being {request.being_id}, response type: {type(response)}, has text: {hasattr(response, 'text') if response else False}")
+            
             # Validate response
             if not response:
                 logger.error("LLM provider returned None response")
                 raise ValueError("LLM provider returned None response")
             
             if not hasattr(response, 'text') or response.text is None:
-                logger.error("LLM response has no text attribute or text is None")
+                logger.error(f"LLM response has no text attribute or text is None. Response object: {response}, attributes: {dir(response)}")
                 raise ValueError("LLM response has no text attribute")
             
             response_text = response.text.strip() if response.text else ""
             
+            logger.info(f"LLM response text length for being {request.being_id}: {len(response_text)}")
+            
             if not response_text:
-                logger.warning(f"LLM returned empty response for being {request.being_id}")
+                logger.warning(f"LLM returned empty response for being {request.being_id}. Response object: {response}")
                 response_text = "I'm sorry, I didn't receive a response. Please try again."
             
         except Exception as e:
