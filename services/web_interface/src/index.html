@@ -59,6 +59,16 @@
                         <button id="create-character-btn" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Create Character</button>
                         <button id="manage-characters-btn" style="padding: 6px 12px; background: #f59e0b; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Manage Characters</button>
                     </div>
+                    <div id="current-session-indicator" style="margin-bottom: 8px; padding: 8px; background: #1a3a1a; border-left: 3px solid #10b981; border-radius: 3px; display: none;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <strong style="color: #10b981; font-size: 0.9em;">Active Session:</strong>
+                                <span id="current-session-name" style="color: #e0e0e0; margin-left: 6px; font-size: 0.9em;"></span>
+                                <span id="current-session-info" style="color: #888; margin-left: 8px; font-size: 0.8em;"></span>
+                            </div>
+                            <button id="clear-session-btn" style="padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em;">Clear Session</button>
+                        </div>
+                    </div>
                     <div id="sessions-list" style="margin-bottom: 8px;"></div>
                 </div>
 

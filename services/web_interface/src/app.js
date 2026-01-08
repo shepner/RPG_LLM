@@ -1228,6 +1228,13 @@ document.addEventListener('click', (e) => {
             // Defer to prevent blocking
             setTimeout(() => joinSession(sessionId), 0);
         }
+    } else if (e.target.classList.contains('leave-session-btn')) {
+        const sessionId = e.target.dataset.sessionId;
+        if (sessionId) {
+            e.preventDefault();
+            // Defer to prevent blocking
+            setTimeout(() => leaveSession(sessionId), 0);
+        }
     } else if (e.target.classList.contains('delete-session-btn')) {
         const sessionId = e.target.dataset.sessionId;
         const sessionName = e.target.dataset.sessionName;
@@ -1275,22 +1282,29 @@ async function refreshSessions() {
                 const statusIcon = session.status === 'active' ? '▶️' : session.status === 'paused' ? '⏸️' : session.status === 'ended' ? '⏹️' : '⏳';
                 const isGM = currentUser && session.gm_user_id === currentUser.user_id;
                 const canDelete = isGM && session.status !== 'active';
+                const isCurrentSession = currentSession && session.session_id === currentSession.session_id;
+                const isPlayer = currentUser && session.player_user_ids && session.player_user_ids.includes(currentUser.user_id);
+                const canLeave = isCurrentSession && (isPlayer || isGM);
                 // Escape quotes to prevent XSS and syntax errors
                 const sessionId = String(session.session_id).replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const sessionName = String(session.name).replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 
-                return `<div style="padding: 6px 8px; margin-bottom: 4px; background: #2a2a2a; border-radius: 3px; border-left: 3px solid ${statusColor}; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                return `<div style="padding: 6px 8px; margin-bottom: 4px; background: ${isCurrentSession ? '#2a3a2a' : '#2a2a2a'}; border-radius: 3px; border-left: 3px solid ${isCurrentSession ? '#10b981' : statusColor}; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <div style="flex: 1; min-width: 200px;">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <strong style="color: #4a9eff; font-size: 0.9em;">${statusIcon} ${sessionName}</strong>
+                            <strong style="color: ${isCurrentSession ? '#10b981' : '#4a9eff'}; font-size: 0.9em;">${statusIcon} ${sessionName}</strong>
                             ${isGM ? '<span style="color: #f59e0b; font-size: 0.75em;">(GM)</span>' : ''}
+                            ${isCurrentSession ? '<span style="color: #10b981; font-size: 0.75em; font-weight: bold;">(ACTIVE)</span>' : ''}
                         </div>
                         <div style="color: #888; font-size: 0.8em; margin-top: 2px;">
                             ${session.status} • ${playerCount} player${playerCount !== 1 ? 's' : ''}${session.game_system_type ? ` • ${session.game_system_type}` : ''}
                         </div>
                     </div>
                     <div style="display: flex; gap: 4px; align-items: center;">
-                        <button data-session-id="${sessionId}" class="join-session-btn" style="padding: 4px 10px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Join</button>
+                        ${isCurrentSession 
+                            ? `<button data-session-id="${sessionId}" class="leave-session-btn" style="padding: 4px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Leave</button>`
+                            : `<button data-session-id="${sessionId}" class="join-session-btn" style="padding: 4px 10px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Join</button>`
+                        }
                         ${isGM ? `<button onclick="manageSession('${sessionId}')" style="padding: 4px 10px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;" title="Manage Session">⚙️</button>` : ''}
                         ${canDelete ? `<button data-session-id="${sessionId}" data-session-name="${sessionName}" class="delete-session-btn" style="padding: 4px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">🗑️</button>` : ''}
                     </div>
@@ -1299,6 +1313,9 @@ async function refreshSessions() {
         
         // Single DOM update
         sessionsList.innerHTML = html;
+        
+        // Update current session indicator
+        updateCurrentSessionIndicator();
     } catch (error) {
         console.error('Error refreshing sessions:', error);
         const sessionsList = document.getElementById('sessions-list');
@@ -2106,29 +2123,36 @@ function displayValidationReport(report) {
 // Make joinSession available globally
 window.joinSession = async function(sessionId) {
     try {
+        const token = authToken || localStorage.getItem('authToken');
+        if (!token) {
+            addSystemMessage('Please log in first', 'warning');
+            return;
+        }
+        
         const userResponse = await fetch(`${AUTH_URL}/me`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         const user = await userResponse.json();
         
         const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}/join?user_id=${user.user_id}`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (response.ok) {
-            // Find the session in the list to store it
-            const sessionsResponse = await fetch(`${GAME_SESSION_URL}/sessions`);
-            if (sessionsResponse.ok) {
-                const sessions = await sessionsResponse.json();
-                const session = sessions.find(s => s.session_id === sessionId);
-                if (session) {
-                    window.currentSession = session;
-                }
+            // Get session details
+            const sessionResponse = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (sessionResponse.ok) {
+                const session = await sessionResponse.json();
+                window.currentSession = session;
+                localStorage.setItem('currentSessionId', sessionId);
+                updateCurrentSessionIndicator();
             }
             
             // Session join is a system message
-            addSystemMessage(`You joined session ${sessionId}`);
+            addSystemMessage(`You joined session "${session.name || sessionId}"`, 'success');
             await refreshSessions();
             // Reload characters for this session
             await loadUserCharacters();
@@ -2141,13 +2165,112 @@ window.joinSession = async function(sessionId) {
                 await updateActivePromptsIndicator(currentBeingChatId);
             }
         } else {
-            alert('Failed to join session');
+            const errorText = await response.text();
+            let errorMessage = 'Failed to join session';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            addSystemMessage(`Failed to join session: ${errorMessage}`, 'error');
         }
     } catch (error) {
         console.error('Error joining session:', error);
-        alert('Error joining session: ' + error.message);
+        addSystemMessage(`Error joining session: ${error.message}`, 'error');
     }
 };
+
+// Make leaveSession available globally
+window.leaveSession = async function(sessionId) {
+    try {
+        const token = authToken || localStorage.getItem('authToken');
+        if (!token) {
+            addSystemMessage('Please log in first', 'warning');
+            return;
+        }
+        
+        const userResponse = await fetch(`${AUTH_URL}/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const user = await userResponse.json();
+        
+        // Get session name before leaving
+        let sessionName = sessionId;
+        try {
+            const sessionResponse = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (sessionResponse.ok) {
+                const session = await sessionResponse.json();
+                sessionName = session.name || sessionId;
+            }
+        } catch (e) {
+            // Continue even if we can't get session name
+        }
+        
+        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}/leave?user_id=${user.user_id}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            // Clear current session if it's the one we're leaving
+            if (window.currentSession && window.currentSession.session_id === sessionId) {
+                window.currentSession = null;
+                localStorage.removeItem('currentSessionId');
+                updateCurrentSessionIndicator();
+            }
+            
+            addSystemMessage(`You left session "${sessionName}"`, 'info');
+            await refreshSessions();
+            // Reload characters (they may have been session-specific)
+            await loadUserCharacters();
+            loadBeingChatCharacters();
+            loadNearbyBeings();
+            loadAllBeings();
+        } else {
+            const errorText = await response.text();
+            let errorMessage = 'Failed to leave session';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                errorMessage = errorText || errorMessage;
+            }
+            addSystemMessage(`Failed to leave session: ${errorMessage}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error leaving session:', error);
+        addSystemMessage(`Error leaving session: ${error.message}`, 'error');
+    }
+};
+
+// Update current session indicator
+function updateCurrentSessionIndicator() {
+    const indicator = document.getElementById('current-session-indicator');
+    const nameSpan = document.getElementById('current-session-name');
+    const infoSpan = document.getElementById('current-session-info');
+    const clearBtn = document.getElementById('clear-session-btn');
+    
+    if (!indicator || !nameSpan || !infoSpan || !clearBtn) return;
+    
+    const currentSession = window.currentSession;
+    
+    if (currentSession) {
+        indicator.style.display = 'block';
+        nameSpan.textContent = currentSession.name || currentSession.session_id.substring(0, 16) + '...';
+        const playerCount = currentSession.player_user_ids?.length || 0;
+        infoSpan.textContent = `${currentSession.status} • ${playerCount} player${playerCount !== 1 ? 's' : ''}${currentSession.game_system_type ? ` • ${currentSession.game_system_type}` : ''}`;
+        clearBtn.onclick = () => {
+            if (window.currentSession) {
+                leaveSession(window.currentSession.session_id);
+            }
+        };
+    } else {
+        indicator.style.display = 'none';
+    }
+}
 
 // Load user info and set up UI
 async function loadUserInfo() {
