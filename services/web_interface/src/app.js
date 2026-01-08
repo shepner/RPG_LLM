@@ -4093,22 +4093,34 @@ async function loadCharactersForManagement() {
         let characters = [];
         
         if (currentUser && currentUser.role === 'gm') {
-            // GM can see all characters
-            const response = await fetch(`${AUTH_URL}/beings/list`, {
+            // GM can see all characters - use same endpoint as chat sidebar for consistency
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:4097',message:'Loading characters for management (GM)',data:{endpoint:`${BEING_REGISTRY_URL}/beings/all`},timestamp:Date.now(),sessionId:'debug-session',runId:'char-mgmt',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            const response = await fetch(`${BEING_REGISTRY_URL}/beings/all`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
                 const data = await response.json();
                 characters = data.characters || [];
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:4103',message:'Characters loaded for management (GM)',data:{count:characters.length,characterIds:characters.map(c=>c.being_id).slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'char-mgmt',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
             }
         } else {
             // Regular users see their owned and assigned characters
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:4106',message:'Loading characters for management (User)',data:{endpoint:`${BEING_REGISTRY_URL}/beings/my-characters`},timestamp:Date.now(),sessionId:'debug-session',runId:'char-mgmt',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             const ownedResponse = await fetch(`${BEING_REGISTRY_URL}/beings/my-characters`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (ownedResponse.ok) {
                 const data = await ownedResponse.json();
                 characters = data.characters || [];
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:4112',message:'Characters loaded for management (User)',data:{count:characters.length,characterIds:characters.map(c=>c.being_id).slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'char-mgmt',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
             }
         }
         
