@@ -387,46 +387,6 @@ async def create_character(
         raise HTTPException(status_code=500, detail=f"Failed to create character: {str(e)}")
 
 
-# IMPORTANT: /beings/list must come BEFORE /beings/{being_id} to ensure proper route matching
-@app.get("/beings/list")
-async def list_all_beings(
-    request: Request,
-    token_data: Optional[TokenData] = Depends(require_gm)
-):
-    """List all beings/characters (GM only)."""
-    if AUTH_AVAILABLE and not token_data:
-        raise HTTPException(status_code=403, detail="GM role required")
-    
-    global registry
-    if registry is None:
-        registry = get_registry()
-    
-    # Get all beings from registry
-    all_beings = []
-    if hasattr(registry, '_registry'):
-        for being_id, entry in registry._registry.items():
-            # Get name from entry (handle both BeingRegistry objects and dicts)
-            name = None
-            if hasattr(entry, 'name'):
-                name = entry.name
-            elif isinstance(entry, dict):
-                name = entry.get('name')
-            
-            # Only use fallback if name is None or empty, not if it starts with "Character "
-            if not name:
-                name = f"Character {being_id[:8]}"
-            
-            all_beings.append({
-                "being_id": entry.being_id if hasattr(entry, 'being_id') else being_id,
-                "owner_id": entry.owner_id if hasattr(entry, 'owner_id') else entry.get('owner_id'),
-                "session_id": entry.session_id if hasattr(entry, 'session_id') else entry.get('session_id'),
-                "container_status": entry.container_status.value if hasattr(entry.container_status, 'value') else str(entry.container_status) if hasattr(entry, 'container_status') else None,
-                "name": name
-            })
-    
-    return {"characters": all_beings}
-
-
 @app.get("/beings/{being_id}", response_model=BeingRegistry)
 async def get_being(
     being_id: str,
