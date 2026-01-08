@@ -3670,6 +3670,32 @@ function setupCreateCharacterButton() {
     });
 }
 
+// Initialize session when page loads (after all function definitions)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeSession();
+        setupSystemMessagesToggle();
+        // Display version number (build timestamp)
+        const versionDisplay = document.getElementById('version-display');
+        if (versionDisplay) {
+            const version = SYSTEM_VERSION === 'dev' ? 'dev' : `build-${SYSTEM_VERSION}`;
+            versionDisplay.textContent = version;
+            versionDisplay.title = `Build time: ${SYSTEM_VERSION === 'dev' ? 'Development mode' : SYSTEM_VERSION.replace(/-/g, ' ')}`;
+        }
+    });
+} else {
+    // DOM is already loaded
+    initializeSession();
+    setupSystemMessagesToggle();
+    // Display version number (build timestamp)
+    const versionDisplay = document.getElementById('version-display');
+    if (versionDisplay) {
+        const version = SYSTEM_VERSION === 'dev' ? 'dev' : `build-${SYSTEM_VERSION}`;
+        versionDisplay.textContent = version;
+        versionDisplay.title = `Build time: ${SYSTEM_VERSION === 'dev' ? 'Development mode' : SYSTEM_VERSION.replace(/-/g, ' ')}`;
+    }
+}
+
 document.getElementById('cancel-character-btn')?.addEventListener('click', () => {
     document.getElementById('character-creation').style.display = 'none';
     // Clear form
