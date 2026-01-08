@@ -699,7 +699,7 @@ async def delete_being(
 @app.get("/beings/list")
 async def list_all_beings(
     request: Request,
-    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else Depends(lambda: None)
 ):
     """List all beings/characters (GM only)."""
     if AUTH_AVAILABLE and not token_data:
