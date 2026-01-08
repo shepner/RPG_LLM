@@ -66,6 +66,14 @@ class BeingOwnership(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
 
 
+class BeingOwnershipCreate(BaseModel):
+    """Being ownership creation model."""
+    
+    owner_id: str
+    assigned_user_ids: List[str] = Field(default_factory=list)
+    name: Optional[str] = None
+
+
 class BeingAssignment(BaseModel):
     """Being assignment model."""
     

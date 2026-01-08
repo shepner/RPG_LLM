@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth_manager import AuthManager
-from .models import User, UserCreate, UserLogin, Token, BeingOwnership, BeingAssignment
+from .models import User, UserCreate, UserLogin, Token, BeingOwnership, BeingOwnershipCreate, BeingAssignment
 from .middleware import require_auth, require_gm, require_being_access, get_current_user
 from .models import TokenData
 
@@ -311,7 +311,6 @@ async def create_being_ownership(
     token_data: TokenData = Depends(require_auth)
 ):
     """Create an ownership record for a being."""
-    from .models import BeingOwnershipCreate
     try:
         await auth_manager.set_being_ownership(
             being_id=being_id,
