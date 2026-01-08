@@ -70,4 +70,11 @@ class Registry:
             self._registry[being_id].container_status = status
             if container_id:
                 self._registry[being_id].container_id = container_id
+    
+    def delete_being(self, being_id: str) -> bool:
+        """Delete a being from the registry."""
+        if being_id in self._registry:
+            del self._registry[being_id]
+            return True
+        return False
 

@@ -297,6 +297,68 @@ async def get_being(being_id: str):
     return entry
 
 
+@app.delete("/beings/{being_id}")
+async def delete_being(
+    being_id: str,
+    http_request: Request,
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
+    """Delete a being/character."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    global registry
+    if registry is None:
+        registry = get_registry()
+    
+    # Get the being entry to check ownership
+    entry = registry.get_being(being_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Being not found")
+    
+    # Check if user has permission to delete (owner or GM)
+    if AUTH_AVAILABLE:
+        is_owner = entry.owner_id == token_data.user_id
+        is_gm = token_data.role == "gm" if hasattr(token_data, 'role') else False
+        
+        if not (is_owner or is_gm):
+            raise HTTPException(status_code=403, detail="You do not have permission to delete this being")
+    
+    # Delete from registry
+    deleted = registry.delete_being(being_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Being not found in registry")
+    
+    # Delete ownership record from auth service
+    if AUTH_AVAILABLE:
+        try:
+            import httpx
+            import logging
+            logger = logging.getLogger(__name__)
+            auth_url = os.getenv("AUTH_URL", "http://localhost:8000")
+            
+            # Get the Authorization header from the incoming request
+            auth_header = http_request.headers.get("Authorization")
+            if not auth_header:
+                logger.warning("No Authorization header found for ownership deletion.")
+            else:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    ownership_response = await client.delete(
+                        f"{auth_url}/beings/{being_id}/ownership",
+                        headers={"Authorization": auth_header}
+                    )
+                    if ownership_response.status_code not in [200, 404]:
+                        # 404 is okay (ownership might not exist), but log other errors
+                        logger.warning(f"Failed to delete ownership record: {ownership_response.status_code} - {ownership_response.text}")
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error deleting ownership record: {e}", exc_info=True)
+            # Don't fail the whole operation if ownership deletion fails
+    
+    return {"message": "Being deleted successfully", "being_id": being_id}
+
+
 @app.get("/beings/vicinity/{session_id}")
 async def get_beings_in_vicinity(
     session_id: str,

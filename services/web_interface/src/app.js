@@ -3343,14 +3343,35 @@ window.deleteCharacter = async function(beingId, characterName) {
     
     try {
         const token = authToken || localStorage.getItem('authToken');
+        if (!token) {
+            alert('Please log in first');
+            return;
+        }
         
-        // Delete from being registry (if endpoint exists)
-        // For now, we'll just show an error that deletion isn't implemented yet
-        // TODO: Add delete endpoint to being_registry service
-        alert('Character deletion is not yet implemented. This feature requires a delete endpoint in the being registry service.');
+        // Delete from being registry
+        const response = await fetch(`${BEING_REGISTRY_URL}/beings/${beingId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
         
-        // Reload characters list
-        await loadCharactersForManagement();
+        if (response.ok) {
+            const result = await response.json();
+            alert(`Character "${characterName}" deleted successfully!`);
+            
+            // Reload characters list
+            await loadCharactersForManagement();
+            
+            // Also reload other character lists
+            await loadUserCharacters();
+            loadBeingChatCharacters();
+            loadAllBeings();
+        } else {
+            const errorText = await response.text();
+            throw new Error(errorText || `HTTP ${response.status}`);
+        }
     } catch (error) {
         console.error('Error deleting character:', error);
         alert('Error deleting character: ' + error.message);
