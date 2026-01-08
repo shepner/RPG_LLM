@@ -334,8 +334,19 @@ function connectWebSockets() {
     };
     
     // Connect to Game Session service for session updates
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:337',message:'Attempting WebSocket connection',data:{url:'ws://localhost:8001/ws/sessions'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     sessionsWS = new WebSocket(`ws://localhost:8001/ws/sessions`);
+    sessionsWS.onopen = () => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:339',message:'WebSocket connection opened',data:{readyState:sessionsWS.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+    };
     sessionsWS.onmessage = (event) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:342',message:'WebSocket message received',data:{messageLength:event.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         const data = JSON.parse(event.data);
         if (data.type === 'session_updated') {
             // Update only the sessions list without full page refresh
@@ -343,13 +354,19 @@ function connectWebSockets() {
         }
     };
     sessionsWS.onerror = (error) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:350',message:'WebSocket error occurred',data:{errorType:error?.type,readyState:sessionsWS?.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         console.warn('Session WebSocket error:', error);
         // Fallback to polling if WebSocket fails
         if (!sessionsAutoRefreshInterval) {
             startSessionsAutoRefresh();
         }
     };
-    sessionsWS.onclose = () => {
+    sessionsWS.onclose = (event) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:357',message:'WebSocket connection closed',data:{code:event.code,reason:event.reason,wasClean:event.wasClean},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         console.log('Session WebSocket closed, falling back to polling');
         // Fallback to polling if WebSocket closes
         if (!sessionsAutoRefreshInterval) {
@@ -1320,6 +1337,9 @@ document.addEventListener('click', (e) => {
 
 async function refreshSessions() {
     try {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1321',message:'refreshSessions called',data:{gameSessionUrl:GAME_SESSION_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         const token = authToken || localStorage.getItem('authToken');
         const currentUser = window.currentUser;
         const sessionsList = document.getElementById('sessions-list');
@@ -1330,10 +1350,17 @@ async function refreshSessions() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
         
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1333',message:'About to fetch sessions',data:{url:`${GAME_SESSION_URL}/sessions`,hasToken:!!token},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         const response = await fetch(`${GAME_SESSION_URL}/sessions`, {
             headers: token ? { 'Authorization': `Bearer ${token}` } : {},
             signal: controller.signal
         });
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1338',message:'Sessions fetch response',data:{status:response.status,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         
         clearTimeout(timeoutId);
         
@@ -3511,7 +3538,17 @@ async function initializeSession() {
             await loadGameState();
             
             // Setup create character button
-            setupCreateCharacterButton();
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:3514',message:'About to call setupCreateCharacterButton',data:{functionExists:typeof setupCreateCharacterButton},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            if (typeof setupCreateCharacterButton === 'function') {
+                setupCreateCharacterButton();
+            } else {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:3518',message:'setupCreateCharacterButton is not a function',data:{type:typeof setupCreateCharacterButton},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
+                console.error('setupCreateCharacterButton is not defined');
+            }
             
             // Don't start polling - WebSocket will handle updates
             // startSessionsAutoRefresh(); // Only used as fallback
@@ -3535,34 +3572,22 @@ async function initializeSession() {
     }
 }
 
-// Initialize session when page loads
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        initializeSession();
-        setupSystemMessagesToggle();
-        // Display version number (build timestamp)
-        const versionDisplay = document.getElementById('version-display');
-        if (versionDisplay) {
-            const version = SYSTEM_VERSION === 'dev' ? 'dev' : `build-${SYSTEM_VERSION}`;
-            versionDisplay.textContent = version;
-            versionDisplay.title = `Build time: ${SYSTEM_VERSION === 'dev' ? 'Development mode' : SYSTEM_VERSION.replace(/-/g, ' ')}`;
-        }
-    });
-} else {
-    // DOM is already loaded
-    initializeSession();
-    setupSystemMessagesToggle();
-    // Display version number (build timestamp)
-    const versionDisplay = document.getElementById('version-display');
-    if (versionDisplay) {
-        const version = SYSTEM_VERSION === 'dev' ? 'dev' : `build-${SYSTEM_VERSION}`;
-        versionDisplay.textContent = version;
-        versionDisplay.title = `Build time: ${SYSTEM_VERSION === 'dev' ? 'Development mode' : SYSTEM_VERSION.replace(/-/g, ' ')}`;
-    }
-}
-
 // Character creation - now uses conversational approach
-document.getElementById('create-character-btn')?.addEventListener('click', async () => {
+function setupCreateCharacterButton() {
+    const createBtn = document.getElementById('create-character-btn');
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:3564',message:'setupCreateCharacterButton called',data:{buttonExists:!!createBtn},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    if (!createBtn) {
+        console.warn('Create character button not found');
+        return;
+    }
+    
+    // Remove any existing listeners by cloning the element
+    const newBtn = createBtn.cloneNode(true);
+    createBtn.parentNode.replaceChild(newBtn, createBtn);
+    
+    newBtn.addEventListener('click', async () => {
     const token = authToken || localStorage.getItem('authToken');
     if (!token) {
         addSystemMessage('Please log in first', 'warning');
@@ -3617,8 +3642,8 @@ document.getElementById('create-character-btn')?.addEventListener('click', async
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            query: "Hello! I'm creating a new character. Can you help me with that? Please ask me questions to help define my character.",
-                            sender_id: token_data?.user_id || "user",
+                            query: "Hello! I'm creating a new character. Can you help me with that? Please ask me questions to help define my character, starting with my name.",
+                            sender_id: window.currentUser?.user_id || "user",
                             session_id: sessionId,
                             game_system: currentSession ? currentSession.game_system_type : null
                         })
@@ -3642,7 +3667,8 @@ document.getElementById('create-character-btn')?.addEventListener('click', async
         console.error('Error creating character:', error);
         addSystemMessage(`Error creating character: ${error.message}`, 'error');
     }
-});
+    });
+}
 
 document.getElementById('cancel-character-btn')?.addEventListener('click', () => {
     document.getElementById('character-creation').style.display = 'none';
