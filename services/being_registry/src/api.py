@@ -399,23 +399,35 @@ async def query_being(
             )
         
         # Fallback to shared being service if no isolated container
-        # But first check if being service is available
-        being_service_url = os.getenv("BEING_URL", "http://localhost:8006")
-        logger.warning(f"Being {being_id} has no isolated container, attempting to use shared service at {being_service_url}")
+        # Use Docker service name when running in Docker, localhost otherwise
+        being_service_host = os.getenv("BEING_SERVICE_HOST", "being")  # Default to Docker service name
+        being_service_port = os.getenv("BEING_SERVICE_PORT", "8006")
+        being_service_url = f"http://{being_service_host}:{being_service_port}"
+        
+        # Also try localhost as fallback (for local development)
+        being_service_urls = [being_service_url]
+        if being_service_host != "localhost":
+            being_service_urls.append(f"http://localhost:{being_service_port}")
+        
+        logger.warning(f"Being {being_id} has no isolated container, attempting to use shared service")
         
         # Try to verify the being service is available
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                health_check = await client.get(f"{being_service_url}/health")
-                if health_check.status_code == 200:
-                    service_endpoint = being_service_url
-                else:
-                    raise HTTPException(
-                        status_code=503,
-                        detail="Being service is not available. Character may need to be recreated."
-                    )
-        except httpx.RequestError:
+        service_endpoint = None
+        last_error = None
+        for url in being_service_urls:
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=2.0) as client:
+                    health_check = await client.get(f"{url}/health")
+                    if health_check.status_code == 200:
+                        service_endpoint = url
+                        logger.info(f"Found being service at {url}")
+                        break
+            except httpx.RequestError as e:
+                last_error = e
+                continue
+        
+        if not service_endpoint:
             raise HTTPException(
                 status_code=503,
                 detail="Being service is not available. Please ensure the being service is running or recreate the character."
