@@ -1599,6 +1599,12 @@ async function refreshSessions() {
             sessionsList.innerHTML = html;
         }
         
+        // Update sessions count
+        const sessionsCountEl = document.getElementById('sessions-count');
+        if (sessionsCountEl) {
+            sessionsCountEl.textContent = `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`;
+        }
+        
         // Update current session indicator
         updateCurrentSessionIndicator();
     } catch (error) {
@@ -2535,6 +2541,40 @@ window.leaveSession = async function(sessionId) {
 };
 
 // Update current session indicator
+function setupSessionsListToggle() {
+    const toggleBtn = document.getElementById('toggle-sessions-list-btn');
+    const sessionsList = document.getElementById('sessions-list');
+    
+    if (!toggleBtn || !sessionsList) return;
+    
+    // Remove existing listeners by cloning
+    const newToggleBtn = toggleBtn.cloneNode(true);
+    toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
+    
+    // Check localStorage for saved state
+    const isExpanded = localStorage.getItem('sessions-list-expanded') === 'true';
+    if (isExpanded) {
+        sessionsList.style.display = 'block';
+        newToggleBtn.textContent = '▲ Hide Sessions';
+    } else {
+        sessionsList.style.display = 'none';
+        newToggleBtn.textContent = '▼ Show All Sessions';
+    }
+    
+    newToggleBtn.addEventListener('click', () => {
+        const isCurrentlyExpanded = sessionsList.style.display !== 'none';
+        if (isCurrentlyExpanded) {
+            sessionsList.style.display = 'none';
+            newToggleBtn.textContent = '▼ Show All Sessions';
+            localStorage.setItem('sessions-list-expanded', 'false');
+        } else {
+            sessionsList.style.display = 'block';
+            newToggleBtn.textContent = '▲ Hide Sessions';
+            localStorage.setItem('sessions-list-expanded', 'true');
+        }
+    });
+}
+
 function updateCurrentSessionIndicator() {
     const indicator = document.getElementById('current-session-indicator');
     const nameSpan = document.getElementById('current-session-name');

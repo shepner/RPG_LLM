@@ -69,7 +69,11 @@
                             <button id="clear-session-btn" style="padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em;">Clear Session</button>
                         </div>
                     </div>
-                    <div id="sessions-list" style="margin-bottom: 8px;"></div>
+                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <button id="toggle-sessions-list-btn" style="padding: 4px 8px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">▼ Show All Sessions</button>
+                        <span id="sessions-count" style="color: #888; font-size: 0.8em;"></span>
+                    </div>
+                    <div id="sessions-list" style="margin-bottom: 8px; display: none;"></div>
                 </div>
 
                 <div class="panel" id="rules-management" style="display: none;">
