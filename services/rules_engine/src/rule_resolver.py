@@ -2,6 +2,7 @@
 
 import random
 import re
+import json
 from typing import Dict, Any, Optional, List
 from .models import RollResult, Resolution
 
