@@ -1883,8 +1883,7 @@ async function loadGameState() {
         
         if (userResponse.ok) {
             const user = await userResponse.json();
-            // Don't add system messages to narrative - narrative is for game story only
-            console.log(`User logged in: ${user.username} (${user.role})`);
+            addSystemMessage(`User logged in: ${user.username} (${user.role})`);
         }
         
         // List game sessions (no auth required for listing)
@@ -1893,19 +1892,19 @@ async function loadGameState() {
             
             if (sessionsResponse.ok) {
                 const sessions = await sessionsResponse.json();
-                // Don't add system messages to narrative - just log for debugging
-                console.log(`Found ${sessions.length} game session(s)`);
+                if (sessions.length > 0) {
+                    addSystemMessage(`Found ${sessions.length} game session(s)`);
+                }
             } else {
-                console.warn('Could not list sessions:', sessionsResponse.status);
+                addSystemMessage(`Could not list sessions: HTTP ${sessionsResponse.status}`, 'error');
             }
         } catch (e) {
-            console.warn('Error listing sessions:', e);
-            // Don't show error to user, just log it
+            addSystemMessage(`Error listing sessions: ${e.message}`, 'error');
         }
         
         // System initialization - this is a system event, not a game event
         // Game Events should only show actual game mechanics (actions, world changes, etc.)
-        console.log('System initialized. Ready to play!');
+        addSystemMessage('System initialized. Ready to play!');
         
     } catch (error) {
         console.error('Error loading game state:', error);
@@ -1959,13 +1958,16 @@ async function loadUserCharacters() {
             }
         } else if (response.status === 401) {
             // Token expired or invalid, clear it and show login
-            console.log('Authentication failed, clearing token');
+            addSystemMessage('Authentication failed, please log in again', 'error');
             authToken = null;
             localStorage.removeItem('authToken');
             localStorage.removeItem('username');
+        } else {
+            addSystemMessage(`Error loading characters: HTTP ${response.status}`, 'error');
         }
     } catch (error) {
         console.error('Error loading characters:', error);
+        addSystemMessage(`Error loading characters: ${error.message}`, 'error');
     }
 }
 

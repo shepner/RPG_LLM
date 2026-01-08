@@ -97,6 +97,7 @@ async def register_being(being_id: str, owner_id: str, session_id: str = None):
 
 @app.get("/beings/my-characters")
 async def get_my_characters(
+    request: Request,
     token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
 ):
     """Get all characters owned or assigned to the current user."""
@@ -108,14 +109,21 @@ async def get_my_characters(
         # If auth is not available, allow access (for development)
         token_data = None
     
+    # Get the auth token from request headers
+    auth_header = request.headers.get("Authorization", "")
+    
     # Get characters from Auth service
     try:
         import httpx
         auth_url = os.getenv("AUTH_URL", "http://localhost:8000")
-        async with httpx.AsyncClient() as client:
+        global registry
+        if registry is None:
+            registry = get_registry()
+        
+        async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
                 f"{auth_url}/beings/assigned",
-                headers={"Authorization": f"Bearer {token_data.access_token if token_data else ''}"}
+                headers={"Authorization": auth_header} if auth_header else {}
             )
             if response.status_code == 200:
                 being_ids = response.json()
@@ -131,8 +139,16 @@ async def get_my_characters(
                             "session_id": entry.get("session_id")
                         })
                 return {"characters": characters}
+            elif response.status_code == 401:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            else:
+                logger.warning(f"Auth service returned {response.status_code} for /beings/assigned")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error fetching user characters: {e}")
+        logger.error(f"Error fetching user characters: {e}", exc_info=True)
+        # Return empty list instead of failing completely
+        return {"characters": []}
     
     return {"characters": []}
 
