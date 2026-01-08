@@ -363,6 +363,41 @@ async def get_being(
     return entry
 
 
+@app.put("/beings/{being_id}/name")
+async def update_being_name(
+    being_id: str,
+    name: str = Body(..., embed=True),
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
+    """Update a being's name in the registry."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    global registry
+    if registry is None:
+        registry = get_registry()
+    
+    entry = registry.get_being(being_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Being not found")
+    
+    # Check permissions - owner or GM can update name
+    if AUTH_AVAILABLE:
+        is_owner = entry.owner_id == token_data.user_id
+        is_gm = token_data.role == "gm" if hasattr(token_data, 'role') else False
+        if not (is_owner or is_gm):
+            raise HTTPException(status_code=403, detail="You do not have permission to update this being's name")
+    
+    # Update the name in the registry entry
+    if hasattr(entry, 'name'):
+        entry.name = name
+    elif isinstance(entry, dict):
+        entry['name'] = name
+    
+    logger.info(f"Updated name for being {being_id} to {name}")
+    return {"message": f"Being {being_id} name updated to {name}", "being_id": being_id, "name": name}
+
+
 @app.post("/beings/{being_id}/query")
 async def query_being(
     being_id: str,
