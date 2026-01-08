@@ -2,6 +2,7 @@
 
 import os
 import logging
+from datetime import datetime
 from typing import Dict, Optional, List, Any
 from fastapi import FastAPI, HTTPException, Depends, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -392,6 +393,49 @@ async def query_being_service(
                 logger.warning(f"Could not resolve @mention to being_id: {e}")
                 # Continue without resolving - mentions will be stored in metadata
         
+        # Helper function to get character-specific system prompt
+        async def get_character_system_prompt(being_id: str) -> str:
+            """Get character-specific system prompt from being_registry."""
+            try:
+                import httpx
+                being_registry_url = os.getenv("BEING_REGISTRY_URL", "http://localhost:8007")
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    # Get registry entry
+                    auth_header = {}
+                    if http_request:
+                        auth_header_value = http_request.headers.get("Authorization")
+                        if auth_header_value:
+                            auth_header = {"Authorization": auth_header_value}
+                    
+                    registry_response = await client.get(
+                        f"{being_registry_url}/beings/{being_id}",
+                        headers=auth_header
+                    )
+                    
+                    if registry_response.status_code == 200:
+                        registry_entry = registry_response.json()
+                        character_name = registry_entry.get("name") or f"Character {being_id[:8]}"
+                        
+                        # Try to get full character data from being service if available
+                        # For now, use the name from registry
+                        # TODO: Store character flavor data (personality, backstory) in being service
+                        return f"""You are {character_name}, a unique thinking being in a Tabletop Role-Playing Game. 
+
+You have your own personality, goals, memories, and experiences. Respond naturally as this character would, based on your individual traits and the context of the conversation.
+
+Remember:
+- You are an autonomous being with your own consciousness
+- You have your own memories and experiences stored in your memory
+- You should respond in character, reflecting your unique personality and perspective
+- You are not a generic service - you are {character_name}, a distinct individual"""
+                    else:
+                        logger.warning(f"Could not fetch character data for {being_id}: {registry_response.status_code}")
+            except Exception as e:
+                logger.warning(f"Error fetching character data for {being_id}: {e}")
+            
+            # Fallback to generic prompt
+            return f"You are a thinking being (ID: {being_id}) in a Tabletop Role-Playing Game. Respond naturally based on your character's personality, goals, and current situation."
+        
         # If target_being_id is provided, this is a being-to-being conversation
         if target_being_id:
             # Verify access to target being
@@ -408,10 +452,14 @@ async def query_being_service(
             target_memory = get_memory_manager(request.target_being_id)
             
             # This is a being-to-being conversation
-            # The source being (being_id) is talking to the target being (target_being_id)
-            base_system_prompt = f"You are {request.target_being_id}, a thinking being in a Tabletop Role-Playing Game. Another being ({request.being_id}) is speaking to you. Respond naturally based on your character's personality, goals, and current situation."
+            # Get character-specific system prompt for the target being
+            base_system_prompt = await get_character_system_prompt(request.target_being_id)
+            base_system_prompt += f"\n\nAnother being ({request.being_id}) is speaking to you. Respond naturally as your character would."
+        elif request.being_id:
+            # Human talking to a specific being - use character-specific prompt
+            base_system_prompt = await get_character_system_prompt(request.being_id)
         else:
-            # Regular query (human to being or GM query)
+            # Generic query without a specific being - use service prompt
             base_system_prompt = "You are Atman, the Being Service. You represent individual consciousness and autonomous decision-making for thinking beings in a Tabletop Role-Playing Game. Answer questions about consciousness, decision-making, and autonomous behavior."
         
         if active_prompts:
