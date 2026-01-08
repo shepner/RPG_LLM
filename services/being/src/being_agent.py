@@ -12,14 +12,32 @@ class BeingAgent:
     
     def __init__(self, being_id: str):
         """Initialize being agent."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         self.being_id = being_id
-        self.llm_provider = GeminiProvider(
-            api_key=os.getenv("GEMINI_API_KEY"),
-            model=os.getenv("LLM_MODEL", "gemini-2.5-flash")
-        )
-        self.cache = RedisCache(
-            redis_url=os.getenv("REDIS_URL", "redis://localhost:6379")
-        )
+        try:
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                logger.warning(f"GEMINI_API_KEY not set for being {being_id}. LLM provider will not be available.")
+                self.llm_provider = None
+            else:
+                self.llm_provider = GeminiProvider(
+                    api_key=api_key,
+                    model=os.getenv("LLM_MODEL", "gemini-2.5-flash")
+                )
+                logger.info(f"LLM provider initialized for being {being_id}")
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM provider for being {being_id}: {e}", exc_info=True)
+            self.llm_provider = None
+        
+        try:
+            self.cache = RedisCache(
+                redis_url=os.getenv("REDIS_URL", "redis://localhost:6379")
+            )
+        except Exception as e:
+            logger.warning(f"Failed to initialize Redis cache for being {being_id}: {e}")
+            self.cache = None
     
     async def think(self, context: str, game_time: float, system_prompt: Optional[str] = None) -> Thought:
         """Generate thoughts."""

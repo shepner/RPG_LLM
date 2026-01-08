@@ -64,6 +64,9 @@ def get_agent(being_id: str) -> BeingAgent:
     """Get or create being agent."""
     if being_id not in _agents:
         _agents[being_id] = BeingAgent(being_id)
+        # Log if LLM provider is not available
+        if not _agents[being_id].llm_provider:
+            logger.warning(f"BeingAgent created for {being_id} but LLM provider is not available. Check GEMINI_API_KEY environment variable.")
     return _agents[being_id]
 
 
