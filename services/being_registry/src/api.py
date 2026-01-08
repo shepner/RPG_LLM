@@ -698,11 +698,12 @@ async def delete_being(
 
 @app.get("/beings/list")
 async def list_all_beings(
+    request: Request,
     token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
 ):
     """List all beings/characters (GM only)."""
     if AUTH_AVAILABLE and not token_data:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise HTTPException(status_code=403, detail="GM role required")
     
     global registry
     if registry is None:
