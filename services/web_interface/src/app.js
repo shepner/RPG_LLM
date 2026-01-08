@@ -701,65 +701,34 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
         const newInput = inputEl.cloneNode(true);
         inputEl.parentNode.replaceChild(newInput, inputEl);
         
-        // Store handler reference
+        // Simple handler: Enter sends message, everything else is default behavior
         const keyHandler = (e) => {
             // #region agent log
             fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:705',message:'Keydown event',data:{key:e.key,shiftKey:e.shiftKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'A'})}).catch(()=>{});
             // #endregion
             
-            // Enter alone sends message, Ctrl+Enter or Shift+Enter inserts newline
+            // Enter alone (without modifiers) sends message
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:710',message:'Preventing default for Enter',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'A'})}).catch(()=>{});
+                fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:710',message:'Preventing default for Enter, sending message',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'A'})}).catch(()=>{});
                 // #endregion
                 e.preventDefault();
                 e.stopPropagation();
                 submitBeingMessage();
                 return false;
             }
-            // For Ctrl+Enter, Shift+Enter, or Cmd+Enter, allow default (newline)
-            // #region agent log
-            if (e.key === 'Enter') {
-                fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:717',message:'Allowing Enter with modifier',data:{shiftKey:e.shiftKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'B'})}).catch(()=>{});
-            }
-            // #endregion
+            // All other keys (including Ctrl+Enter, Shift+Enter) use default behavior
         };
         
         newInput.addEventListener('keydown', keyHandler);
         
-        // Also handle at form level to prevent form submission
+        // Prevent form submission on Enter (handled by keyHandler above)
         const form = newInput.closest('form');
         if (form) {
-            // Remove any inline onsubmit handler and set our own
-            form.onsubmit = null;
             form.addEventListener('submit', (e) => {
                 e.preventDefault();
-                // Only submit if Enter was pressed without modifiers (handled by keyHandler)
-                // For Ctrl+Enter, Shift+Enter, etc., don't submit
                 return false;
-            }, true);
-            
-            const formHandler = (e) => {
-                // Only prevent if it's Enter without modifiers
-                // For Ctrl+Enter, Shift+Enter, or Cmd+Enter, explicitly allow default behavior
-                if (e.key === 'Enter' && e.target === newInput) {
-                    if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                        // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:740',message:'Form handler preventing Enter',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'C'})}).catch(()=>{});
-                        // #endregion
-                        e.preventDefault();
-                        e.stopPropagation();
-                        return false;
-                    } else {
-                        // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:748',message:'Form handler allowing Enter with modifier',data:{shiftKey:e.shiftKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'D'})}).catch(()=>{});
-                        // #endregion
-                        // Explicitly allow default for modifiers - don't prevent or stop
-                        return true;
-                    }
-                }
-            };
-            form.addEventListener('keydown', formHandler, true); // Use capture phase
+            });
         }
         
         // Keep focus in input
