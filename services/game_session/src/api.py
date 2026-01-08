@@ -248,6 +248,19 @@ async def delete_session(session_id: str, gm_user_id: str = Query(...)):
     return {"message": "Session deleted successfully"}
 
 
+@app.websocket("/ws/sessions")
+async def websocket_sessions(websocket: WebSocket):
+    """WebSocket endpoint for session updates."""
+    await ws_manager.connect(websocket, "sessions")
+    try:
+        while True:
+            # Keep connection alive and handle any incoming messages
+            data = await websocket.receive_text()
+            # Echo back or handle client messages if needed
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket, "sessions")
+
+
 @app.get("/health")
 async def health():
     """Health check."""
