@@ -34,15 +34,14 @@ try:
         
         from auth_middleware import require_auth, require_gm, get_current_user, TokenData
         AUTH_AVAILABLE = True
+        import logging
+        logger = logging.getLogger(__name__)
     else:
         raise ImportError(f"Middleware file not found at {middleware_path}")
 except (ImportError, Exception) as e:
     import logging
     logger = logging.getLogger(__name__)
     logger.warning(f"Auth middleware not available: {e}")
-else:
-    import logging
-    logger = logging.getLogger(__name__)
     AUTH_AVAILABLE = False
     def require_auth():
         return None
