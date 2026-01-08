@@ -1832,7 +1832,7 @@ window.addPlayerToSession = async function(sessionId) {
     }
     
     try {
-        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}/players/${userId}?gm_user_id=${currentUser.user_id}`, {
+        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}/players/${userId}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1880,7 +1880,7 @@ window.removePlayerFromSession = async function(sessionId, userId, username) {
     }
     
     try {
-        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}/players/${userId}?gm_user_id=${currentUser.user_id}`, {
+        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}/players/${userId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
