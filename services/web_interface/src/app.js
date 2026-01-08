@@ -1291,6 +1291,7 @@ async function refreshSessions() {
                     </div>
                     <div style="display: flex; gap: 4px; align-items: center;">
                         <button data-session-id="${sessionId}" class="join-session-btn" style="padding: 4px 10px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Join</button>
+                        ${isGM ? `<button onclick="manageSession('${sessionId}')" style="padding: 4px 10px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;" title="Manage Session">⚙️</button>` : ''}
                         ${canDelete ? `<button data-session-id="${sessionId}" data-session-name="${sessionName}" class="delete-session-btn" style="padding: 4px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">🗑️</button>` : ''}
                     </div>
                 </div>`;

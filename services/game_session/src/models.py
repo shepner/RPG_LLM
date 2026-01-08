@@ -67,3 +67,14 @@ class SessionCreate(BaseModel):
     time_mode_preference: TimeMode = TimeMode.REAL_TIME
     settings: Dict[str, Any] = Field(default_factory=dict)
 
+
+class SessionUpdate(BaseModel):
+    """Session update model."""
+    
+    name: Optional[str] = None
+    description: Optional[str] = None
+    game_system_type: Optional[str] = None
+    time_mode_preference: Optional[TimeMode] = None
+    status: Optional[SessionStatus] = None
+    settings: Optional[Dict[str, Any]] = None
+

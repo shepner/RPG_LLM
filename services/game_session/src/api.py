@@ -6,7 +6,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from .session_manager import SessionManager
-from .models import GameSession, SessionCreate, SessionState, SessionStatus
+from .models import GameSession, SessionCreate, SessionUpdate, SessionState, SessionStatus
 
 app = FastAPI(title="Game Session Service")
 
@@ -89,6 +89,76 @@ async def leave_session(session_id: str, user_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"message": "Left session"}
+
+
+@app.put("/sessions/{session_id}")
+async def update_session(
+    session_id: str,
+    session_data: SessionUpdate,
+    gm_user_id: str = Query(...)
+):
+    """Update a game session (GM only - must be the session's GM)."""
+    # Get session to verify GM ownership
+    session = await session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Only the GM of the session can update it
+    if session.gm_user_id != gm_user_id:
+        raise HTTPException(status_code=403, detail="Only the session's Game Master can update it")
+    
+    updated_session = await session_manager.update_session(session_id, session_data)
+    if not updated_session:
+        raise HTTPException(status_code=500, detail="Failed to update session")
+    return updated_session
+
+
+@app.post("/sessions/{session_id}/players/{user_id}")
+async def add_player_to_session(
+    session_id: str,
+    user_id: str,
+    gm_user_id: str = Query(...)
+):
+    """Add a player to a session (GM only)."""
+    # Get session to verify GM ownership
+    session = await session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Only the GM of the session can add players
+    if session.gm_user_id != gm_user_id:
+        raise HTTPException(status_code=403, detail="Only the session's Game Master can add players")
+    
+    # Don't allow adding the GM as a player
+    if user_id == session.gm_user_id:
+        raise HTTPException(status_code=400, detail="Cannot add the Game Master as a player")
+    
+    success = await session_manager.join_session(session_id, user_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to add player to session")
+    return {"message": "Player added to session"}
+
+
+@app.delete("/sessions/{session_id}/players/{user_id}")
+async def remove_player_from_session(
+    session_id: str,
+    user_id: str,
+    gm_user_id: str = Query(...)
+):
+    """Remove a player from a session (GM only)."""
+    # Get session to verify GM ownership
+    session = await session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Only the GM of the session can remove players
+    if session.gm_user_id != gm_user_id:
+        raise HTTPException(status_code=403, detail="Only the session's Game Master can remove players")
+    
+    success = await session_manager.leave_session(session_id, user_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to remove player from session")
+    return {"message": "Player removed from session"}
 
 
 @app.delete("/sessions/{session_id}")

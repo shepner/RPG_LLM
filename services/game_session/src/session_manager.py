@@ -138,6 +138,43 @@ class SessionManager:
             
             return True
     
+    async def update_session(
+        self,
+        session_id: str,
+        session_data: "SessionUpdate"
+    ) -> Optional[GameSession]:
+        """Update a game session."""
+        from .models import SessionUpdate
+        
+        async with self.SessionLocal() as session:
+            result = await session.execute(
+                sa.select(GameSessionDB).where(GameSessionDB.session_id == session_id)
+            )
+            session_db = result.scalar_one_or_none()
+            
+            if not session_db:
+                return None
+            
+            # Update fields if provided
+            if session_data.name is not None:
+                session_db.name = session_data.name
+            if session_data.description is not None:
+                session_db.description = session_data.description
+            if session_data.game_system_type is not None:
+                session_db.game_system_type = session_data.game_system_type
+            if session_data.time_mode_preference is not None:
+                session_db.time_mode_preference = session_data.time_mode_preference
+            if session_data.status is not None:
+                session_db.status = session_data.status
+            if session_data.settings is not None:
+                session_db.settings = session_data.settings
+            
+            session_db.updated_at = datetime.now()
+            await session.commit()
+            await session.refresh(session_db)
+            
+            return self._db_to_model(session_db)
+    
     async def delete_session(self, session_id: str) -> bool:
         """Delete a game session."""
         async with self.SessionLocal() as session:
