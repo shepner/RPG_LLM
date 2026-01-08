@@ -124,6 +124,8 @@ class QueryRequest(BaseModel):
     session_id: Optional[str] = None
     game_system: Optional[str] = None
     source_user_id: Optional[str] = None  # User/being who sent the query
+    target_being_id: Optional[str] = None  # If set, this is a being-to-being conversation
+    being_id: Optional[str] = None  # The being being queried (for compatibility)
 
 
 @app.post("/query")
@@ -339,26 +341,33 @@ Respond naturally as your character would. Consider your personality, goals, rel
         if token_data and hasattr(token_data, 'role') and token_data.role == "gm":
             source_type = "gm"
         
+        # Determine if this is a being-to-being conversation
+        is_being_to_being = request.target_being_id is not None
+        
         # Store incoming message
         await memory_manager.add_incoming_message(
             content=request.query,
-            source_being_id=None,  # Human user or other being (passed via source_user_id if needed)
+            source_being_id=request.source_user_id if is_being_to_being else None,  # Other being if being-to-being, None if human
             session_id=request.session_id,
             game_system=request.game_system,
             metadata={
-                "source_type": source_type,
+                "source_type": source_type if not is_being_to_being else "being",
                 "source_user_id": request.source_user_id or (token_data.user_id if token_data else None),
-                "context": request.context
+                "context": request.context,
+                "target_being_id": request.target_being_id
             }
         )
         
         # Store outgoing response
         await memory_manager.add_outgoing_response(
             content=response_text,
-            target_being_id=None,  # Response to human
+            target_being_id=request.target_being_id,  # Target being if being-to-being, None if human
             session_id=request.session_id,
             game_system=request.game_system,
-            metadata={"conversation_type": "human_to_being"}
+            metadata={
+                "conversation_type": "being_to_being" if is_being_to_being else "human_to_being",
+                "target_being_id": request.target_being_id
+            }
         )
         
         logger.info(f"Stored conversation events for being {BEING_ID}")
