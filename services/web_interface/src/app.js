@@ -449,10 +449,20 @@ function saveBeingChatHistory(beingId, history) {
 // Add message to being chat history
 function addBeingChatMessage(beingId, role, content, metadata = {}) {
     const history = loadBeingChatHistory(beingId);
+    const currentUser = window.currentUser;
+    const senderRole = currentUser ? currentUser.role : 'player';
+    
+    // GM messages are hidden from players by default, unless explicitly marked visible
+    const visibleToPlayers = metadata.visible_to_players !== undefined 
+        ? metadata.visible_to_players 
+        : (senderRole !== 'gm'); // Non-GM messages are always visible
+    
     history.push({
         role: role, // 'user' or 'assistant'
         content: content,
         timestamp: new Date().toISOString(),
+        sender_role: senderRole, // Track who sent the message
+        visible_to_players: visibleToPlayers, // Visibility flag
         metadata: metadata
     });
     // Keep only last 100 messages per being
@@ -513,33 +523,61 @@ function renderLLMConversationForBeingChat(service) {
 function renderBeingChat(beingId, beingName) {
     const messagesDiv = document.getElementById('being-chat-messages');
     const history = loadBeingChatHistory(beingId);
+    const currentUser = window.currentUser;
+    const isGM = currentUser && currentUser.role === 'gm';
     
-    if (history.length === 0) {
+    // Filter messages based on visibility
+    // Non-GMs can't see GM messages unless they're marked visible_to_players
+    const visibleHistory = isGM 
+        ? history // GMs see all messages
+        : history.filter(msg => {
+            // Show message if:
+            // 1. Sender is not a GM, OR
+            // 2. Sender is GM but message is marked visible_to_players
+            return !msg.sender_role || msg.sender_role !== 'gm' || msg.visible_to_players === true;
+        });
+    
+    if (visibleHistory.length === 0) {
         messagesDiv.innerHTML = `
             <div style="text-align: center; color: #888; padding: 40px 20px; font-style: italic;">
-                No messages yet. Start the conversation!
+                ${history.length > 0 && !isGM 
+                    ? 'No visible messages. Some messages may be hidden by the GM.' 
+                    : 'No messages yet. Start the conversation!'}
             </div>
         `;
         return;
     }
     
-    messagesDiv.innerHTML = history.map(msg => {
+    messagesDiv.innerHTML = visibleHistory.map((msg, index) => {
         const isUser = msg.role === 'user';
         const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+        const isGMMessage = msg.sender_role === 'gm' && msg.role === 'user';
+        const isHidden = isGMMessage && !msg.visible_to_players;
+        
         return `
-            <div style="display: flex; gap: 12px; ${isUser ? 'flex-direction: row-reverse;' : ''}">
-                <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${isUser ? '#4a9eff' : '#8b5cf6'}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
-                    ${isUser ? '👤' : '🧠'}
+            <div style="display: flex; gap: 12px; ${isUser ? 'flex-direction: row-reverse;' : ''}" data-message-index="${index}" data-message-timestamp="${msg.timestamp}">
+                <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
+                    ${isUser ? (isGMMessage ? '👑' : '👤') : '🧠'}
                 </div>
                 <div style="flex: 1; ${isUser ? 'text-align: right;' : ''}">
                     <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; ${isUser ? 'justify-content: flex-end;' : ''}">
-                        <span style="font-weight: bold; color: ${isUser ? '#4a9eff' : '#8b5cf6'}; font-size: 0.9em;">
-                            ${isUser ? 'You' : beingName}
+                        <span style="font-weight: bold; color: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; font-size: 0.9em;">
+                            ${isUser ? (isGMMessage ? 'GM' : 'You') : beingName}
                         </span>
+                        ${isGMMessage && !msg.visible_to_players ? '<span style="color: #888; font-size: 0.7em;">(Hidden from players)</span>' : ''}
                         <span style="font-size: 0.75em; color: #888;">${timestamp}</span>
                     </div>
-                    <div style="background: ${isUser ? '#2a4a6a' : '#2a1a3a'}; padding: 10px 12px; border-radius: 8px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word;">
+                    <div style="background: ${isUser ? (isGMMessage ? '#3a2a1a' : '#2a4a6a') : '#2a1a3a'}; padding: 10px 12px; border-radius: 8px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word; position: relative;">
                         ${escapeHTML(msg.content)}
+                        ${isGM && isGMMessage ? `
+                            <button onclick="toggleMessageVisibility('${beingId}', '${msg.timestamp}', ${!msg.visible_to_players})" 
+                                style="position: absolute; top: 4px; right: 4px; padding: 2px 6px; background: ${msg.visible_to_players ? '#10b981' : '#666'}; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.7em; opacity: 0.7; transition: opacity 0.2s;"
+                                onmouseover="this.style.opacity='1'" 
+                                onmouseout="this.style.opacity='0.7'"
+                                title="${msg.visible_to_players ? 'Hide from players' : 'Show to players'}">
+                                ${msg.visible_to_players ? '👁️' : '👁️‍🗨️'}
+                            </button>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -686,7 +724,12 @@ async function submitBeingMessage() {
     
     // Handle being messages (existing code)
     // Add user message to history
-    addBeingChatMessage(currentBeingChatId, 'user', message);
+    // GM messages are hidden by default, but can be made visible
+    const currentUser = window.currentUser;
+    const isGM = currentUser && currentUser.role === 'gm';
+    addBeingChatMessage(currentBeingChatId, 'user', message, {
+        visible_to_players: false // GM messages hidden by default
+    });
     renderBeingChat(currentBeingChatId, document.getElementById('being-chat-character-name').textContent);
     
     // Show typing indicator
