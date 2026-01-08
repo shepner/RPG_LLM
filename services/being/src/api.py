@@ -330,11 +330,14 @@ async def query_being_service(
         memory_manager = None
     
     if not agent.llm_provider:
+        error_msg = "LLM provider not available. Please configure GEMINI_API_KEY environment variable."
+        logger.error(f"LLM provider not available for being {request.being_id if request.being_id else 'query-temp'}. {error_msg}")
         return {
             "service": "Atman (Being Service)",
             "query": request.query,
-            "response": "LLM provider not available. Cannot process queries.",
-            "error": "LLM not configured"
+            "response": error_msg,
+            "error": "LLM not configured",
+            "being_id": request.being_id
         }
     
     try:
