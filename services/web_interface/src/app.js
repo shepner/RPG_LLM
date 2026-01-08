@@ -3506,10 +3506,87 @@ if (document.readyState === 'loading') {
     }
 }
 
-// Character creation
-document.getElementById('create-character-btn')?.addEventListener('click', () => {
-    const panel = document.getElementById('character-creation');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+// Character creation - now uses conversational approach
+document.getElementById('create-character-btn')?.addEventListener('click', async () => {
+    const token = authToken || localStorage.getItem('authToken');
+    if (!token) {
+        addSystemMessage('Please log in first', 'warning');
+        return;
+    }
+    
+    const currentSession = window.currentSession;
+    const sessionId = currentSession ? currentSession.session_id : null;
+    
+    if (!sessionId) {
+        addSystemMessage('Please join a game session first', 'warning');
+        return;
+    }
+    
+    try {
+        addSystemMessage('Creating new character...', 'info');
+        
+        // Create character in conversational mode
+        const response = await fetch(`${BEING_REGISTRY_URL}/beings/create`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: null, // Will be set during conversation
+                session_id: sessionId,
+                game_system: currentSession ? currentSession.game_system_type : null,
+                conversational: true
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const beingId = data.being_id;
+            
+            addSystemMessage('Character created! Opening chat...', 'success');
+            
+            // Open chat with the new character
+            const characterName = `Character ${beingId.substring(0, 8)}`;
+            switchBeingChat(beingId, characterName, 'being');
+            
+            // Wait a moment for container to be ready, then send initial greeting
+            setTimeout(async () => {
+                try {
+                    // Send initial message to start conversation
+                    const queryUrl = `${BEING_REGISTRY_URL}/beings/${beingId}/query`;
+                    const queryResponse = await fetch(queryUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            query: "Hello! I'm creating a new character. Can you help me with that? Please ask me questions to help define my character.",
+                            sender_id: token_data?.user_id || "user",
+                            session_id: sessionId,
+                            game_system: currentSession ? currentSession.game_system_type : null
+                        })
+                    });
+                    
+                    if (queryResponse.ok) {
+                        const queryData = await queryResponse.json();
+                        // Add the character's response to chat
+                        addBeingChatMessage(beingId, 'assistant', queryData.response || "Hello! I'd be happy to help you create your character. Let's start with your name - what would you like to be called?");
+                        renderBeingChat(beingId, characterName);
+                    }
+                } catch (e) {
+                    console.error('Error starting character creation conversation:', e);
+                }
+            }, 2000); // Wait 2 seconds for container to be ready
+        } else {
+            const errorText = await response.text();
+            addSystemMessage(`Failed to create character: ${errorText}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error creating character:', error);
+        addSystemMessage(`Error creating character: ${error.message}`, 'error');
+    }
 });
 
 document.getElementById('cancel-character-btn')?.addEventListener('click', () => {

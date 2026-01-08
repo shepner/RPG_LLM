@@ -80,13 +80,14 @@ system_validator = SystemValidator()
 
 class CharacterCreateRequest(BaseModel):
     """Character creation request."""
-    name: str
+    name: Optional[str] = None  # Optional for conversational creation
     backstory: Optional[str] = None
     personality: Optional[str] = None
     appearance: Optional[str] = None
     game_system: Optional[str] = None
     session_id: Optional[str] = None
     automatic: bool = False  # If True, auto-generate everything
+    conversational: bool = False  # If True, create minimal character and engage in dialog
 
 
 @app.post("/beings/register", response_model=BeingRegistry)
@@ -338,7 +339,8 @@ async def create_character(
             "being_id": being_id,
             "registry": registry_entry,
             "character_data": character_data,
-            "message": "Character created successfully"
+            "message": "Character created successfully",
+            "conversational": request.conversational
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create character: {str(e)}")
