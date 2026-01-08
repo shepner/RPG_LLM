@@ -389,9 +389,37 @@ async def query_being(
     service_endpoint = entry.service_endpoint if entry.service_endpoint else None
     
     if not service_endpoint:
+        # Check if container should exist but doesn't have endpoint yet
+        # This might happen if container creation is in progress or failed
+        if entry.container_id:
+            logger.warning(f"Being {being_id} has container {entry.container_id} but no service endpoint. Container may not be ready.")
+            raise HTTPException(
+                status_code=503,
+                detail="Being container is not ready yet. Please wait a moment and try again."
+            )
+        
         # Fallback to shared being service if no isolated container
-        service_endpoint = os.getenv("BEING_URL", "http://localhost:8006")
-        logger.warning(f"Being {being_id} has no isolated container, using shared service at {service_endpoint}")
+        # But first check if being service is available
+        being_service_url = os.getenv("BEING_URL", "http://localhost:8006")
+        logger.warning(f"Being {being_id} has no isolated container, attempting to use shared service at {being_service_url}")
+        
+        # Try to verify the being service is available
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                health_check = await client.get(f"{being_service_url}/health")
+                if health_check.status_code == 200:
+                    service_endpoint = being_service_url
+                else:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Being service is not available. Character may need to be recreated."
+                    )
+        except httpx.RequestError:
+            raise HTTPException(
+                status_code=503,
+                detail="Being service is not available. Please ensure the being service is running or recreate the character."
+            )
     
     # Forward the request to the being instance service
     try:
