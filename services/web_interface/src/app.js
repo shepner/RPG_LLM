@@ -759,8 +759,26 @@ async function submitBeingMessage() {
         if (typingEl) typingEl.remove();
         
         if (response.ok) {
-            const data = await response.json();
+            let data;
+            try {
+                const responseText = await response.text();
+                if (!responseText || responseText.trim() === '') {
+                    throw new Error('Empty response from being service');
+                }
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Error parsing being service response:', parseError);
+                console.error('Response status:', response.status);
+                console.error('Response headers:', [...response.headers.entries()]);
+                throw new Error(`Invalid response from being service: ${parseError.message}`);
+            }
+            
             const responseText = data.response || 'No response received';
+            
+            if (responseText === 'No response received' || !responseText || responseText.trim() === '') {
+                console.error('Being service returned empty response:', data);
+                addSystemMessage(`Warning: Character "${currentBeingChatId}" returned no response. Check being service logs.`, 'warning');
+            }
             
             // Add response to history
             addBeingChatMessage(currentBeingChatId, 'assistant', responseText, {
@@ -772,7 +790,14 @@ async function submitBeingMessage() {
             renderBeingChat(currentBeingChatId, document.getElementById('being-chat-character-name').textContent);
         } else {
             const errorText = await response.text();
-            throw new Error(errorText || 'Failed to send message');
+            let errorMessage = errorText || 'Failed to send message';
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.detail || errorMessage;
+            } catch {
+                // Not JSON, use as-is
+            }
+            throw new Error(errorMessage);
         }
     } catch (error) {
         // Remove typing indicator
