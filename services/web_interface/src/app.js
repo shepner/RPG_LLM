@@ -992,19 +992,24 @@ async function submitBeingMessage() {
                     }
                 }
                 
-                // Clean up extracted name - remove common prefixes like "now", "the", etc.
+                // Clean up extracted name - remove common prefixes and reject invalid names
                 if (extractedName) {
                     extractedName = extractedName.trim();
-                    // Remove leading words like "now", "the", "a" if they're part of the match
-                    const cleanPattern = /^(?:now|the|a|an)\s+(.+)$/i;
+                    // Remove leading words like "now", "the", "a", "just", "starting" if they're part of the match
+                    const cleanPattern = /^(?:now|the|a|an|just|starting|shall|will|be|is)\s+(.+)$/i;
                     const cleanMatch = extractedName.match(cleanPattern);
                     if (cleanMatch) {
                         extractedName = cleanMatch[1].trim();
                     }
+                    // Reject invalid/generic names
+                    const invalidNames = ['just', 'starting', 'shall', 'will', 'be', 'is', 'the', 'a', 'an', 'now', 'name', 'character'];
+                    if (invalidNames.includes(extractedName.toLowerCase())) {
+                        extractedName = null; // Reject invalid names
+                    }
                 }
                 
-                // Update name if found
-                if (extractedName && extractedName.length < 50 && extractedName.length > 1) {
+                // Update name if found and valid
+                if (extractedName && extractedName.length < 50 && extractedName.length > 1 && extractedName.length < 30) {
                     try {
                         // #region agent log
                         fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:943',message:'Sending name update request',data:{beingId:currentBeingChatId,extractedName},timestamp:Date.now(),sessionId:'debug-session',runId:'name-update',hypothesisId:'B'})}).catch(()=>{});
