@@ -453,12 +453,47 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
             pass
         # #endregion
         
-        response = await response_agent.llm_provider.generate(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            temperature=0.7,
-            max_tokens=1000
-        )
+        try:
+            response = await response_agent.llm_provider.generate(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=0.7,
+                max_tokens=1000
+            )
+            
+            # Validate response
+            if not response:
+                logger.error("LLM provider returned None response")
+                raise ValueError("LLM provider returned None response")
+            
+            if not hasattr(response, 'text') or response.text is None:
+                logger.error("LLM response has no text attribute or text is None")
+                raise ValueError("LLM response has no text attribute")
+            
+            response_text = response.text.strip() if response.text else ""
+            
+            if not response_text:
+                logger.warning(f"LLM returned empty response for being {request.being_id}")
+                response_text = "I'm sorry, I didn't receive a response. Please try again."
+            
+        except Exception as e:
+            logger.error(f"Error generating LLM response: {e}", exc_info=True)
+            # #region agent log
+            try:
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({
+                        "location": "being/api.py:query_being_service",
+                        "message": "LLM generation error",
+                        "data": {"being_id": request.being_id, "error": str(e), "error_type": type(e).__name__},
+                        "timestamp": time.time() * 1000,
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "A"
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            raise HTTPException(status_code=500, detail=f"Error generating response: {str(e)}")
         
         # #region agent log
         try:
@@ -466,7 +501,7 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
                 f.write(json.dumps({
                     "location": "being/api.py:query_being_service",
                     "message": "LLM response received",
-                    "data": {"being_id": request.being_id, "response_length": len(response.text) if response else 0},
+                    "data": {"being_id": request.being_id, "response_length": len(response_text), "response_preview": response_text[:50]},
                     "timestamp": time.time() * 1000,
                     "sessionId": "debug-session",
                     "runId": "run1",
@@ -479,8 +514,8 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
         # Store conversation in memory
         if target_being_id:
             # Being-to-being conversation: store in both beings' memories
-            conversation_text_source = f"To {target_being_id}: {request.query}\nFrom {target_being_id}: {response.text}"
-            conversation_text_target = f"From {request.being_id}: {request.query}\nTo {request.being_id}: {response.text}"
+            conversation_text_source = f"To {target_being_id}: {request.query}\nFrom {target_being_id}: {response_text}"
+            conversation_text_target = f"From {request.being_id}: {request.query}\nTo {request.being_id}: {response_text}"
             
             if request.being_id and memory_manager:
                 await memory_manager.add_memory(
@@ -509,7 +544,7 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
             logger.info(f"Stored being-to-being conversation between {request.being_id} and {target_being_id}")
         elif request.being_id and memory_manager:
             # Human-to-being conversation: store in being's memory
-            conversation_text = f"User: {request.query}\nBeing: {response.text}"
+            conversation_text = f"User: {request.query}\nBeing: {response_text}"
             await memory_manager.add_memory(
                 conversation_text,
                 metadata={
@@ -525,7 +560,7 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
         return {
             "service": "Atman (Being Service)",
             "query": request.query,
-            "response": response.text,
+            "response": response_text,
             "being_id": request.being_id,
             "target_being_id": target_being_id,
             "mentions": mentions,
