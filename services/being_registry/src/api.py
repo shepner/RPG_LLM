@@ -313,9 +313,7 @@ async def create_character(
                     # #endregion
             except Exception as e:
                 # If direct import fails, log but don't fail character creation
-                import logging
                 import json
-                logger = logging.getLogger(__name__)
                 logger.warning(f"Could not create ownership record in auth service: {e}")
                 
                 # #region agent log
@@ -412,8 +410,6 @@ async def delete_being(
     if AUTH_AVAILABLE:
         try:
             import httpx
-            import logging
-            logger = logging.getLogger(__name__)
             auth_url = os.getenv("AUTH_URL", "http://localhost:8000")
             
             # Get the Authorization header from the incoming request
@@ -430,8 +426,6 @@ async def delete_being(
                         # 404 is okay (ownership might not exist), but log other errors
                         logger.warning(f"Failed to delete ownership record: {ownership_response.status_code} - {ownership_response.text}")
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Error deleting ownership record: {e}", exc_info=True)
             # Don't fail the whole operation if ownership deletion fails
     
