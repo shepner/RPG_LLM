@@ -224,6 +224,8 @@ async def create_character(
             result = await orchestrator.create_container(being_id)
             if result:
                 container_id, port = result
+                # Use Docker service name for internal communication, localhost for external
+                # For now, use localhost since containers are on host network
                 service_endpoint = f"http://localhost:{port}"
                 
                 # Start container and wait for health
@@ -389,12 +391,28 @@ async def update_being_name(
             raise HTTPException(status_code=403, detail="You do not have permission to update this being's name")
     
     # Update the name in the registry entry
+    old_name = None
     if hasattr(entry, 'name'):
+        old_name = entry.name
         entry.name = name
     elif isinstance(entry, dict):
+        old_name = entry.get('name')
         entry['name'] = name
+    else:
+        # If entry is a BeingRegistry object, update it
+        if hasattr(entry, '__dict__'):
+            old_name = getattr(entry, 'name', None)
+            setattr(entry, 'name', name)
     
-    logger.info(f"Updated name for being {being_id} to {name}")
+    # Also update in the registry's internal storage
+    if hasattr(registry, '_registry') and being_id in registry._registry:
+        registry_entry = registry._registry[being_id]
+        if hasattr(registry_entry, 'name'):
+            registry_entry.name = name
+        elif isinstance(registry_entry, dict):
+            registry_entry['name'] = name
+    
+    logger.info(f"Updated name for being {being_id} from '{old_name}' to '{name}'")
     return {"message": f"Being {being_id} name updated to {name}", "being_id": being_id, "name": name}
 
 

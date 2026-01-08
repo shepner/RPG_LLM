@@ -185,8 +185,10 @@ async def query_being(
                         registry_entry = registry_response.json()
                         character_name = registry_entry.get("name")
                         
+                        logger.info(f"Fetched character name for {BEING_ID}: '{character_name}'")
+                        
                         # If no name, this is a new character in conversational creation mode
-                        if not character_name or character_name.startswith("Character "):
+                        if not character_name or (isinstance(character_name, str) and character_name.startswith("Character ")):
                             return """You are a new character being created in a Tabletop Role-Playing Game. You are helping your creator define who you are through conversation. 
 
 IMPORTANT: You are NOT a service or assistant. You are the CHARACTER being created. You do not have a name yet, but you will receive one from your creator.
