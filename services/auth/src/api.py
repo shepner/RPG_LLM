@@ -304,6 +304,64 @@ async def unassign_being(
         return {"message": "Being unassigned", "being_id": being_id, "user_id": user_id}
 
 
+@app.post("/beings/{being_id}/ownership")
+async def create_being_ownership(
+    being_id: str,
+    ownership_data: BeingOwnershipCreate,
+    token_data: TokenData = Depends(require_auth)
+):
+    """Create an ownership record for a being."""
+    from .models import BeingOwnershipCreate
+    try:
+        await auth_manager.set_being_ownership(
+            being_id=being_id,
+            owner_id=ownership_data.owner_id,
+            created_by=token_data.user_id,
+            assigned_user_ids=ownership_data.assigned_user_ids,
+            name=ownership_data.name
+        )
+        return {"message": "Being ownership created successfully", "being_id": being_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create being ownership: {str(e)}")
+
+
+@app.delete("/beings/{being_id}/ownership")
+async def delete_being_ownership(
+    being_id: str,
+    token_data: TokenData = Depends(require_auth)
+):
+    """Delete an ownership record for a being."""
+    import sqlalchemy as sa
+    from .auth_manager import BeingOwnershipDB
+    from .models import UserRole
+    
+    async with auth_manager.SessionLocal() as session:
+        # Get ownership record
+        result = await session.execute(
+            sa.select(BeingOwnershipDB).where(
+                BeingOwnershipDB.being_id == being_id
+            )
+        )
+        ownership_db = result.scalar_one_or_none()
+        
+        if not ownership_db:
+            raise HTTPException(status_code=404, detail="Being ownership not found")
+        
+        # Check permission: owner or GM can delete
+        is_owner = ownership_db.owner_id == token_data.user_id
+        is_gm = token_data.role == UserRole.GM
+        
+        if not (is_owner or is_gm):
+            raise HTTPException(status_code=403, detail="You do not have permission to delete this ownership record")
+        
+        # Delete the ownership record
+        await session.delete(ownership_db)
+        await session.commit()
+        
+        logger.info(f"Being ownership deleted for {being_id} by {token_data.username}")
+        return {"message": "Being ownership deleted successfully", "being_id": being_id}
+
+
 @app.delete("/users/{user_id}")
 async def delete_user(
     user_id: str,
