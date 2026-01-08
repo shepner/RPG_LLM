@@ -2371,10 +2371,43 @@ async function loadGameState() {
             }
         });
         
+        let user = null;
         if (userResponse.ok) {
-            const user = await userResponse.json();
-            addSystemMessage(`User logged in: ${user.username} (${user.role})`);
+            user = await userResponse.json();
+            addSystemMessage(`User logged in: ${user.username} (${user.role})`, 'success');
         }
+        
+        // Restore current session from localStorage if available
+        const savedSessionId = localStorage.getItem('currentSessionId');
+        if (savedSessionId && user) {
+            try {
+                const sessionResponse = await fetch(`${GAME_SESSION_URL}/sessions/${savedSessionId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (sessionResponse.ok) {
+                    const session = await sessionResponse.json();
+                    // Verify user is still in the session
+                    const isGM = user.role === 'gm' && session.gm_user_id === user.user_id;
+                    const isPlayer = session.player_user_ids && session.player_user_ids.includes(user.user_id);
+                    if (isGM || isPlayer) {
+                        window.currentSession = session;
+                        addSystemMessage(`Restored active session: "${session.name || savedSessionId}"`, 'info');
+                    } else {
+                        // User is no longer in this session, clear it
+                        localStorage.removeItem('currentSessionId');
+                    }
+                } else {
+                    // Session not found, clear it
+                    localStorage.removeItem('currentSessionId');
+                }
+            } catch (e) {
+                console.warn('Could not restore session:', e);
+                localStorage.removeItem('currentSessionId');
+            }
+        }
+        
+        // Update current session indicator
+        updateCurrentSessionIndicator();
         
         // List game sessions (no auth required for listing)
         try {
@@ -2383,7 +2416,7 @@ async function loadGameState() {
             if (sessionsResponse.ok) {
                 const sessions = await sessionsResponse.json();
                 if (sessions.length > 0) {
-                    addSystemMessage(`Found ${sessions.length} game session(s)`);
+                    addSystemMessage(`Found ${sessions.length} game session(s)`, 'info');
                 }
             } else {
                 addSystemMessage(`Could not list sessions: HTTP ${sessionsResponse.status}`, 'error');
