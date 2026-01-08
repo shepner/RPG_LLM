@@ -1338,13 +1338,21 @@ document.addEventListener('click', (e) => {
 async function refreshSessions() {
     try {
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1321',message:'refreshSessions called',data:{gameSessionUrl:GAME_SESSION_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1338',message:'refreshSessions called',data:{gameSessionUrl:GAME_SESSION_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'E'})}).catch(()=>{});
         // #endregion
         const token = authToken || localStorage.getItem('authToken');
         const currentUser = window.currentUser;
         const sessionsList = document.getElementById('sessions-list');
         
-        if (!sessionsList) return;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1347',message:'Sessions list element check',data:{sessionsListExists:!!sessionsList},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        if (!sessionsList) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1349',message:'Sessions list element not found, returning early',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
+            return;
+        }
         
         // Add timeout to prevent hanging
         const controller = new AbortController();
@@ -1370,6 +1378,9 @@ async function refreshSessions() {
         }
         
         const sessions = await response.json();
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1372',message:'Sessions fetched successfully',data:{sessionCount:sessions.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
         const html = sessions.length === 0 
             ? '<div style="color: #888; padding: 8px; font-size: 0.85em;">No game sessions found. Create one to get started!</div>'
             : sessions.map(session => {
@@ -1410,6 +1421,9 @@ async function refreshSessions() {
         
         // Only update DOM if content actually changed to prevent flashing
         const currentHtml = sessionsList.innerHTML;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1413',message:'About to update sessions list HTML',data:{htmlLength:html.length,currentHtmlLength:currentHtml.length,willUpdate:currentHtml!==html},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
         if (currentHtml !== html) {
             sessionsList.innerHTML = html;
         }
@@ -2249,20 +2263,23 @@ window.joinSession = async function(sessionId) {
                 window.currentSession = session;
                 localStorage.setItem('currentSessionId', sessionId);
                 updateCurrentSessionIndicator();
-            }
-            
-            // Session join is a system message
-            addSystemMessage(`You joined session "${session.name || sessionId}"`, 'success');
-            await refreshSessions();
-            // Reload characters for this session
-            await loadUserCharacters();
-            // Reload being chat data
-            loadBeingChatCharacters();
-            loadNearbyBeings();
-            loadAllBeings();
-            // Update active prompts indicator if LLM service is active in being chat
-            if (currentChatType === 'llm' && currentBeingChatId) {
-                await updateActivePromptsIndicator(currentBeingChatId);
+                
+                // Session join is a system message
+                addSystemMessage(`You joined session "${session.name || sessionId}"`, 'success');
+                await refreshSessions();
+                // Reload characters for this session
+                await loadUserCharacters();
+                // Reload being chat data
+                loadBeingChatCharacters();
+                loadNearbyBeings();
+                loadAllBeings();
+                // Update active prompts indicator if LLM service is active in being chat
+                if (currentChatType === 'llm' && currentBeingChatId) {
+                    await updateActivePromptsIndicator(currentBeingChatId);
+                }
+            } else {
+                addSystemMessage('Joined session but could not load session details', 'warning');
+                await refreshSessions();
             }
         } else {
             const errorText = await response.text();
@@ -2509,21 +2526,8 @@ async function loadGameState() {
         // Update current session indicator
         updateCurrentSessionIndicator();
         
-        // List game sessions (no auth required for listing)
-        try {
-            const sessionsResponse = await fetch(`${GAME_SESSION_URL}/sessions`);
-            
-            if (sessionsResponse.ok) {
-                const sessions = await sessionsResponse.json();
-                if (sessions.length > 0) {
-                    addSystemMessage(`Found ${sessions.length} game session(s)`, 'info');
-                }
-            } else {
-                addSystemMessage(`Could not list sessions: HTTP ${sessionsResponse.status}`, 'error');
-            }
-        } catch (e) {
-            addSystemMessage(`Error listing sessions: ${e.message}`, 'error');
-        }
+        // Load and display game sessions
+        await refreshSessions();
         
         // System initialization - this is a system event, not a game event
         // Game Events should only show actual game mechanics (actions, world changes, etc.)
@@ -3586,23 +3590,42 @@ function setupCreateCharacterButton() {
     // Remove any existing listeners by cloning the element
     const newBtn = createBtn.cloneNode(true);
     createBtn.parentNode.replaceChild(newBtn, createBtn);
-    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:3589',message:'About to attach click listener',data:{buttonId:newBtn.id,buttonExists:!!newBtn},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     newBtn.addEventListener('click', async () => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:3590',message:'Create character button clicked',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
     const token = authToken || localStorage.getItem('authToken');
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:3593',message:'Token check',data:{hasToken:!!token,hasAuthToken:!!authToken},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     if (!token) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:3595',message:'No token found, returning early',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         addSystemMessage('Please log in first', 'warning');
         return;
     }
     
     const currentSession = window.currentSession;
     const sessionId = currentSession ? currentSession.session_id : null;
-    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:3601',message:'Session check',data:{hasSession:!!currentSession,sessionId:sessionId},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     if (!sessionId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:3603',message:'No session found, returning early',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         addSystemMessage('Please join a game session first', 'warning');
         return;
     }
     
     try {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:3608',message:'Starting character creation',data:{sessionId:sessionId,beingRegistryUrl:BEING_REGISTRY_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         addSystemMessage('Creating new character...', 'info');
         
         // Create character in conversational mode
