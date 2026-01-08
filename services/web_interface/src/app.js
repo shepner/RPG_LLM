@@ -1558,12 +1558,14 @@ async function refreshSessions() {
                 const playerCount = session.player_user_ids?.length || 0;
                 const statusColor = session.status === 'active' ? '#10b981' : session.status === 'paused' ? '#f59e0b' : session.status === 'ended' ? '#ef4444' : '#888';
                 const statusIcon = session.status === 'active' ? '▶️' : session.status === 'paused' ? '⏸️' : session.status === 'ended' ? '⏹️' : '⏳';
-                const isGM = currentUser && session.gm_user_id === currentUser.user_id;
-                const canDelete = isGM && session.status !== 'active';
+                const isSessionOwner = currentUser && session.gm_user_id === currentUser.user_id;
+                const isGM = currentUser && currentUser.role === 'gm';
+                const canManage = isGM; // Any GM can manage any session
+                const canDelete = isGM && session.status !== 'active'; // Any GM can delete non-active sessions
                 const currentSession = window.currentSession || null;
                 const isCurrentSession = currentSession && session.session_id === currentSession.session_id;
                 const isPlayer = currentUser && session.player_user_ids && session.player_user_ids.includes(currentUser.user_id);
-                const canLeave = isCurrentSession && (isPlayer || isGM);
+                const canLeave = isCurrentSession && (isPlayer || isSessionOwner);
                 // Escape quotes to prevent XSS and syntax errors
                 const sessionId = String(session.session_id).replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const sessionName = String(session.name).replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -1572,7 +1574,7 @@ async function refreshSessions() {
                     <div style="flex: 1; min-width: 200px;">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <strong style="color: ${isCurrentSession ? '#10b981' : '#4a9eff'}; font-size: 0.9em;">${statusIcon} ${sessionName}</strong>
-                            ${isGM ? '<span style="color: #f59e0b; font-size: 0.75em;">(GM)</span>' : ''}
+                            ${isSessionOwner ? '<span style="color: #f59e0b; font-size: 0.75em;">(GM)</span>' : ''}
                             ${isCurrentSession ? '<span style="color: #10b981; font-size: 0.75em; font-weight: bold;">(ACTIVE)</span>' : ''}
                         </div>
                         <div style="color: #888; font-size: 0.8em; margin-top: 2px;">
@@ -1584,7 +1586,7 @@ async function refreshSessions() {
                             ? `<button data-session-id="${sessionId}" class="leave-session-btn" style="padding: 4px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Leave</button>`
                             : `<button data-session-id="${sessionId}" class="join-session-btn" style="padding: 4px 10px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Join</button>`
                         }
-                        ${isGM ? `<button onclick="manageSession('${sessionId}')" style="padding: 4px 10px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;" title="Manage Session">⚙️</button>` : ''}
+                        ${canManage ? `<button onclick="manageSession('${sessionId}')" style="padding: 4px 10px; background: #10b981; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;" title="Manage Session">⚙️</button>` : ''}
                         ${canDelete ? `<button data-session-id="${sessionId}" data-session-name="${sessionName}" class="delete-session-btn" style="padding: 4px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">🗑️</button>` : ''}
                     </div>
                 </div>`;
@@ -1647,9 +1649,9 @@ window.manageSession = async function(sessionId) {
         
         const session = await sessionResponse.json();
         
-        // Verify user is GM of this session
-        if (session.gm_user_id !== currentUser.user_id) {
-            alert('Only the Game Master of this session can manage it.');
+        // Verify user is a GM (any GM can manage any session)
+        if (currentUser.role !== 'gm') {
+            alert('Only Game Masters can manage sessions.');
             return;
         }
         
@@ -1926,7 +1928,7 @@ window.deleteSession = async function(sessionId, sessionName) {
             return;
         }
         
-        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}?gm_user_id=${currentUser.user_id}`, {
+        const response = await fetch(`${GAME_SESSION_URL}/sessions/${sessionId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });

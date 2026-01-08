@@ -3,7 +3,7 @@
 import os
 import sys
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .session_manager import SessionManager
@@ -11,6 +11,35 @@ from .models import GameSession, SessionCreate, SessionUpdate, SessionState, Ses
 
 # Import WebSocket manager
 from shared.websocket.manager import WebSocketManager
+
+# Try to import auth middleware
+AUTH_AVAILABLE = False
+require_auth = None
+require_gm = None
+TokenData = None
+
+try:
+    auth_src_path = os.path.join(os.path.dirname(__file__), '../../auth/src')
+    if os.path.exists(auth_src_path):
+        middleware_path = os.path.join(auth_src_path, 'middleware.py')
+        if os.path.exists(middleware_path):
+            sys.path.insert(0, auth_src_path)
+            from middleware import require_auth, require_gm, get_current_user, TokenData
+            AUTH_AVAILABLE = True
+        else:
+            raise ImportError(f"Middleware file not found at {middleware_path}")
+    else:
+        raise ImportError(f"Auth service path not found at {auth_src_path}")
+except (ImportError, Exception) as e:
+    # Auth not available - use dummy functions
+    AUTH_AVAILABLE = False
+    async def require_auth(request: Request = None):
+        return None
+    async def require_gm(request: Request = None):
+        return None
+    def get_current_user():
+        return None
+    TokenData = None
 
 app = FastAPI(title="Game Session Service")
 
@@ -129,17 +158,18 @@ async def leave_session(session_id: str, user_id: str):
 async def update_session(
     session_id: str,
     session_data: SessionUpdate,
-    gm_user_id: str = Query(...)
+    request: Request,
+    token_data: Optional[TokenData] = Depends(lambda: require_gm() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
 ):
-    """Update a game session (GM only - must be the session's GM)."""
-    # Get session to verify GM ownership
+    """Update a game session (GM only - any GM can update any session)."""
+    # Verify user is a GM
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="Game Master role required")
+    
+    # Get session
     session = await session_manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
-    # Only the GM of the session can update it
-    if session.gm_user_id != gm_user_id:
-        raise HTTPException(status_code=403, detail="Only the session's Game Master can update it")
     
     updated_session = await session_manager.update_session(session_id, session_data)
     if not updated_session:
@@ -158,17 +188,18 @@ async def update_session(
 async def add_player_to_session(
     session_id: str,
     user_id: str,
-    gm_user_id: str = Query(...)
+    request: Request,
+    token_data: Optional[TokenData] = Depends(lambda: require_gm() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
 ):
-    """Add a player to a session (GM only)."""
-    # Get session to verify GM ownership
+    """Add a player to a session (GM only - any GM can add players to any session)."""
+    # Verify user is a GM
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="Game Master role required")
+    
+    # Get session
     session = await session_manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
-    # Only the GM of the session can add players
-    if session.gm_user_id != gm_user_id:
-        raise HTTPException(status_code=403, detail="Only the session's Game Master can add players")
     
     # Don't allow adding the GM as a player
     if user_id == session.gm_user_id:
@@ -194,17 +225,18 @@ async def add_player_to_session(
 async def remove_player_from_session(
     session_id: str,
     user_id: str,
-    gm_user_id: str = Query(...)
+    request: Request,
+    token_data: Optional[TokenData] = Depends(lambda: require_gm() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
 ):
-    """Remove a player from a session (GM only)."""
-    # Get session to verify GM ownership
+    """Remove a player from a session (GM only - any GM can remove players from any session)."""
+    # Verify user is a GM
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="Game Master role required")
+    
+    # Get session
     session = await session_manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
-    # Only the GM of the session can remove players
-    if session.gm_user_id != gm_user_id:
-        raise HTTPException(status_code=403, detail="Only the session's Game Master can remove players")
     
     success = await session_manager.leave_session(session_id, user_id)
     if not success:
@@ -223,16 +255,20 @@ async def remove_player_from_session(
 
 
 @app.delete("/sessions/{session_id}")
-async def delete_session(session_id: str, gm_user_id: str = Query(...)):
-    """Delete a game session (GM only - must be the session's GM)."""
-    # Get session to verify GM ownership
+async def delete_session(
+    session_id: str,
+    request: Request,
+    token_data: Optional[TokenData] = Depends(lambda: require_gm() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
+):
+    """Delete a game session (GM only - any GM can delete any session)."""
+    # Verify user is a GM
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=403, detail="Game Master role required")
+    
+    # Get session
     session = await session_manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
-    # Only the GM of the session can delete it
-    if session.gm_user_id != gm_user_id:
-        raise HTTPException(status_code=403, detail="Only the session's Game Master can delete it")
     
     success = await session_manager.delete_session(session_id)
     if not success:
