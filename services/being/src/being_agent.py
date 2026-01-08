@@ -39,8 +39,16 @@ class BeingAgent:
             logger.warning(f"Failed to initialize Redis cache for being {being_id}: {e}")
             self.cache = None
     
-    async def think(self, context: str, game_time: float, system_prompt: Optional[str] = None) -> Thought:
-        """Generate thoughts."""
+    async def think(self, context: str, game_time: float, system_prompt: Optional[str] = None, memory_manager=None) -> Thought:
+        """
+        Generate thoughts (internal, private to the being).
+        
+        Args:
+            context: Context for thinking
+            game_time: Game time
+            system_prompt: Optional system prompt
+            memory_manager: Optional memory manager to store the thought
+        """
         import uuid
         
         prompt = f"As this being, think about: {context}"
@@ -48,16 +56,34 @@ class BeingAgent:
         system = system_prompt if system_prompt else base_system
         response = await self.llm_provider.generate(prompt, system_prompt=system)
         
-        return Thought(
+        thought = Thought(
             thought_id=str(uuid.uuid4()),
             being_id=self.being_id,
             text=response.text,
             game_time=game_time,
             metadata={}
         )
+        
+        # Store thought in memory as private event
+        if memory_manager:
+            await memory_manager.add_thought(
+                content=thought.text,
+                game_time=game_time,
+                metadata={"thought_id": thought.thought_id, "context": context}
+            )
+        
+        return thought
     
-    async def decide(self, context: str, game_time: float, system_prompt: Optional[str] = None) -> BeingAction:
-        """Make a decision and generate action."""
+    async def decide(self, context: str, game_time: float, system_prompt: Optional[str] = None, memory_manager=None) -> BeingAction:
+        """
+        Make a decision and generate action.
+        
+        Args:
+            context: Context for decision
+            game_time: Game time
+            system_prompt: Optional system prompt
+            memory_manager: Optional memory manager to store the action
+        """
         import uuid
         
         prompt = f"As this being, decide what to do: {context}"
@@ -65,7 +91,7 @@ class BeingAgent:
         system = system_prompt if system_prompt else base_system
         response = await self.llm_provider.generate(prompt, system_prompt=system)
         
-        return BeingAction(
+        action = BeingAction(
             action_id=str(uuid.uuid4()),
             being_id=self.being_id,
             action_type="general",
@@ -73,4 +99,15 @@ class BeingAgent:
             game_time=game_time,
             metadata={}
         )
+        
+        # Store action in memory as public event
+        if memory_manager:
+            await memory_manager.add_action(
+                content=action.description,
+                action_type=action.action_type,
+                game_time=game_time,
+                metadata={"action_id": action.action_id, "context": context, **action.metadata}
+            )
+        
+        return action
 

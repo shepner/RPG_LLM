@@ -570,51 +570,72 @@ Answer the question about consciousness, decision-making, autonomous behavior, o
             pass
         # #endregion
         
-        # Store conversation in memory
+        # Store comprehensive memory events
+        from .memory_events import MemoryEventType, MemoryVisibility
+        
         if target_being_id:
-            # Being-to-being conversation: store in both beings' memories
-            conversation_text_source = f"To {target_being_id}: {request.query}\nFrom {target_being_id}: {response_text}"
-            conversation_text_target = f"From {request.being_id}: {request.query}\nTo {request.being_id}: {response_text}"
-            
+            # Being-to-being conversation: store comprehensive events in both beings' memories
             if request.being_id and memory_manager:
-                await memory_manager.add_memory(
-                    conversation_text_source,
-                    metadata={
-                        "type": "being_conversation",
-                        "target_being_id": target_being_id,
-                        "session_id": request.session_id,
-                        "game_system": request.game_system,
-                        "timestamp": datetime.now().isoformat()
-                    }
+                # Source being: incoming message from target, outgoing response to target
+                await memory_manager.add_incoming_message(
+                    content=request.query,
+                    source_being_id=target_being_id,
+                    session_id=request.session_id,
+                    game_system=request.game_system,
+                    metadata={"mentions": mentions if mentions else []}
+                )
+                await memory_manager.add_outgoing_response(
+                    content=response_text,
+                    target_being_id=target_being_id,
+                    session_id=request.session_id,
+                    game_system=request.game_system,
+                    metadata={"conversation_type": "being_to_being"}
                 )
             
             if target_memory:
-                await target_memory.add_memory(
-                    conversation_text_target,
-                    metadata={
-                        "type": "being_conversation",
-                        "source_being_id": request.being_id,
-                        "session_id": request.session_id,
-                        "game_system": request.game_system,
-                        "timestamp": datetime.now().isoformat()
-                    }
+                # Target being: incoming message from source, outgoing response to source
+                await target_memory.add_incoming_message(
+                    content=request.query,
+                    source_being_id=request.being_id,
+                    session_id=request.session_id,
+                    game_system=request.game_system,
+                    metadata={"mentions": mentions if mentions else []}
+                )
+                await target_memory.add_outgoing_response(
+                    content=response_text,
+                    target_being_id=request.being_id,
+                    session_id=request.session_id,
+                    game_system=request.game_system,
+                    metadata={"conversation_type": "being_to_being"}
                 )
             
-            logger.info(f"Stored being-to-being conversation between {request.being_id} and {target_being_id}")
+            logger.info(f"Stored being-to-being conversation events between {request.being_id} and {target_being_id}")
         elif request.being_id and memory_manager:
-            # Human-to-being conversation: store in being's memory
-            conversation_text = f"User: {request.query}\nBeing: {response_text}"
-            await memory_manager.add_memory(
-                conversation_text,
+            # Human-to-being conversation: store comprehensive events
+            # Determine if source is GM or regular user
+            source_type = "user"
+            if token_data and hasattr(token_data, 'role') and token_data.role == "gm":
+                source_type = "gm"
+            
+            await memory_manager.add_incoming_message(
+                content=request.query,
+                source_being_id=None,  # Human user, not a being
+                session_id=request.session_id,
+                game_system=request.game_system,
                 metadata={
-                    "type": "conversation",
-                    "session_id": request.session_id,
-                    "game_system": request.game_system,
-                    "mentions": mentions if mentions else [],
-                    "timestamp": datetime.now().isoformat()
+                    "source_type": source_type,
+                    "source_user_id": token_data.user_id if token_data else None,
+                    "mentions": mentions if mentions else []
                 }
             )
-            logger.info(f"Stored conversation in memory for being {request.being_id}")
+            await memory_manager.add_outgoing_response(
+                content=response_text,
+                target_being_id=None,  # Response to human
+                session_id=request.session_id,
+                game_system=request.game_system,
+                metadata={"conversation_type": "human_to_being"}
+            )
+            logger.info(f"Stored human-to-being conversation events for being {request.being_id}")
         
         return {
             "service": "Atman (Being Service)",
