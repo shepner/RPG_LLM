@@ -446,6 +446,52 @@ function addBeingChatMessage(beingId, role, content, metadata = {}) {
     return history;
 }
 
+// Render LLM service conversation in being chat interface
+function renderLLMConversationForBeingChat(service) {
+    const messagesDiv = document.getElementById('being-chat-messages');
+    const history = loadLLMConversationHistory(service);
+    const serviceConfig = LLM_SERVICES[service];
+    
+    if (history.length === 0) {
+        messagesDiv.innerHTML = `
+            <div style="text-align: center; color: #888; padding: 40px 20px; font-style: italic;">
+                No messages yet. Start the conversation!
+            </div>
+        `;
+        return;
+    }
+    
+    messagesDiv.innerHTML = history.map(msg => {
+        const isUser = msg.role === 'user';
+        const timestamp = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `
+            <div style="display: flex; gap: 12px; ${isUser ? 'flex-direction: row-reverse;' : ''}">
+                <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${isUser ? '#4a9eff' : serviceConfig.color}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
+                    ${isUser ? '👤' : serviceConfig.icon}
+                </div>
+                <div style="flex: 1; ${isUser ? 'text-align: right;' : ''}">
+                    <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; ${isUser ? 'justify-content: flex-end;' : ''}">
+                        <span style="font-weight: bold; color: ${isUser ? '#4a9eff' : serviceConfig.color}; font-size: 0.9em;">
+                            ${isUser ? 'You' : serviceConfig.name.split(' ')[0]}
+                        </span>
+                        <span style="font-size: 0.75em; color: #888;">${timestamp}</span>
+                    </div>
+                    <div style="background: ${isUser ? '#2a4a6a' : '#2a2a2a'}; padding: 10px 12px; border-radius: 8px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word;">
+                        ${escapeHTML(msg.content)}
+                    </div>
+                    ${!isUser && msg.metadata && msg.metadata.rules_found !== undefined ? `
+                        <div style="font-size: 0.75em; color: #888; margin-top: 4px;">
+                            Rules found: ${msg.metadata.rules_found}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
 // Render being chat conversation
 function renderBeingChat(beingId, beingName) {
     const messagesDiv = document.getElementById('being-chat-messages');
