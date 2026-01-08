@@ -89,10 +89,56 @@ class RuleResolver:
             search_results = await self.rules_indexer.search(action, n_results=5)
             relevant_rules = [r["content"] for r in search_results]
         
+        # Check if this is a character creation action
+        is_character_creation = "create character" in action.lower() or "generate character" in action.lower() or context.get("creation_type") in ["manual", "automatic"]
+        
         # Build prompt for LLM
         rules_context = "\n\n".join(relevant_rules) if relevant_rules else "No specific rules found for this action."
         
-        prompt = f"""You are Ma'at, the Rules Engine for a Tabletop Role-Playing Game system. Your role is to interpret and apply game rules accurately.
+        if is_character_creation:
+            # Special prompt for character creation
+            game_system = context.get("game_system") if context else None
+            flavor_data = context.get("flavor_data") if context else {}
+            
+            prompt = f"""You are Ma'at, the Rules Engine for a Tabletop Role-Playing Game system. You are creating a new character based on the provided rules.
+
+AVAILABLE RULES CONTEXT:
+{rules_context}
+
+CHARACTER CREATION REQUEST:
+{action}
+
+CHARACTER FLAVOR:
+{json.dumps(flavor_data, indent=2) if flavor_data else "Auto-generated"}
+
+GAME SYSTEM:
+{game_system or "Not specified"}
+
+ADDITIONAL CONTEXT:
+{json.dumps({k: v for k, v in (context or {}).items() if k not in ["flavor_data"]}, indent=2)}
+
+Based on the rules provided, you must:
+1. Generate appropriate character statistics (stats) according to the game system rules
+2. Determine starting skills and skill levels
+3. Assign abilities, traits, or special features as per the rules
+4. Ensure all mechanics follow the game system's character creation guidelines
+
+Return your response as JSON with this structure:
+{{
+    "explanation": "Brief explanation of character creation process",
+    "stats": {{"stat_name": value, ...}},
+    "skills": {{"skill_name": value, ...}},
+    "abilities": {{"ability_name": "description", ...}},
+    "game_system": "{game_system or "generic"}",
+    "notes": "Any important notes about this character"
+}}
+
+If the game system is D&D 5e, use standard ability scores (Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma) with values typically 8-15 for starting characters.
+If Pathfinder, use similar ability scores plus additional mechanics.
+If no specific system, use generic stats."""
+        else:
+            # Standard action resolution prompt
+            prompt = f"""You are Ma'at, the Rules Engine for a Tabletop Role-Playing Game system. Your role is to interpret and apply game rules accurately.
 
 AVAILABLE RULES CONTEXT:
 {rules_context}
@@ -113,15 +159,62 @@ Provide a clear explanation of how the rules apply to this action."""
 
         try:
             # Query LLM
+            max_tokens = 2000 if is_character_creation else 500
             response = await self.llm_provider.generate(
                 prompt=prompt,
-                system_prompt="You are Ma'at, the Rules Engine. You interpret and apply game rules with precision and fairness.",
+                system_prompt="You are Ma'at, the Rules Engine. You interpret and apply game rules with precision and fairness." + 
+                             (" When creating characters, you must return valid JSON with stats, skills, and abilities." if is_character_creation else ""),
                 temperature=0.3,  # Lower temperature for more consistent rule interpretation
-                max_tokens=500
+                max_tokens=max_tokens
             )
             
             explanation = response.text
             
+            # For character creation, try to parse JSON from response
+            if is_character_creation:
+                try:
+                    # Try to extract JSON from response (might be wrapped in markdown code blocks)
+                    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', explanation, re.DOTALL)
+                    if json_match:
+                        char_data = json.loads(json_match.group(1))
+                    else:
+                        # Try to find JSON object directly
+                        json_match = re.search(r'\{.*"stats".*\}', explanation, re.DOTALL)
+                        if json_match:
+                            char_data = json.loads(json_match.group(0))
+                        else:
+                            # Fallback: try to parse entire response as JSON
+                            char_data = json.loads(explanation)
+                    
+                    # Extract mechanics from parsed JSON
+                    stats = char_data.get("stats", {})
+                    skills = char_data.get("skills", {})
+                    abilities = char_data.get("abilities", {})
+                    game_system = char_data.get("game_system") or (context.get("game_system") if context else None)
+                    notes = char_data.get("notes", "")
+                    
+                    return Resolution(
+                        rule_id=None,
+                        result=True,  # Character creation succeeded
+                        explanation=char_data.get("explanation", explanation),
+                        metadata={
+                            "action": action,
+                            "context": context or {},
+                            "stats": stats,
+                            "skills": skills,
+                            "abilities": abilities,
+                            "game_system": game_system,
+                            "notes": notes,
+                            "rules_used": [r.get("metadata", {}).get("filename", "unknown") for r in search_results] if relevant_rules else [],
+                            "generated_flavor": char_data.get("generated_flavor", {}) if "generated_flavor" in char_data else None
+                        }
+                    )
+                except (json.JSONDecodeError, KeyError) as e:
+                    # If JSON parsing fails, return explanation but log the error
+                    print(f"Warning: Could not parse character creation JSON from LLM response: {e}")
+                    print(f"Response was: {explanation[:500]}")
+            
+            # Standard action resolution (non-character creation)
             # Try to extract dice notation from response
             dice_match = re.search(r'(\d+d\d+[+-]\d*)', explanation, re.IGNORECASE)
             dice_string = dice_match.group(1) if dice_match else None
