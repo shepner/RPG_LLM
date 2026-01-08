@@ -257,6 +257,66 @@ Respond naturally as your character would. Consider your personality, goals, rel
             logger.warning(f"LLM returned empty response for being {BEING_ID}. Response object: {response}")
             response_text = "I'm sorry, I didn't receive a response. Please try again."
         
+        # Check if character provided their name in the response or user's query
+        # If we don't have a name yet and the user provided one, update the registry
+        try:
+            import httpx
+            being_registry_url = os.getenv("BEING_REGISTRY_URL", "http://localhost:8007")
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                auth_header = {}
+                if http_request:
+                    auth_header_value = http_request.headers.get("Authorization")
+                    if auth_header_value:
+                        auth_header = {"Authorization": auth_header_value}
+                
+                # Check current name
+                registry_check = await client.get(
+                    f"{being_registry_url}/beings/{BEING_ID}",
+                    headers=auth_header
+                )
+                
+                if registry_check.status_code == 200:
+                    registry_entry = registry_check.json()
+                    current_name = registry_entry.get("name")
+                    
+                    # If no name yet, try to extract from response or query
+                    if not current_name:
+                        import re
+                        # Look for patterns like "My name is X" or "I'm X" or "Call me X" or just "X" as first word
+                        name_patterns = [
+                            r"(?:my name is|i'm|i am|call me|name's|name is|i go by)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+                            r"^([A-Z][a-zA-Z]+)(?:\s+here|$)",  # "Aura" or "Aura here"
+                            r"^([A-Z][a-zA-Z]+)(?:\s+is my name|$)",  # "Aura is my name"
+                        ]
+                        
+                        extracted_name = None
+                        # First check user's query
+                        for pattern in name_patterns:
+                            match = re.search(pattern, request.query, re.IGNORECASE)
+                            if match:
+                                extracted_name = match.group(1).strip()
+                                break
+                        
+                        # Then check character's response
+                        if not extracted_name:
+                            for pattern in name_patterns:
+                                match = re.search(pattern, response_text, re.IGNORECASE)
+                                if match:
+                                    extracted_name = match.group(1).strip()
+                                    break
+                        
+                        # If we found a name, update the registry
+                        if extracted_name and len(extracted_name) < 50:  # Sanity check
+                            update_response = await client.put(
+                                f"{being_registry_url}/beings/{BEING_ID}/name",
+                                json={"name": extracted_name},
+                                headers=auth_header
+                            )
+                            if update_response.status_code == 200:
+                                logger.info(f"Updated being name to: {extracted_name}")
+        except Exception as e:
+            logger.warning(f"Could not check/update being name: {e}")
+        
         # Store comprehensive memory events
         source_type = "user"
         if token_data and hasattr(token_data, 'role') and token_data.role == "gm":

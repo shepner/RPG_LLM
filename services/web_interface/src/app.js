@@ -848,8 +848,31 @@ async function submitBeingMessage() {
                 mentions: data.mentions || []
             });
             
+            // Check if character name was updated and refresh it
+            try {
+                const beingResponse = await fetch(`${BEING_REGISTRY_URL}/beings/${currentBeingChatId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (beingResponse.ok) {
+                    const beingData = await beingResponse.json();
+                    const updatedName = beingData.name;
+                    if (updatedName) {
+                        // Update chat header with new name
+                        const nameEl = document.getElementById('being-chat-character-name');
+                        if (nameEl && nameEl.textContent !== updatedName) {
+                            nameEl.textContent = updatedName;
+                        }
+                        // Also update sidebar if this character is listed
+                        await loadUserCharacters();
+                    }
+                }
+            } catch (e) {
+                // Non-critical, continue
+            }
+            
             // Re-render conversation
-            renderBeingChat(currentBeingChatId, document.getElementById('being-chat-character-name').textContent);
+            const currentName = document.getElementById('being-chat-character-name')?.textContent || `Character ${currentBeingChatId.substring(0, 8)}`;
+            renderBeingChat(currentBeingChatId, currentName);
         } else {
             const errorText = await response.text();
             let errorMessage = errorText || 'Failed to send message';
