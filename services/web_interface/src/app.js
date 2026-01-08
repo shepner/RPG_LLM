@@ -1033,6 +1033,12 @@ async function submitBeingMessage() {
                 await loadUserCharacters();
             }
             
+            // Keep focus in input for continuous typing
+            const input = document.getElementById('being-chat-input');
+            if (input) {
+                input.focus();
+            }
+            
             // Re-render conversation
             const currentName = document.getElementById('being-chat-character-name')?.textContent || `Character ${currentBeingChatId.substring(0, 8)}`;
             renderBeingChat(currentBeingChatId, currentName);
