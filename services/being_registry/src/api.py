@@ -582,6 +582,12 @@ async def query_being(
                 detail="Being service is not available. Please ensure the being service is running or recreate the character."
             )
     
+    # Get request body
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
     # Forward the request to the being instance service
     try:
         import httpx
