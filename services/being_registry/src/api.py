@@ -302,8 +302,14 @@ async def create_character(
 
 
 @app.get("/beings/{being_id}", response_model=BeingRegistry)
-async def get_being(being_id: str):
+async def get_being(
+    being_id: str,
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+):
     """Get being registry entry."""
+    if AUTH_AVAILABLE and not token_data:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
     global registry
     if registry is None:
         registry = get_registry()
