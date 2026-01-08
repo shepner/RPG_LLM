@@ -65,6 +65,19 @@ class Registry:
         status: ContainerStatus,
         container_id: Optional[str] = None
     ):
+        """Update container status for a being."""
+        if being_id in self._registry:
+            entry = self._registry[being_id]
+            entry.container_status = status
+            if container_id:
+                entry.container_id = container_id
+    
+    def delete_being(self, being_id: str) -> bool:
+        """Delete a being from the registry."""
+        if being_id in self._registry:
+            del self._registry[being_id]
+            return True
+        return False
         """Update container status."""
         if being_id in self._registry:
             self._registry[being_id].container_status = status

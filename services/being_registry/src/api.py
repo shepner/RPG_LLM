@@ -39,6 +39,9 @@ except (ImportError, Exception) as e:
     import logging
     logger = logging.getLogger(__name__)
     logger.warning(f"Auth middleware not available: {e}")
+else:
+    import logging
+    logger = logging.getLogger(__name__)
     AUTH_AVAILABLE = False
     def require_auth():
         return None
@@ -205,6 +208,42 @@ async def create_character(
             registry = get_registry()
         registry_entry = registry.register_being(being_id, owner_id, request.session_id, name=character_name)
         
+        # Create container for being instance (Phase 2: Container Orchestration)
+        container_id = None
+        service_endpoint = None
+        container_status = ContainerStatus.CREATED
+        
+        try:
+            from .orchestrator import ContainerOrchestrator
+            orchestrator = ContainerOrchestrator()
+            
+            # Create container
+            result = await orchestrator.create_container(being_id)
+            if result:
+                container_id, port = result
+                service_endpoint = f"http://localhost:{port}"
+                
+                # Start container and wait for health
+                started = await orchestrator.start_container(container_id, wait_for_health=True, timeout=30)
+                if started:
+                    container_status = ContainerStatus.RUNNING
+                else:
+                    container_status = ContainerStatus.ERROR
+                    logger.warning(f"Container {container_id} started but health check failed")
+                
+                # Update registry with container info
+                registry.update_status(being_id, container_status, container_id)
+                registry_entry.container_id = container_id
+                registry_entry.container_status = container_status
+                registry_entry.service_endpoint = service_endpoint
+                
+                logger.info(f"Container created for being {being_id}: {container_id} on port {port}")
+            else:
+                logger.warning(f"Could not create container for being {being_id}. Continuing without container.")
+        except Exception as e:
+            logger.error(f"Error creating container for being {being_id}: {e}", exc_info=True)
+            # Continue without container - being can still work with shared service
+        
         # Create ownership record in auth service
         if AUTH_AVAILABLE:
             try:
@@ -325,7 +364,7 @@ async def delete_being(
     http_request: Request,
     token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
 ):
-    """Delete a being/character."""
+    """Delete a being and its container."""
     if AUTH_AVAILABLE and not token_data:
         raise HTTPException(status_code=401, detail="Authentication required")
     
@@ -345,6 +384,17 @@ async def delete_being(
         
         if not (is_owner or is_gm):
             raise HTTPException(status_code=403, detail="You do not have permission to delete this being")
+    
+    # Delete container if it exists
+    if entry.container_id:
+        try:
+            from .orchestrator import ContainerOrchestrator
+            orchestrator = ContainerOrchestrator()
+            await orchestrator.delete_container(entry.container_id, force=True)
+            logger.info(f"Container {entry.container_id} deleted for being {being_id}")
+        except Exception as e:
+            logger.error(f"Error deleting container for being {being_id}: {e}", exc_info=True)
+            # Continue with deletion even if container deletion fails
     
     # Delete from registry
     deleted = registry.delete_being(being_id)

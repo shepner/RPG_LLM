@@ -135,12 +135,26 @@ services:
       - WORLDS_URL=http://worlds:8004
       - GAME_MASTER_URL=http://game_master:8005
       - TIME_MANAGEMENT_URL=http://time_management:8006
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-gemini-2.5-flash}
+      - REDIS_URL=redis://redis:6379
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
     depends_on:
       - being
       - rules_engine
+      - redis
+
+  # Being instance service (base image for dynamic containers)
+  being_instance_base:
+    build:
+      context: .
+      dockerfile: ./services/being_instance/Dockerfile
+    image: rpg_llm_being_instance:latest
+    # This service is not started by default - containers are created dynamically
+    profiles:
+      - no-start
 
   web_interface:
     build:
