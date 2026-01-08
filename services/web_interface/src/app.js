@@ -1160,6 +1160,9 @@ async function loadAllBeings() {
     try {
         // Use being_registry endpoint which has the most up-to-date names
         // Using /beings/all instead of /beings/list to avoid route conflict
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1163',message:'Loading all beings for chat sidebar',data:{endpoint:`${BEING_REGISTRY_URL}/beings/all`},timestamp:Date.now(),sessionId:'debug-session',runId:'char-mgmt',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         const response = await fetch(`${BEING_REGISTRY_URL}/beings/all`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1167,6 +1170,9 @@ async function loadAllBeings() {
         if (response.ok) {
             const data = await response.json();
             const beings = data.characters || [];
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1170',message:'All beings loaded for chat sidebar',data:{count:beings.length,characterIds:beings.map(c=>c.being_id).slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'char-mgmt',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
             allBeingsCache = beings;
             
             // Sort intelligently
