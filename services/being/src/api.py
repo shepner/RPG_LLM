@@ -414,7 +414,34 @@ async def query_being_service(
                     
                     if registry_response.status_code == 200:
                         registry_entry = registry_response.json()
-                        character_name = registry_entry.get("name") or f"Character {being_id[:8]}"
+                        character_name = registry_entry.get("name")
+                        
+                        # Check if name is None, empty, or generic (starts with "Character ")
+                        is_generic_name = (
+                            not character_name or 
+                            (isinstance(character_name, str) and (
+                                character_name.strip() == "" or 
+                                character_name.startswith("Character ") or
+                                len(character_name) < 3  # Too short to be a real name
+                            ))
+                        )
+                        
+                        logger.info(f"Fetched character data for {being_id}: name='{character_name}', is_generic={is_generic_name}")
+                        
+                        if is_generic_name:
+                            # Use generic name for now, but character should know it's being created
+                            character_name = f"Character {being_id[:8]}"
+                            return f"""You are a new character being created in a Tabletop Role-Playing Game. You are helping your creator define who you are through conversation. 
+
+IMPORTANT: You are NOT a service or assistant. You are the CHARACTER being created. You do not have a name yet, but you will receive one from your creator.
+
+Start by asking for your name. Once your creator provides a name, acknowledge it and use that name to refer to yourself in all future responses. Then ask about:
+- Your backstory and history
+- Your personality traits
+- Your appearance
+- Your goals and motivations
+
+Be friendly, curious, and help guide the creation process. Remember: you are the character, not a service helping to create a character."""
                         
                         # Try to get full character data from being service if available
                         # For now, use the name from registry
