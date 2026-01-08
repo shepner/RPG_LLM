@@ -149,6 +149,7 @@ const SYSTEM_VERSION = (typeof window !== 'undefined' && window.BUILD_VERSION) |
 let authToken = null;
 let worldsWS = null;
 let gmWS = null;
+let sessionsWS = null;
 
 // Authentication - login function
 async function performLogin() {
@@ -331,6 +332,30 @@ function connectWebSockets() {
             addNarrative(data.narrative);
         }
     };
+    
+    // Connect to Game Session service for session updates
+    sessionsWS = new WebSocket(`ws://localhost:8001/ws/sessions`);
+    sessionsWS.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'session_updated') {
+            // Update only the sessions list without full page refresh
+            updateSessionsList(data);
+        }
+    };
+    sessionsWS.onerror = (error) => {
+        console.warn('Session WebSocket error:', error);
+        // Fallback to polling if WebSocket fails
+        if (!sessionsAutoRefreshInterval) {
+            startSessionsAutoRefresh();
+        }
+    };
+    sessionsWS.onclose = () => {
+        console.log('Session WebSocket closed, falling back to polling');
+        // Fallback to polling if WebSocket closes
+        if (!sessionsAutoRefreshInterval) {
+            startSessionsAutoRefresh();
+        }
+    };
 }
 
 function disconnectWebSockets() {
@@ -341,6 +366,10 @@ function disconnectWebSockets() {
     if (gmWS) {
         gmWS.close();
         gmWS = null;
+    }
+    if (sessionsWS) {
+        sessionsWS.close();
+        sessionsWS = null;
     }
 }
 
@@ -3481,8 +3510,11 @@ async function initializeSession() {
             // Load initial game state
             await loadGameState();
             
-            // Start auto-refresh for sessions
-            startSessionsAutoRefresh();
+            // Setup create character button
+            setupCreateCharacterButton();
+            
+            // Don't start polling - WebSocket will handle updates
+            // startSessionsAutoRefresh(); // Only used as fallback
             
             // Setup system messages toggle
             setupSystemMessagesToggle();

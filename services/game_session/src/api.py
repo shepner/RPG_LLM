@@ -1,14 +1,22 @@
 """Game session service API."""
 
 import os
+import sys
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from .session_manager import SessionManager
 from .models import GameSession, SessionCreate, SessionUpdate, SessionState, SessionStatus
 
+# Import WebSocket manager
+sys.path.insert(0, '/app/shared/websocket')
+from manager import WebSocketManager
+
 app = FastAPI(title="Game Session Service")
+
+# Initialize WebSocket manager for session updates
+ws_manager = WebSocketManager()
 
 # Add CORS middleware to allow web interface to access this service
 app.add_middleware(
@@ -88,6 +96,17 @@ async def leave_session(session_id: str, user_id: str):
     success = await session_manager.leave_session(session_id, user_id)
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Get updated session
+    updated_session = await session_manager.get_session(session_id)
+    if updated_session:
+        # Broadcast session update via WebSocket
+        await ws_manager.broadcast({
+            "type": "session_updated",
+            "action": "updated",
+            "session": updated_session.model_dump()
+        })
+    
     return {"message": "Left session"}
 
 
