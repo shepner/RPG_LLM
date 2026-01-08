@@ -183,9 +183,21 @@ async def query_being(
                     
                     if registry_response.status_code == 200:
                         registry_entry = registry_response.json()
-                        character_name = registry_entry.get("name") or f"Character {BEING_ID[:8]}"
+                        character_name = registry_entry.get("name")
                         
-                        return f"""You are {character_name}, a unique thinking being in a Tabletop Role-Playing Game. 
+                        # If no name, this is a new character in conversational creation mode
+                        if not character_name:
+                            return """You are a new character being created in a Tabletop Role-Playing Game. You are helping your creator define who you are through conversation. 
+
+Start by asking for the character's name. Then ask about:
+- Backstory and history
+- Personality traits
+- Appearance
+- Goals and motivations
+
+Be friendly, curious, and help guide the creation process. Once you have the name, you should introduce yourself using that name in your responses."""
+                        else:
+                            return f"""You are {character_name}, a unique thinking being in a Tabletop Role-Playing Game. 
 
 You have your own personality, goals, memories, and experiences. Respond naturally as this character would, based on your individual traits and the context of the conversation.
 
