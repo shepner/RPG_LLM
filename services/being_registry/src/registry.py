@@ -51,11 +51,22 @@ class Registry:
         """Get being registry entry as dict."""
         entry = self._registry.get(being_id)
         if entry:
+            # Get name from entry, handling both BeingRegistry objects and dicts
+            name = None
+            if hasattr(entry, 'name'):
+                name = entry.name
+            elif isinstance(entry, dict):
+                name = entry.get('name')
+            
+            # Only use fallback if name is None or empty, not if it starts with "Character "
+            if not name:
+                name = f"Character {being_id[:8]}"
+            
             return {
-                "being_id": entry.being_id,
-                "name": getattr(entry, 'name', f"Character {being_id[:8]}"),
-                "owner_id": entry.owner_id,
-                "session_id": entry.session_id
+                "being_id": entry.being_id if hasattr(entry, 'being_id') else being_id,
+                "name": name,
+                "owner_id": entry.owner_id if hasattr(entry, 'owner_id') else entry.get('owner_id'),
+                "session_id": entry.session_id if hasattr(entry, 'session_id') else entry.get('session_id')
             }
         return None
     
