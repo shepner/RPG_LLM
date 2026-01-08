@@ -694,21 +694,40 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
         }
     });
     
-    // Setup Enter key handler for being chat input (Ctrl+Enter for newline)
+    // Setup Enter key handler for being chat input (Ctrl+Enter or Shift+Enter for newline)
     const inputEl = document.getElementById('being-chat-input');
     if (inputEl) {
         // Remove existing listeners by cloning
         const newInput = inputEl.cloneNode(true);
         inputEl.parentNode.replaceChild(newInput, inputEl);
         
-        newInput.addEventListener('keydown', (e) => {
-            // Enter to send, Ctrl+Enter or Shift+Enter for newline
+        // Store handler reference
+        const keyHandler = (e) => {
+            // Enter alone sends message, Ctrl+Enter or Shift+Enter inserts newline
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                 e.preventDefault();
+                e.stopPropagation();
                 submitBeingMessage();
+                return false;
             }
-            // Ctrl+Enter or Shift+Enter allows newline (default behavior)
-        });
+            // For Ctrl+Enter, Shift+Enter, or Cmd+Enter, allow default (newline)
+        };
+        
+        newInput.addEventListener('keydown', keyHandler, true); // Use capture phase
+        
+        // Also handle at form level to prevent form submission
+        const form = newInput.closest('form');
+        if (form) {
+            const formHandler = (e) => {
+                // Only prevent if it's Enter without modifiers
+                if (e.key === 'Enter' && e.target === newInput && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+            };
+            form.addEventListener('keydown', formHandler, true);
+        }
         
         // Keep focus in input
         newInput.focus();
