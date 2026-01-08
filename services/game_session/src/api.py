@@ -50,6 +50,12 @@ async def create_session(session_data: SessionCreate, gm_user_id: str):
         time_mode_preference=session_data.time_mode_preference,
         settings=session_data.settings
     )
+    # Broadcast session update via WebSocket
+    await ws_manager.broadcast({
+        "type": "session_updated",
+        "action": "created",
+        "session": session.model_dump()
+    })
     return session
 
 
@@ -87,6 +93,16 @@ async def join_session(session_id: str, user_id: str):
     success = await session_manager.join_session(session_id, user_id)
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Get updated session and broadcast
+    updated_session = await session_manager.get_session(session_id)
+    if updated_session:
+        await ws_manager.broadcast({
+            "type": "session_updated",
+            "action": "updated",
+            "session": updated_session.model_dump()
+        })
+    
     return {"message": "Joined session"}
 
 
@@ -129,6 +145,13 @@ async def update_session(
     updated_session = await session_manager.update_session(session_id, session_data)
     if not updated_session:
         raise HTTPException(status_code=500, detail="Failed to update session")
+    
+    # Broadcast session update via WebSocket
+    await ws_manager.broadcast({
+        "type": "session_updated",
+        "action": "updated",
+        "session": updated_session.model_dump()
+    })
     return updated_session
 
 
@@ -155,6 +178,16 @@ async def add_player_to_session(
     success = await session_manager.join_session(session_id, user_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to add player to session")
+    
+    # Get updated session and broadcast
+    updated_session = await session_manager.get_session(session_id)
+    if updated_session:
+        await ws_manager.broadcast({
+            "type": "session_updated",
+            "action": "updated",
+            "session": updated_session.model_dump()
+        })
+    
     return {"message": "Player added to session"}
 
 
@@ -177,6 +210,16 @@ async def remove_player_from_session(
     success = await session_manager.leave_session(session_id, user_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to remove player from session")
+    
+    # Get updated session and broadcast
+    updated_session = await session_manager.get_session(session_id)
+    if updated_session:
+        await ws_manager.broadcast({
+            "type": "session_updated",
+            "action": "updated",
+            "session": updated_session.model_dump()
+        })
+    
     return {"message": "Player removed from session"}
 
 
@@ -195,6 +238,13 @@ async def delete_session(session_id: str, gm_user_id: str = Query(...)):
     success = await session_manager.delete_session(session_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete session")
+    
+    # Broadcast session deletion via WebSocket
+    await ws_manager.broadcast({
+        "type": "session_updated",
+        "action": "deleted",
+        "session_id": session_id
+    })
     return {"message": "Session deleted successfully"}
 
 
