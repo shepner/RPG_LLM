@@ -383,7 +383,43 @@ async def query_being(
     # Get being entry to find service endpoint
     entry = registry.get_being(being_id)
     if not entry:
-        raise HTTPException(status_code=404, detail="Being not found")
+        # Being not in registry - might be an older being created before registry existed
+        # Try to auto-register it by checking auth service
+        logger.info(f"Being {being_id} not found in registry, attempting to auto-register")
+        try:
+            if AUTH_AVAILABLE and token_data:
+                import httpx
+                auth_url = os.getenv("AUTH_URL", "http://localhost:8000")
+                auth_header = request.headers.get("Authorization", "")
+                
+                # Check if being exists in auth service
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    ownership_response = await client.get(
+                        f"{auth_url}/beings/{being_id}/ownership",
+                        headers={"Authorization": auth_header} if auth_header else {}
+                    )
+                    
+                    if ownership_response.status_code == 200:
+                        ownership_data = ownership_response.json()
+                        owner_id = ownership_data.get("owner_id")
+                        
+                        # Auto-register the being
+                        entry = registry.register_being(
+                            being_id=being_id,
+                            owner_id=owner_id,
+                            session_id=None,  # Will be updated when we know the session
+                            name=None  # Will be updated if we can get it
+                        )
+                        logger.info(f"Auto-registered being {being_id} for owner {owner_id}")
+                    else:
+                        raise HTTPException(status_code=404, detail=f"Being not found: {being_id}")
+            else:
+                raise HTTPException(status_code=404, detail=f"Being not found: {being_id}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error auto-registering being {being_id}: {e}", exc_info=True)
+            raise HTTPException(status_code=404, detail=f"Being not found and could not be auto-registered: {being_id}")
     
     # Get service endpoint (either from isolated container or fallback to shared service)
     service_endpoint = entry.service_endpoint if entry.service_endpoint else None
