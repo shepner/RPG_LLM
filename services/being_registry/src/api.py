@@ -45,9 +45,9 @@ try:
 except (ImportError, Exception) as e:
     logger.warning(f"Auth middleware not available: {e}")
     AUTH_AVAILABLE = False
-    def require_auth():
+    async def require_auth(request: Request = None):
         return None
-    def require_gm():
+    async def require_gm(request: Request = None):
         return None
     def get_current_user():
         return None
@@ -699,7 +699,7 @@ async def delete_being(
 @app.get("/beings/list")
 async def list_all_beings(
     request: Request,
-    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else Depends(lambda: None)
+    token_data: Optional[TokenData] = Depends(require_gm)
 ):
     """List all beings/characters (GM only)."""
     if AUTH_AVAILABLE and not token_data:
