@@ -3334,8 +3334,6 @@ window.viewCharacterDetails = async function(beingId) {
     
     try {
         // Try to get character data from being registry
-        // For now, we'll create a minimal character data structure
-        // In the future, we could add an endpoint to get full character data
         const registryResponse = await fetch(`${BEING_REGISTRY_URL}/beings/${beingId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -3355,11 +3353,31 @@ window.viewCharacterDetails = async function(beingId) {
                 },
                 mechanics: {}
             };
+        } else if (registryResponse.status === 404) {
+            // Character not found in registry, but might exist in auth service
+            // Create minimal data structure from available info
+            addSystemMessage(`Character ${beingId.substring(0, 8)} not found in registry. Showing minimal details.`, 'warning');
+            characterData.registry = {
+                being_id: beingId,
+                name: `Character ${beingId.substring(0, 8)}`,
+                owner_id: 'Unknown',
+                session_id: null
+            };
+            characterData.character_data = {
+                flavor: {
+                    name: `Character ${beingId.substring(0, 8)}`
+                },
+                mechanics: {}
+            };
+        } else {
+            const errorText = await registryResponse.text();
+            throw new Error(`Failed to load character: ${registryResponse.status} - ${errorText}`);
         }
         
         showCharacterRecord(characterData);
     } catch (error) {
         console.error('Error loading character details:', error);
+        addSystemMessage(`Error loading character details: ${error.message}`, 'error');
         alert('Error loading character details: ' + error.message);
     }
 };
