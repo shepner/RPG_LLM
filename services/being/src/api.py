@@ -148,7 +148,7 @@ class QueryRequest(BaseModel):
 @app.post("/query")
 async def query_being_service(
     request: QueryRequest,
-    http_request: Request = None,
+    http_request: Request,
     token_data: Optional[TokenData] = Depends(lambda: require_auth() if AUTH_AVAILABLE else None) if AUTH_AVAILABLE else None
 ):
     """
