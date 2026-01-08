@@ -703,30 +703,52 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
         
         // Store handler reference
         const keyHandler = (e) => {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:705',message:'Keydown event',data:{key:e.key,shiftKey:e.shiftKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            
             // Enter alone sends message, Ctrl+Enter or Shift+Enter inserts newline
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:710',message:'Preventing default for Enter',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
                 e.preventDefault();
                 e.stopPropagation();
                 submitBeingMessage();
                 return false;
             }
             // For Ctrl+Enter, Shift+Enter, or Cmd+Enter, allow default (newline)
+            // #region agent log
+            if (e.key === 'Enter') {
+                fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:717',message:'Allowing Enter with modifier',data:{shiftKey:e.shiftKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'B'})}).catch(()=>{});
+            }
+            // #endregion
         };
         
-        newInput.addEventListener('keydown', keyHandler, true); // Use capture phase
+        newInput.addEventListener('keydown', keyHandler);
         
         // Also handle at form level to prevent form submission
         const form = newInput.closest('form');
         if (form) {
+            // Remove inline onsubmit handler that might interfere
+            form.onsubmit = (e) => {
+                e.preventDefault();
+                // Let keyHandler handle Enter key
+                return false;
+            };
+            
             const formHandler = (e) => {
                 // Only prevent if it's Enter without modifiers
                 if (e.key === 'Enter' && e.target === newInput && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:730',message:'Form handler preventing Enter',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'C'})}).catch(()=>{});
+                    // #endregion
                     e.preventDefault();
                     e.stopPropagation();
                     return false;
                 }
             };
-            form.addEventListener('keydown', formHandler, true);
+            form.addEventListener('keydown', formHandler);
         }
         
         // Keep focus in input
