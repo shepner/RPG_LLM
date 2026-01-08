@@ -894,26 +894,83 @@ async function submitBeingMessage() {
                 mentions: data.mentions || []
             });
             
-            // Check if character name was updated and refresh it
-            try {
-                const beingResponse = await fetch(`${BEING_REGISTRY_URL}/beings/${currentBeingChatId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (beingResponse.ok) {
-                    const beingData = await beingResponse.json();
-                    const updatedName = beingData.name;
-                    if (updatedName) {
-                        // Update chat header with new name
-                        const nameEl = document.getElementById('being-chat-character-name');
-                        if (nameEl && nameEl.textContent !== updatedName) {
-                            nameEl.textContent = updatedName;
-                        }
-                        // Also update sidebar if this character is listed
-                        await loadUserCharacters();
+            // Check if character name was provided in the message and update registry
+            // This handles the case where user provides name like "My name is Bob" or "Call me Bob"
+            const currentBeing = await fetch(`${BEING_REGISTRY_URL}/beings/${currentBeingChatId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.ok ? r.json() : null).catch(() => null);
+            
+            if (currentBeing && (!currentBeing.name || currentBeing.name.startsWith('Character '))) {
+                // Try to extract name from user's message or character's response
+                const namePatterns = [
+                    /(?:my name is|i'm|i am|call me|name's|name is|i go by|you can call me)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
+                    /^([A-Z][a-zA-Z]+)(?:\s+here|$)/,  // "Bob" or "Bob here"
+                    /^([A-Z][a-zA-Z]+)(?:\s+is my name|$)/,  // "Bob is my name"
+                ];
+                
+                let extractedName = null;
+                // Check user's message first
+                for (const pattern of namePatterns) {
+                    const match = message.match(pattern);
+                    if (match) {
+                        extractedName = match[1].trim();
+                        break;
                     }
                 }
-            } catch (e) {
-                // Non-critical, continue
+                
+                // Then check character's response
+                if (!extractedName) {
+                    for (const pattern of namePatterns) {
+                        const match = responseText.match(pattern);
+                        if (match) {
+                            extractedName = match[1].trim();
+                            break;
+                        }
+                    }
+                }
+                
+                // Also look for quoted names like "Bob" or 'Bob'
+                if (!extractedName) {
+                    const quotedMatch = responseText.match(/["']([A-Z][a-zA-Z]+)["']/);
+                    if (quotedMatch) {
+                        extractedName = quotedMatch[1].trim();
+                    }
+                }
+                
+                // Update name if found
+                if (extractedName && extractedName.length < 50 && extractedName.length > 1) {
+                    try {
+                        const updateResponse = await fetch(`${BEING_REGISTRY_URL}/beings/${currentBeingChatId}/name`, {
+                            method: 'PUT',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ name: extractedName })
+                        });
+                        
+                        if (updateResponse.ok) {
+                            addSystemMessage(`Character name updated to "${extractedName}"`, 'success');
+                            // Update chat header
+                            const nameEl = document.getElementById('being-chat-character-name');
+                            if (nameEl) {
+                                nameEl.textContent = extractedName;
+                            }
+                            // Refresh sidebar
+                            await loadUserCharacters();
+                            loadAllBeings();
+                        }
+                    } catch (e) {
+                        console.warn('Could not update character name:', e);
+                    }
+                }
+            } else if (currentBeing && currentBeing.name) {
+                // Name already exists, just update UI if needed
+                const nameEl = document.getElementById('being-chat-character-name');
+                if (nameEl && nameEl.textContent !== currentBeing.name) {
+                    nameEl.textContent = currentBeing.name;
+                }
+                await loadUserCharacters();
             }
             
             // Re-render conversation
