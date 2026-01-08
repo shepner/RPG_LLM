@@ -702,10 +702,12 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
         inputEl.parentNode.replaceChild(newInput, inputEl);
         
         newInput.addEventListener('keydown', (e) => {
+            // Enter to send, Ctrl+Enter or Shift+Enter for newline
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                 e.preventDefault();
                 submitBeingMessage();
             }
+            // Ctrl+Enter or Shift+Enter allows newline (default behavior)
         });
         
         // Keep focus in input
@@ -1020,15 +1022,17 @@ async function submitBeingMessage() {
                             fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:968',message:'Verifying name after update',data:{verifyBeing},timestamp:Date.now(),sessionId:'debug-session',runId:'name-update',hypothesisId:'C'})}).catch(()=>{});
                             // #endregion
                             
-                            // Force refresh all character lists
-                            await loadUserCharacters();
-                            loadBeingChatCharacters();
-                            loadAllBeings();
-                            
-                            // Update the current chat if it's the same being
-                            if (currentBeingChatId === window.currentBeingChatId) {
-                                switchBeingChat(currentBeingChatId, extractedName, 'being');
-                            }
+                            // Force refresh all character lists with a small delay to ensure registry is updated
+                            setTimeout(async () => {
+                                await loadUserCharacters();
+                                loadBeingChatCharacters();
+                                await loadAllBeings();
+                                
+                                // Update the current chat if it's the same being
+                                if (currentBeingChatId === window.currentBeingChatId) {
+                                    switchBeingChat(currentBeingChatId, extractedName, 'being');
+                                }
+                            }, 100);
                         } else {
                             const errorText = await updateResponse.text();
                             // #region agent log
@@ -1135,8 +1139,8 @@ async function loadAllBeings() {
     }
     
     try {
-        // Use auth service endpoint which has better ownership info
-        const response = await fetch(`${AUTH_URL}/beings/list`, {
+        // Use being_registry endpoint which has the most up-to-date names
+        const response = await fetch(`${BEING_REGISTRY_URL}/beings/list`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
