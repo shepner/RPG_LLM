@@ -3828,17 +3828,17 @@ function renderCharactersList(characters) {
 }
 
 // Toggle message visibility for players (GM only)
-window.toggleMessageVisibility = function(beingId, messageTimestamp, makeVisible) {
+window.toggleMessageVisibility = function(beingId, messageIndex, messageTimestamp, makeVisible) {
     const currentUser = window.currentUser;
     if (!currentUser || currentUser.role !== 'gm') {
         return; // Only GMs can toggle visibility
     }
     
     const history = loadBeingChatHistory(beingId);
-    const messageIndex = history.findIndex(msg => msg.timestamp === messageTimestamp);
+    const message = history.find(msg => msg.timestamp === messageTimestamp);
     
-    if (messageIndex !== -1) {
-        history[messageIndex].visible_to_players = makeVisible;
+    if (message && message.sender_role === 'gm') {
+        message.visible_to_players = makeVisible;
         saveBeingChatHistory(beingId, history);
         
         // Re-render the chat
