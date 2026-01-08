@@ -389,30 +389,50 @@ async def query_being(
         try:
             if AUTH_AVAILABLE and token_data:
                 import httpx
-                auth_url = os.getenv("AUTH_URL", "http://localhost:8000")
+                auth_url = os.getenv("AUTH_URL", "http://auth:8000")  # Use Docker service name
                 auth_header = request.headers.get("Authorization", "")
                 
-                # Check if being exists in auth service
+                # Check if being exists in auth service by getting all beings and filtering
+                # (auth service doesn't have a direct GET endpoint for single being ownership)
                 async with httpx.AsyncClient(timeout=5.0) as client:
-                    ownership_response = await client.get(
-                        f"{auth_url}/beings/{being_id}/ownership",
+                    # Try to get the being from the list endpoint
+                    list_response = await client.get(
+                        f"{auth_url}/beings/list",
                         headers={"Authorization": auth_header} if auth_header else {}
                     )
                     
-                    if ownership_response.status_code == 200:
-                        ownership_data = ownership_response.json()
-                        owner_id = ownership_data.get("owner_id")
+                    if list_response.status_code == 200:
+                        list_data = list_response.json()
+                        characters = list_data.get("characters", [])
                         
-                        # Auto-register the being
+                        # Find this being in the list
+                        being_info = next((c for c in characters if c.get("being_id") == being_id), None)
+                        
+                        if being_info:
+                            owner_id = being_info.get("owner_id")
+                            
+                            # Auto-register the being
+                            entry = registry.register_being(
+                                being_id=being_id,
+                                owner_id=owner_id,
+                                session_id=None,  # Will be updated when we know the session
+                                name=being_info.get("name")  # Use name from auth if available
+                            )
+                            logger.info(f"Auto-registered being {being_id} for owner {owner_id}")
+                        else:
+                            # Being not in auth service either - might be invalid
+                            logger.warning(f"Being {being_id} not found in auth service either")
+                            raise HTTPException(status_code=404, detail=f"Being not found: {being_id}")
+                    else:
+                        # If list endpoint fails, try using current user as owner (fallback)
+                        logger.warning(f"Could not access auth service list, using current user as owner for {being_id}")
                         entry = registry.register_being(
                             being_id=being_id,
-                            owner_id=owner_id,
-                            session_id=None,  # Will be updated when we know the session
-                            name=None  # Will be updated if we can get it
+                            owner_id=token_data.user_id,
+                            session_id=None,
+                            name=None
                         )
-                        logger.info(f"Auto-registered being {being_id} for owner {owner_id}")
-                    else:
-                        raise HTTPException(status_code=404, detail=f"Being not found: {being_id}")
+                        logger.info(f"Auto-registered being {being_id} with current user {token_data.user_id} as owner")
             else:
                 raise HTTPException(status_code=404, detail=f"Being not found: {being_id}")
         except HTTPException:
