@@ -859,12 +859,17 @@ function renderMentionAutocomplete(matches, autocompleteDiv, input, cursorPos, m
             const beingName = item.dataset.beingName;
             const mentionStart = parseInt(item.dataset.mentionStart);
             const currentValue = input.value;
+            const currentCursorPos = input.selectionStart;
             const textBefore = currentValue.substring(0, mentionStart);
-            const textAfter = currentValue.substring(cursorPos);
-            input.value = textBefore + '@' + beingName + ' ' + textAfter;
+            const textAfter = currentValue.substring(currentCursorPos);
+            const newValue = textBefore + '@' + beingName + ' ' + textAfter;
+            input.value = newValue;
             input.focus();
-            input.setSelectionRange(mentionStart + beingName.length + 2, mentionStart + beingName.length + 2);
+            const newCursorPos = mentionStart + beingName.length + 2;
+            input.setSelectionRange(newCursorPos, newCursorPos);
             hideMentionAutocomplete(autocompleteDiv);
+            // Trigger input event to update autocomplete if needed
+            input.dispatchEvent(new Event('input', { bubbles: true }));
         });
     });
 }
