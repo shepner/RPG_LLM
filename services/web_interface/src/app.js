@@ -550,34 +550,33 @@ function renderBeingChat(beingId, beingName) {
     
     messagesDiv.innerHTML = visibleHistory.map((msg, index) => {
         const isUser = msg.role === 'user';
-        const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+        const timestamp = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const isGMMessage = msg.sender_role === 'gm' && msg.role === 'user';
         const isHidden = isGMMessage && !msg.visible_to_players;
+        const messageId = `msg-${beingId}-${index}-${msg.timestamp}`;
         
         return `
-            <div style="display: flex; gap: 12px; ${isUser ? 'flex-direction: row-reverse;' : ''}" data-message-index="${index}" data-message-timestamp="${msg.timestamp}">
-                <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">
+            <div style="display: flex; gap: 6px; ${isUser ? 'flex-direction: row-reverse;' : ''}" data-message-index="${index}" data-message-timestamp="${msg.timestamp}">
+                ${isGM && isGMMessage ? `
+                    <div style="flex-shrink: 0; display: flex; align-items: flex-start; padding-top: 2px;">
+                        <input type="checkbox" id="${messageId}" ${msg.visible_to_players ? 'checked' : ''} 
+                            onchange="toggleMessageVisibility('${beingId}', ${index}, '${msg.timestamp}', this.checked)"
+                            style="cursor: pointer; width: 16px; height: 16px; margin: 0;"
+                            title="${msg.visible_to_players ? 'Visible to players' : 'Hidden from players'}">
+                    </div>
+                ` : ''}
+                <div style="flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; display: flex; align-items: center; justify-content: center; font-size: 0.9em;">
                     ${isUser ? (isGMMessage ? '👑' : '👤') : '🧠'}
                 </div>
-                <div style="flex: 1; ${isUser ? 'text-align: right;' : ''}">
-                    <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; ${isUser ? 'justify-content: flex-end;' : ''}">
-                        <span style="font-weight: bold; color: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; font-size: 0.9em;">
+                <div style="flex: 1; ${isUser ? 'text-align: right;' : ''} min-width: 0;">
+                    <div style="display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; ${isUser ? 'justify-content: flex-end;' : ''}">
+                        <span style="font-weight: bold; color: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; font-size: 0.8em;">
                             ${isUser ? (isGMMessage ? 'GM' : 'You') : beingName}
                         </span>
-                        ${isGMMessage && !msg.visible_to_players ? '<span style="color: #888; font-size: 0.7em;">(Hidden from players)</span>' : ''}
-                        <span style="font-size: 0.75em; color: #888;">${timestamp}</span>
+                        <span style="font-size: 0.7em; color: #888;">${timestamp}</span>
                     </div>
-                    <div style="background: ${isUser ? (isGMMessage ? '#3a2a1a' : '#2a4a6a') : '#2a1a3a'}; padding: 10px 12px; border-radius: 8px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word; position: relative;">
+                    <div style="background: ${isUser ? (isGMMessage ? '#3a2a1a' : '#2a4a6a') : '#2a1a3a'}; padding: 6px 8px; border-radius: 4px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; font-size: 0.85em; line-height: 1.4;">
                         ${escapeHTML(msg.content)}
-                        ${isGM && isGMMessage ? `
-                            <button onclick="toggleMessageVisibility('${beingId}', '${msg.timestamp}', ${!msg.visible_to_players})" 
-                                style="position: absolute; top: 4px; right: 4px; padding: 2px 6px; background: ${msg.visible_to_players ? '#10b981' : '#666'}; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.7em; opacity: 0.7; transition: opacity 0.2s;"
-                                onmouseover="this.style.opacity='1'" 
-                                onmouseout="this.style.opacity='0.7'"
-                                title="${msg.visible_to_players ? 'Hide from players' : 'Show to players'}">
-                                ${msg.visible_to_players ? '👁️' : '👁️‍🗨️'}
-                            </button>
-                        ` : ''}
                     </div>
                 </div>
             </div>
