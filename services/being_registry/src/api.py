@@ -735,41 +735,35 @@ async def list_all_beings(
 
 
 @app.get("/beings/vicinity/{session_id}")
-async def list_all_beings(
-    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
+async def get_beings_in_vicinity(
+    session_id: str,
+    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
 ):
-    """List all beings/characters (GM only)."""
+    """Get all beings in the same session (vicinity)."""
     if AUTH_AVAILABLE and not token_data:
         raise HTTPException(status_code=401, detail="Authentication required")
     
-    global registry
-    if registry is None:
-        registry = get_registry()
+    registry = get_registry()
+    beings_in_session = []
     
-    # Get all beings from registry
-    all_beings = []
+    # Get all beings in this session from registry
     if hasattr(registry, '_registry'):
         for being_id, entry in registry._registry.items():
-            # Get name from entry (handle both BeingRegistry objects and dicts)
-            name = None
-            if hasattr(entry, 'name'):
-                name = entry.name
-            elif isinstance(entry, dict):
-                name = entry.get('name')
-            
-            # Only use fallback if name is None or empty, not if it starts with "Character "
-            if not name:
+            if hasattr(entry, 'session_id') and entry.session_id == session_id:
+                # Try to get name from registry entry or use being_id as fallback
                 name = f"Character {being_id[:8]}"
-            
-            all_beings.append({
-                "being_id": entry.being_id if hasattr(entry, 'being_id') else being_id,
-                "owner_id": entry.owner_id if hasattr(entry, 'owner_id') else entry.get('owner_id'),
-                "session_id": entry.session_id if hasattr(entry, 'session_id') else entry.get('session_id'),
-                "container_status": entry.container_status.value if hasattr(entry.container_status, 'value') else str(entry.container_status) if hasattr(entry, 'container_status') else None,
-                "name": name
-            })
+                if hasattr(entry, 'name') and entry.name:
+                    name = entry.name
+                elif isinstance(entry, dict) and 'name' in entry:
+                    name = entry['name']
+                
+                beings_in_session.append({
+                    "being_id": being_id,
+                    "name": name,
+                    "owner_id": entry.owner_id if hasattr(entry, 'owner_id') else None
+                })
     
-    return {"characters": all_beings}
+    return {"beings": beings_in_session}
 
 
 @app.post("/beings/{being_id}/migrate")
