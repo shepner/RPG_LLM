@@ -2937,7 +2937,8 @@ document.getElementById('submit-character-btn')?.addEventListener('click', async
         
         if (response.ok) {
             const result = await response.json();
-            alert(`Character created successfully! ID: ${result.being_id}`);
+            
+            // Hide character creation panel
             document.getElementById('character-creation').style.display = 'none';
             
             // Clear form
@@ -2952,6 +2953,9 @@ document.getElementById('submit-character-btn')?.addEventListener('click', async
             
             // Reload all beings list for GM
             loadAllBeings();
+            
+            // Show character record viewer
+            showCharacterRecord(result);
             
             // Character creation is a system action, not narrative
             console.log(`Character "${name || 'Auto-generated'}" created successfully!`);

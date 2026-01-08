@@ -210,6 +210,19 @@
         </div>
     </div>
 
+    <!-- Character Record Viewer Modal -->
+    <div id="character-record-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 10001; align-items: center; justify-content: center; overflow-y: auto; padding: 20px;">
+        <div id="character-record-modal" style="background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 20px; max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); position: relative;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h2 style="color: #e0e0e0; margin: 0; font-size: 1.3em;">Character Record</h2>
+                <button id="character-record-close" style="padding: 6px 12px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">Close</button>
+            </div>
+            <div id="character-record-content" style="color: #e0e0e0;">
+                <!-- Character data will be rendered here -->
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
