@@ -2969,6 +2969,127 @@ document.getElementById('submit-character-btn')?.addEventListener('click', async
     }
 });
 
+// Character Record Viewer
+function showCharacterRecord(characterData) {
+    const overlay = document.getElementById('character-record-overlay');
+    const content = document.getElementById('character-record-content');
+    
+    if (!overlay || !content) return;
+    
+    const charData = characterData.character_data || {};
+    const flavor = charData.flavor || {};
+    const mechanics = charData.mechanics || {};
+    const registry = characterData.registry || {};
+    
+    // Build HTML for character record
+    let html = '<div style="display: flex; flex-direction: column; gap: 16px;">';
+    
+    // Basic Info
+    html += '<div style="background: #1a1a1a; padding: 12px; border-radius: 4px; border-left: 3px solid #4a9eff;">';
+    html += '<h3 style="margin: 0 0 8px 0; color: #4a9eff; font-size: 1.1em;">Basic Information</h3>';
+    html += `<div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 0.9em;">`;
+    html += `<div style="color: #888;">Name:</div><div>${escapeHTML(flavor.name || registry.name || 'Unknown')}</div>`;
+    html += `<div style="color: #888;">Being ID:</div><div style="font-family: monospace; font-size: 0.85em; color: #888;">${escapeHTML(characterData.being_id)}</div>`;
+    html += `<div style="color: #888;">Owner ID:</div><div style="font-family: monospace; font-size: 0.85em; color: #888;">${escapeHTML(registry.owner_id || 'Unknown')}</div>`;
+    if (registry.session_id) {
+        html += `<div style="color: #888;">Session:</div><div style="font-family: monospace; font-size: 0.85em; color: #888;">${escapeHTML(registry.session_id)}</div>`;
+    }
+    html += `</div></div>`;
+    
+    // Flavor Information
+    if (flavor.backstory || flavor.personality || flavor.appearance) {
+        html += '<div style="background: #1a1a1a; padding: 12px; border-radius: 4px; border-left: 3px solid #10b981;">';
+        html += '<h3 style="margin: 0 0 8px 0; color: #10b981; font-size: 1.1em;">Character Flavor</h3>';
+        if (flavor.backstory) {
+            html += `<div style="margin-bottom: 8px;"><strong style="color: #888; font-size: 0.85em;">Backstory:</strong><div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.5;">${escapeHTML(flavor.backstory)}</div></div>`;
+        }
+        if (flavor.personality) {
+            html += `<div style="margin-bottom: 8px;"><strong style="color: #888; font-size: 0.85em;">Personality:</strong><div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.5;">${escapeHTML(flavor.personality)}</div></div>`;
+        }
+        if (flavor.appearance) {
+            html += `<div><strong style="color: #888; font-size: 0.85em;">Appearance:</strong><div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.5;">${escapeHTML(flavor.appearance)}</div></div>`;
+        }
+        html += '</div>';
+    }
+    
+    // Mechanics
+    if (mechanics.stats || mechanics.skills || mechanics.abilities) {
+        html += '<div style="background: #1a1a1a; padding: 12px; border-radius: 4px; border-left: 3px solid #8b5cf6;">';
+        html += '<h3 style="margin: 0 0 8px 0; color: #8b5cf6; font-size: 1.1em;">Mechanics</h3>';
+        if (mechanics.game_system) {
+            html += `<div style="margin-bottom: 8px; font-size: 0.9em;"><strong style="color: #888;">Game System:</strong> ${escapeHTML(mechanics.game_system)}</div>`;
+        }
+        if (mechanics.stats && Object.keys(mechanics.stats).length > 0) {
+            html += '<div style="margin-bottom: 8px;"><strong style="color: #888; font-size: 0.85em;">Stats:</strong><div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px;">';
+            for (const [stat, value] of Object.entries(mechanics.stats)) {
+                html += `<span style="background: #2a2a2a; padding: 4px 8px; border-radius: 3px; font-size: 0.85em;"><strong>${escapeHTML(stat)}:</strong> ${escapeHTML(String(value))}</span>`;
+            }
+            html += '</div></div>';
+        }
+        if (mechanics.skills && Object.keys(mechanics.skills).length > 0) {
+            html += '<div style="margin-bottom: 8px;"><strong style="color: #888; font-size: 0.85em;">Skills:</strong><div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px;">';
+            for (const [skill, value] of Object.entries(mechanics.skills)) {
+                html += `<span style="background: #2a2a2a; padding: 4px 8px; border-radius: 3px; font-size: 0.85em;"><strong>${escapeHTML(skill)}:</strong> ${escapeHTML(String(value))}</span>`;
+            }
+            html += '</div></div>';
+        }
+        if (mechanics.abilities && Object.keys(mechanics.abilities).length > 0) {
+            html += '<div><strong style="color: #888; font-size: 0.85em;">Abilities:</strong><div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px;">';
+            for (const [ability, value] of Object.entries(mechanics.abilities)) {
+                html += `<span style="background: #2a2a2a; padding: 4px 8px; border-radius: 3px; font-size: 0.85em;"><strong>${escapeHTML(ability)}:</strong> ${escapeHTML(String(value))}</span>`;
+            }
+            html += '</div></div>';
+        }
+        html += '</div>';
+    }
+    
+    // Rules Validation
+    if (charData.rules_validation) {
+        const validation = charData.rules_validation;
+        const statusColor = validation.status === 'validated' ? '#10b981' : '#f59e0b';
+        html += '<div style="background: #1a1a1a; padding: 12px; border-radius: 4px; border-left: 3px solid ' + statusColor + ';">';
+        html += '<h3 style="margin: 0 0 8px 0; color: ' + statusColor + '; font-size: 1.1em;">Rules Validation</h3>';
+        html += `<div style="font-size: 0.9em;"><strong style="color: #888;">Status:</strong> <span style="color: ${statusColor};">${escapeHTML(validation.status || 'unknown')}</span></div>`;
+        if (validation.message) {
+            html += `<div style="margin-top: 8px; font-size: 0.9em; color: #bbb; white-space: pre-wrap;">${escapeHTML(validation.message)}</div>`;
+        }
+        html += '</div>';
+    }
+    
+    // Raw Data (collapsible)
+    html += '<div style="background: #1a1a1a; padding: 12px; border-radius: 4px; border-left: 3px solid #666;">';
+    html += '<details style="cursor: pointer;"><summary style="color: #888; font-size: 0.9em; margin-bottom: 8px;">Raw Character Data (JSON)</summary>';
+    html += `<pre style="background: #0a0a0a; padding: 12px; border-radius: 3px; overflow-x: auto; font-size: 0.8em; color: #888; margin: 0;">${escapeHTML(JSON.stringify(characterData, null, 2))}</pre>`;
+    html += '</details></div>';
+    
+    html += '</div>';
+    
+    content.innerHTML = html;
+    overlay.style.display = 'flex';
+    
+    // Close button handler
+    const closeBtn = document.getElementById('character-record-close');
+    if (closeBtn) {
+        closeBtn.onclick = () => {
+            overlay.style.display = 'none';
+        };
+    }
+    
+    // Close on overlay click (outside modal)
+    overlay.onclick = (e) => {
+        if (e.target === overlay) {
+            overlay.style.display = 'none';
+        }
+    };
+}
+
+// Helper function to escape HTML
+function escapeHTML(str) {
+    if (str == null) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
 
 // System Prompts Management Functions
 async function loadPrompts() {
