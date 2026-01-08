@@ -1,11 +1,12 @@
 """Being registry service API."""
 
+import os
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Depends, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from .registry import Registry
-from .models import BeingRegistry
+from .models import BeingRegistry, ContainerStatus
 from .character_creator import CharacterCreator
 from .system_validator import SystemValidator
 
@@ -237,7 +238,10 @@ async def create_character(
                 registry_entry.container_status = container_status
                 registry_entry.service_endpoint = service_endpoint
                 
-                logger.info(f"Container created for being {being_id}: {container_id} on port {port}")
+                # Also update service_endpoint in registry
+                registry.update_service_endpoint(being_id, service_endpoint)
+                
+                logger.info(f"Container created for being {being_id}: {container_id} on port {port}, endpoint: {service_endpoint}")
             else:
                 logger.warning(f"Could not create container for being {being_id}. Continuing without container.")
         except Exception as e:

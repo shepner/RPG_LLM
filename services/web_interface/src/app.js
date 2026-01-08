@@ -781,8 +781,13 @@ async function submitBeingMessage() {
             }
         }
         
-        // Send message to being service
-        const response = await fetch(`${BEING_URL}/query`, {
+        // Send message through being_registry router (Phase 3: Service Discovery)
+        // The registry will route to the appropriate being instance or fallback to shared service
+        const queryUrl = currentBeingChatId 
+            ? `${BEING_REGISTRY_URL}/beings/${currentBeingChatId}/query`
+            : `${BEING_URL}/query`; // Fallback for non-being queries
+        
+        const response = await fetch(queryUrl, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,

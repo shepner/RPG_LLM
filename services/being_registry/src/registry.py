@@ -72,17 +72,16 @@ class Registry:
             if container_id:
                 entry.container_id = container_id
     
-    def delete_being(self, being_id: str) -> bool:
-        """Delete a being from the registry."""
+    def update_service_endpoint(self, being_id: str, service_endpoint: str):
+        """Update service endpoint for a being."""
         if being_id in self._registry:
-            del self._registry[being_id]
-            return True
-        return False
-        """Update container status."""
+            self._registry[being_id].service_endpoint = service_endpoint
+    
+    def get_service_endpoint(self, being_id: str) -> Optional[str]:
+        """Get service endpoint for a being."""
         if being_id in self._registry:
-            self._registry[being_id].container_status = status
-            if container_id:
-                self._registry[being_id].container_id = container_id
+            return self._registry[being_id].service_endpoint
+        return None
     
     def delete_being(self, being_id: str) -> bool:
         """Delete a being from the registry."""
@@ -90,4 +89,3 @@ class Registry:
             del self._registry[being_id]
             return True
         return False
-
