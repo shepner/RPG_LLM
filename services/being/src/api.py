@@ -398,7 +398,8 @@ async def query_being_service(
             """Get character-specific system prompt from being_registry."""
             try:
                 import httpx
-                being_registry_url = os.getenv("BEING_REGISTRY_URL", "http://localhost:8007")
+                # Use Docker service name for inter-container communication
+                being_registry_url = os.getenv("BEING_REGISTRY_URL", "http://being_registry:8007")
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     # Get registry entry
                     auth_header = {}

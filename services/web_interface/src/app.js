@@ -903,9 +903,12 @@ async function submitBeingMessage() {
             if (currentBeing && (!currentBeing.name || currentBeing.name.startsWith('Character '))) {
                 // Try to extract name from user's message or character's response
                 const namePatterns = [
-                    /(?:my name is|i'm|i am|call me|name's|name is|i go by|you can call me|your name is)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
+                    // Match "your name is Bob" or "your name is now Bob" - extract just the name
+                    /(?:your name is|my name is|i'm|i am|call me|name's|name is|i go by|you can call me)\s+(?:now\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i,
                     /^([A-Z][a-zA-Z]+)(?:\s+here|$)/,  // "Bob" or "Bob here"
                     /^([A-Z][a-zA-Z]+)(?:\s+is my name|$)/,  // "Bob is my name"
+                    // Match quoted names - extract just the name part
+                    /["']([A-Z][a-zA-Z]+)["']/,
                 ];
                 
                 // #region agent log
@@ -939,7 +942,7 @@ async function submitBeingMessage() {
                     }
                 }
                 
-                // Also look for quoted names like "Bob" or 'Bob'
+                // Also look for quoted names like "Bob" or 'Bob' (already in patterns, but check separately too)
                 if (!extractedName) {
                     const quotedMatch = responseText.match(/["']([A-Z][a-zA-Z]+)["']/);
                     if (quotedMatch) {
@@ -947,6 +950,17 @@ async function submitBeingMessage() {
                         // #region agent log
                         fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:936',message:'Name extracted from quoted text',data:{extractedName},timestamp:Date.now(),sessionId:'debug-session',runId:'name-update',hypothesisId:'A'})}).catch(()=>{});
                         // #endregion
+                    }
+                }
+                
+                // Clean up extracted name - remove common prefixes like "now", "the", etc.
+                if (extractedName) {
+                    extractedName = extractedName.trim();
+                    // Remove leading words like "now", "the", "a" if they're part of the match
+                    const cleanPattern = /^(?:now|the|a|an)\s+(.+)$/i;
+                    const cleanMatch = extractedName.match(cleanPattern);
+                    if (cleanMatch) {
+                        extractedName = cleanMatch[1].trim();
                     }
                 }
                 
@@ -987,8 +1001,16 @@ async function submitBeingMessage() {
                             // #region agent log
                             fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:968',message:'Verifying name after update',data:{verifyBeing},timestamp:Date.now(),sessionId:'debug-session',runId:'name-update',hypothesisId:'C'})}).catch(()=>{});
                             // #endregion
+                            
+                            // Force refresh all character lists
                             await loadUserCharacters();
+                            loadBeingChatCharacters();
                             loadAllBeings();
+                            
+                            // Update the current chat if it's the same being
+                            if (currentBeingChatId === window.currentBeingChatId) {
+                                switchBeingChat(currentBeingChatId, extractedName, 'being');
+                            }
                         } else {
                             const errorText = await updateResponse.text();
                             // #region agent log
