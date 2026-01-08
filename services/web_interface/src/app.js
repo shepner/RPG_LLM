@@ -345,14 +345,31 @@ function disconnectWebSockets() {
 }
 
 // UI updates
-function addSystemMessage(message) {
+function addSystemMessage(message, type = 'info') {
     const log = document.getElementById('system-messages-log');
     if (!log) return;
     const div = document.createElement('div');
     div.className = 'system-message';
-    div.style.cssText = 'padding: 6px 8px; margin-bottom: 6px; background: #333; border-radius: 3px; border-left: 2px solid #888; font-size: 0.9em; color: #bbb;';
+    
+    // Set color based on type
+    let borderColor = '#888'; // default/info
+    let textColor = '#bbb';
+    if (type === 'error') {
+        borderColor = '#ef4444';
+        textColor = '#ff9999';
+    } else if (type === 'success') {
+        borderColor = '#10b981';
+        textColor = '#99ffcc';
+    } else if (type === 'warning') {
+        borderColor = '#f59e0b';
+        textColor = '#ffcc99';
+    }
+    
+    div.style.cssText = `padding: 6px 8px; margin-bottom: 6px; background: #333; border-radius: 3px; border-left: 2px solid ${borderColor}; font-size: 0.9em; color: ${textColor};`;
     div.textContent = message;
     log.appendChild(div);
+    
+    // Auto-scroll to bottom
     log.scrollTop = log.scrollHeight;
 }
 
