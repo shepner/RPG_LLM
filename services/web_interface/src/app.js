@@ -3296,28 +3296,29 @@ function renderCharactersList(characters) {
         const isInSession = currentSession && char.session_id === currentSession.session_id;
         const canDelete = isOwner || (currentUser && currentUser.role === 'gm');
         
+        const charName = escapeHTML(char.name || `Character ${char.being_id.substring(0, 8)}`);
+        const statusBadges = [];
+        if (isOwner) statusBadges.push('<span style="color: #10b981; font-size: 0.75em;">Owner</span>');
+        if (isAssigned && !isOwner) statusBadges.push('<span style="color: #4a9eff; font-size: 0.75em;">Assigned</span>');
+        if (isInSession) statusBadges.push('<span style="color: #f59e0b; font-size: 0.75em;">In Session</span>');
+        const statusText = statusBadges.length > 0 ? ' • ' + statusBadges.join(' • ') : '';
+        
+        const ownerText = char.owner_username ? ` • ${escapeHTML(char.owner_username)}` : '';
+        const sessionText = char.session_id ? ` • Session: ${char.session_id.substring(0, 8)}` : ' • No Session';
+        
         return `
-            <div style="padding: 10px; margin-bottom: 6px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid ${isOwner ? '#10b981' : isAssigned ? '#4a9eff' : '#888'};">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                    <div style="flex: 1;">
-                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                            <span style="font-size: 1.2em;">🧠</span>
-                            <strong style="color: #e0e0e0; font-size: 1em;">${escapeHTML(char.name || `Character ${char.being_id.substring(0, 8)}`)}</strong>
-                            ${isOwner ? '<span style="color: #10b981; font-size: 0.75em;">(Owner)</span>' : ''}
-                            ${isAssigned && !isOwner ? '<span style="color: #4a9eff; font-size: 0.75em;">(Assigned)</span>' : ''}
-                            ${isInSession ? '<span style="color: #f59e0b; font-size: 0.75em;">(In Session)</span>' : ''}
-                        </div>
-                        <div style="font-size: 0.85em; color: #888; margin-bottom: 4px;">
-                            <div>ID: <code style="font-size: 0.9em; color: #666;">${char.being_id.substring(0, 16)}...</code></div>
-                            ${char.owner_username ? `<div>Owner: ${escapeHTML(char.owner_username)}</div>` : ''}
-                            ${char.session_id ? `<div>Session: <code style="font-size: 0.9em; color: #666;">${char.session_id.substring(0, 16)}...</code></div>` : '<div>No Session</div>'}
-                        </div>
+            <div style="padding: 8px 10px; margin-bottom: 4px; background: #2a2a2a; border-radius: 3px; border-left: 3px solid ${isOwner ? '#10b981' : isAssigned ? '#4a9eff' : '#888'}; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                        <span style="font-size: 1em;">🧠</span>
+                        <strong style="color: #e0e0e0; font-size: 0.9em; white-space: nowrap;">${charName}</strong>
+                        <span style="font-size: 0.75em; color: #888;">${statusText}${ownerText}${sessionText}</span>
                     </div>
-                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                        <button onclick="viewCharacterDetails('${char.being_id}')" style="padding: 6px 12px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">View</button>
-                        <button onclick="openCharacterChat('${char.being_id}', '${escapeHTML(char.name || `Character ${char.being_id.substring(0, 8)}`)}')" style="padding: 6px 12px; background: #8b5cf6; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Chat</button>
-                        ${canDelete ? `<button onclick="deleteCharacter('${char.being_id}', '${escapeHTML(char.name || `Character ${char.being_id.substring(0, 8)}`)}')" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Delete</button>` : ''}
-                    </div>
+                </div>
+                <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                    <button onclick="viewCharacterDetails('${char.being_id}')" style="padding: 4px 8px; background: #4a9eff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em;">View</button>
+                    <button onclick="openCharacterChat('${char.being_id}', '${charName}')" style="padding: 4px 8px; background: #8b5cf6; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em;">Chat</button>
+                    ${canDelete ? `<button onclick="deleteCharacter('${char.being_id}', '${charName}')" style="padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75em;">Delete</button>` : ''}
                 </div>
             </div>
         `;
