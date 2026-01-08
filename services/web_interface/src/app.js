@@ -1959,19 +1959,23 @@ async function loadUserCharacters() {
         if (response.ok) {
             const data = await response.json();
             const select = document.getElementById('character-select');
-            // Clear existing options except the first one
-            while (select.options.length > 1) {
-                select.remove(1);
-            }
             
-            // Add characters to select
-            if (data.characters && data.characters.length > 0) {
-                data.characters.forEach(char => {
-                    const option = document.createElement('option');
-                    option.value = char.being_id;
-                    option.textContent = char.name || char.being_id;
-                    select.appendChild(option);
-                });
+            // Only update if the select element exists (it might not be on all pages)
+            if (select) {
+                // Clear existing options except the first one
+                while (select.options.length > 1) {
+                    select.remove(1);
+                }
+                
+                // Add characters to select
+                if (data.characters && data.characters.length > 0) {
+                    data.characters.forEach(char => {
+                        const option = document.createElement('option');
+                        option.value = char.being_id;
+                        option.textContent = char.name || char.being_id;
+                        select.appendChild(option);
+                    });
+                }
             }
         } else if (response.status === 401) {
             // Token expired or invalid, clear it and show login
