@@ -1206,8 +1206,9 @@ let sessionsAutoRefreshInterval = null;
 
 function startSessionsAutoRefresh() {
     if (!sessionsAutoRefreshInterval) {
-        sessionsAutoRefreshInterval = setInterval(refreshSessions, 5000); // Refresh every 5 seconds
-        console.log("Started sessions auto-refresh.");
+        // Increased interval to 30 seconds to reduce flashing
+        sessionsAutoRefreshInterval = setInterval(refreshSessions, 30000); // Refresh every 30 seconds
+        console.log("Started sessions auto-refresh (30s interval).");
     }
 }
 
@@ -1312,8 +1313,11 @@ async function refreshSessions() {
                 </div>`;
             }).join('');
         
-        // Single DOM update
-        sessionsList.innerHTML = html;
+        // Only update DOM if content actually changed to prevent flashing
+        const currentHtml = sessionsList.innerHTML;
+        if (currentHtml !== html) {
+            sessionsList.innerHTML = html;
+        }
         
         // Update current session indicator
         updateCurrentSessionIndicator();
@@ -2916,7 +2920,7 @@ function startRulesAutoRefresh() {
             // Panel is hidden, stop auto-refresh
             stopRulesAutoRefresh();
         }
-    }, 5000); // Refresh every 5 seconds
+    }, 30000); // Refresh every 30 seconds (reduced from 5s to prevent flashing)
 }
 
 function stopRulesAutoRefresh() {
