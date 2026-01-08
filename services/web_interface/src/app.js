@@ -739,16 +739,25 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
             
             const formHandler = (e) => {
                 // Only prevent if it's Enter without modifiers
-                if (e.key === 'Enter' && e.target === newInput && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:730',message:'Form handler preventing Enter',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'C'})}).catch(()=>{});
-                    // #endregion
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return false;
+                // For Ctrl+Enter, Shift+Enter, or Cmd+Enter, explicitly allow default behavior
+                if (e.key === 'Enter' && e.target === newInput) {
+                    if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:740',message:'Form handler preventing Enter',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'C'})}).catch(()=>{});
+                        // #endregion
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    } else {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:748',message:'Form handler allowing Enter with modifier',data:{shiftKey:e.shiftKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'D'})}).catch(()=>{});
+                        // #endregion
+                        // Explicitly allow default for modifiers - don't prevent or stop
+                        return true;
+                    }
                 }
             };
-            form.addEventListener('keydown', formHandler);
+            form.addEventListener('keydown', formHandler, true); // Use capture phase
         }
         
         // Keep focus in input
