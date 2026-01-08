@@ -159,8 +159,8 @@ async def get_my_characters(
     return {"characters": []}
 
 
-# IMPORTANT: /beings/list must come BEFORE /beings/{being_id} to ensure proper route matching
-@app.get("/beings/list")
+# Use /beings/all instead of /beings/list to avoid route conflict with /beings/{being_id}
+@app.get("/beings/all")
 async def list_all_beings(
     request: Request,
     token_data: Optional[TokenData] = Depends(require_gm)

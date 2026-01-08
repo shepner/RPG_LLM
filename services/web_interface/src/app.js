@@ -1140,7 +1140,8 @@ async function loadAllBeings() {
     
     try {
         // Use being_registry endpoint which has the most up-to-date names
-        const response = await fetch(`${BEING_REGISTRY_URL}/beings/list`, {
+        // Using /beings/all instead of /beings/list to avoid route conflict
+        const response = await fetch(`${BEING_REGISTRY_URL}/beings/all`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
