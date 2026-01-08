@@ -696,39 +696,45 @@ async def delete_being(
     return {"message": "Being deleted successfully", "being_id": being_id}
 
 
-@app.get("/beings/vicinity/{session_id}")
-async def get_beings_in_vicinity(
-    session_id: str,
-    token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
+@app.get("/beings/list")
+async def list_all_beings(
+    token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
 ):
-    """Get all beings in the same session (vicinity)."""
+    """List all beings/characters (GM only)."""
     if AUTH_AVAILABLE and not token_data:
         raise HTTPException(status_code=401, detail="Authentication required")
     
-    registry = get_registry()
-    beings_in_session = []
+    global registry
+    if registry is None:
+        registry = get_registry()
     
-    # Get all beings in this session from registry
+    # Get all beings from registry
+    all_beings = []
     if hasattr(registry, '_registry'):
         for being_id, entry in registry._registry.items():
-            if hasattr(entry, 'session_id') and entry.session_id == session_id:
-                # Try to get name from registry entry or use being_id as fallback
+            # Get name from entry (handle both BeingRegistry objects and dicts)
+            name = None
+            if hasattr(entry, 'name'):
+                name = entry.name
+            elif isinstance(entry, dict):
+                name = entry.get('name')
+            
+            # Only use fallback if name is None or empty, not if it starts with "Character "
+            if not name:
                 name = f"Character {being_id[:8]}"
-                if hasattr(entry, 'name') and entry.name:
-                    name = entry.name
-                elif isinstance(entry, dict) and 'name' in entry:
-                    name = entry['name']
-                
-                beings_in_session.append({
-                    "being_id": being_id,
-                    "name": name,
-                    "owner_id": entry.owner_id if hasattr(entry, 'owner_id') else None
-                })
+            
+            all_beings.append({
+                "being_id": entry.being_id if hasattr(entry, 'being_id') else being_id,
+                "owner_id": entry.owner_id if hasattr(entry, 'owner_id') else entry.get('owner_id'),
+                "session_id": entry.session_id if hasattr(entry, 'session_id') else entry.get('session_id'),
+                "container_status": entry.container_status.value if hasattr(entry.container_status, 'value') else str(entry.container_status) if hasattr(entry, 'container_status') else None,
+                "name": name
+            })
     
-    return {"beings": beings_in_session}
+    return {"characters": all_beings}
 
 
-@app.get("/beings/list")
+@app.get("/beings/vicinity/{session_id}")
 async def list_all_beings(
     token_data: Optional[TokenData] = Depends(require_gm) if AUTH_AVAILABLE else None
 ):
