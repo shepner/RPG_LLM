@@ -19,12 +19,18 @@ require_gm = None
 TokenData = None
 
 try:
+    import importlib.util
     auth_src_path = os.path.join(os.path.dirname(__file__), '../../auth/src')
     if os.path.exists(auth_src_path):
         middleware_path = os.path.join(auth_src_path, 'middleware.py')
         if os.path.exists(middleware_path):
-            sys.path.insert(0, auth_src_path)
-            from middleware import require_auth, require_gm, get_current_user, TokenData
+            spec = importlib.util.spec_from_file_location("auth_middleware", middleware_path)
+            auth_middleware = importlib.util.module_from_spec(spec)
+            auth_middleware.__package__ = 'src'
+            sys.modules['auth_middleware'] = auth_middleware
+            spec.loader.exec_module(auth_middleware)
+            
+            from auth_middleware import require_auth, require_gm, get_current_user, TokenData
             AUTH_AVAILABLE = True
         else:
             raise ImportError(f"Middleware file not found at {middleware_path}")
