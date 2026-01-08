@@ -693,6 +693,24 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
             el.style.background = '#2a2a2a';
         }
     });
+    
+    // Setup Enter key handler for being chat input (Ctrl+Enter for newline)
+    const inputEl = document.getElementById('being-chat-input');
+    if (inputEl) {
+        // Remove existing listeners by cloning
+        const newInput = inputEl.cloneNode(true);
+        inputEl.parentNode.replaceChild(newInput, inputEl);
+        
+        newInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                submitBeingMessage();
+            }
+        });
+        
+        // Keep focus in input
+        newInput.focus();
+    }
 }
 
 // Submit message (handles both beings and LLM services)
