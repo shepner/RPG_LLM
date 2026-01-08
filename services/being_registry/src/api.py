@@ -1,7 +1,7 @@
 """Being registry service API."""
 
 from typing import Optional, Dict, Any
-from fastapi import FastAPI, HTTPException, Depends, Body
+from fastapi import FastAPI, HTTPException, Depends, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from .registry import Registry
@@ -140,6 +140,7 @@ async def get_my_characters(
 @app.post("/beings/create")
 async def create_character(
     request: CharacterCreateRequest,
+    http_request: Request = None,
     token_data: Optional[TokenData] = Depends(require_auth) if AUTH_AVAILABLE else None
 ):
     """Create a new character/being."""
@@ -173,11 +174,106 @@ async def create_character(
                 game_system=request.game_system
             )
         
+        # Get character name from character_data or request
+        character_name = None
+        if not request.automatic and request.name:
+            character_name = request.name
+        elif character_data and isinstance(character_data, dict):
+            character_name = character_data.get('name')
+        elif hasattr(character_data, 'name'):
+            character_name = character_data.name
+        
         # Register the being
         global registry
         if registry is None:
             registry = get_registry()
-        registry_entry = registry.register_being(being_id, owner_id, request.session_id)
+        registry_entry = registry.register_being(being_id, owner_id, request.session_id, name=character_name)
+        
+        # Create ownership record in auth service
+        if AUTH_AVAILABLE:
+            try:
+                # Try to import auth_manager directly and create ownership
+                auth_manager_path = os.path.join(auth_src_path, 'auth_manager.py')
+                if os.path.exists(auth_manager_path):
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location("auth_manager", auth_manager_path)
+                    auth_manager_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(auth_manager_module)
+                    
+                    # Create auth manager instance with same config as auth service
+                    auth_url = os.getenv("AUTH_URL", "http://localhost:8000")
+                    auth_manager_instance = auth_manager_module.AuthManager(
+                        database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./RPG_LLM_DATA/databases/auth.db"),
+                        jwt_secret_key=os.getenv("JWT_SECRET_KEY", "change-me-in-production"),
+                        jwt_algorithm=os.getenv("JWT_ALGORITHM", "HS256"),
+                        jwt_expiration_hours=int(os.getenv("JWT_EXPIRATION", "24").replace("h", ""))
+                    )
+                    
+                    # #region agent log
+                    import json
+                    import time
+                    log_path = os.getenv("DEBUG_LOG_PATH", "/Users/shepner/RPG_LLM/.cursor/debug.log")
+                    try:
+                        with open(log_path, 'a') as f:
+                            f.write(json.dumps({
+                                "location": "being_registry/api.py:create_character",
+                                "message": "Creating ownership record",
+                                "data": {"being_id": being_id, "owner_id": owner_id},
+                                "timestamp": time.time() * 1000,
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A"
+                            }) + "\n")
+                    except Exception:
+                        pass  # Don't fail if logging fails
+                    # #endregion
+                    
+                    await auth_manager_instance.set_being_ownership(
+                        being_id=being_id,
+                        owner_id=owner_id,
+                        created_by=owner_id,
+                        assigned_user_ids=None
+                    )
+                    
+                    # #region agent log
+                    try:
+                        with open(log_path, 'a') as f:
+                            f.write(json.dumps({
+                                "location": "being_registry/api.py:create_character",
+                                "message": "Ownership record created successfully",
+                                "data": {"being_id": being_id},
+                                "timestamp": time.time() * 1000,
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A"
+                            }) + "\n")
+                    except Exception:
+                        pass
+                    # #endregion
+            except Exception as e:
+                # If direct import fails, log but don't fail character creation
+                import logging
+                import json
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Could not create ownership record in auth service: {e}")
+                
+                # #region agent log
+                import time
+                log_path = os.getenv("DEBUG_LOG_PATH", "/Users/shepner/RPG_LLM/.cursor/debug.log")
+                try:
+                    with open(log_path, 'a') as f:
+                        f.write(json.dumps({
+                            "location": "being_registry/api.py:create_character",
+                            "message": "Failed to create ownership record",
+                            "data": {"error": str(e), "being_id": being_id},
+                            "timestamp": time.time() * 1000,
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A"
+                        }) + "\n")
+                except Exception:
+                    pass
+                # #endregion
         
         return {
             "being_id": being_id,

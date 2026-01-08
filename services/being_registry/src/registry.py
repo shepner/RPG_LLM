@@ -25,14 +25,16 @@ class Registry:
         self,
         being_id: str,
         owner_id: str,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        name: Optional[str] = None
     ) -> BeingRegistry:
         """Register a being."""
         registry_entry = BeingRegistry(
             being_id=being_id,
             owner_id=owner_id,
             session_id=session_id,
-            container_status=ContainerStatus.CREATED
+            container_status=ContainerStatus.CREATED,
+            name=name
         )
         self._registry[being_id] = registry_entry
         return registry_entry

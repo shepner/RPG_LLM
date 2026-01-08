@@ -23,4 +23,5 @@ class BeingRegistry(BaseModel):
     service_endpoint: Optional[str] = None
     owner_id: str
     session_id: Optional[str] = None
+    name: Optional[str] = None  # Character name for easier lookup
 

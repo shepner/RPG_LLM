@@ -2950,6 +2950,9 @@ document.getElementById('submit-character-btn')?.addEventListener('click', async
             // Reload characters
             await loadUserCharacters();
             
+            // Reload all beings list for GM
+            loadAllBeings();
+            
             // Character creation is a system action, not narrative
             console.log(`Character "${name || 'Auto-generated'}" created successfully!`);
         } else {
