@@ -703,15 +703,8 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
         
         // Simple handler: Enter sends message, everything else is default behavior
         const keyHandler = (e) => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:705',message:'Keydown event',data:{key:e.key,shiftKey:e.shiftKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'A'})}).catch(()=>{});
-            // #endregion
-            
             // Enter alone (without modifiers) sends message
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:710',message:'Preventing default for Enter, sending message',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'enter-handler',hypothesisId:'A'})}).catch(()=>{});
-                // #endregion
                 e.preventDefault();
                 e.stopPropagation();
                 submitBeingMessage();
