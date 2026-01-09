@@ -100,7 +100,16 @@ class ServiceHandler:
                     
                     if response.status_code == 200:
                         data = response.json()
-                        return data.get("response") or data.get("text")
+                        # Worlds service returns response in "response" field
+                        response_text = data.get("response")
+                        if response_text:
+                            return response_text
+                        # Fallback to error message if present
+                        error_msg = data.get("error")
+                        if error_msg:
+                            return f"Error from {service_info['name']}: {error_msg}"
+                        # If no response, return a default message
+                        return f"Received query but no response from {service_info['name']}"
                     else:
                         logger.error(f"Worlds service returned {response.status_code}: {response.text}")
                         error_msg = f"Error: Could not get response from {service_info['name']}"

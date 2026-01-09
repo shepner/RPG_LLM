@@ -223,12 +223,21 @@ async def handle_webhook(request: Request):
         if response:
             # Post response back to Mattermost
             channel_id = response.get("channel_id") or body.get("channel_id")
-            if channel_id:
-                await bot.post_message(
-                    channel_id=channel_id,
-                    text=response.get("text", ""),
-                    attachments=response.get("attachments")
-                )
+            response_text = response.get("text", "")
+            
+            if channel_id and response_text:
+                logger.info(f"Posting response to channel {channel_id}: {response_text[:100]}")
+                try:
+                    await bot.post_message(
+                        channel_id=channel_id,
+                        text=response_text,
+                        attachments=response.get("attachments")
+                    )
+                    logger.info("Response posted successfully")
+                except Exception as e:
+                    logger.error(f"Error posting response: {e}", exc_info=True)
+            else:
+                logger.warning(f"Cannot post response - channel_id={channel_id}, response_text={bool(response_text)}")
         
         return {"status": "ok"}
         
