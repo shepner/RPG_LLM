@@ -83,6 +83,7 @@ async def handle_webhook(request: Request):
     - Slash commands
     - Outgoing webhooks
     - Incoming webhooks
+    - Direct messages (via incoming webhook from Mattermost)
     """
     if not bot:
         raise HTTPException(status_code=503, detail="Bot not initialized")
@@ -95,6 +96,59 @@ async def handle_webhook(request: Request):
             # Try form data
             form = await request.form()
             body = dict(form)
+        
+        # Check if this is an incoming webhook (has 'text' and 'username' but no 'trigger_word')
+        # This handles DMs sent via incoming webhook
+        if "text" in body and "username" in body and "trigger_word" not in body and "command" not in body:
+            # This might be an incoming webhook for a DM
+            logger.info(f"Received incoming webhook: username={body.get('username')}, text={body.get('text')[:50]}")
+            
+            # Check if it's a DM to a service bot
+            channel_id = body.get("channel_id")
+            user_id = body.get("user_id") or body.get("user_name")
+            message = body.get("text", "").strip()
+            
+            if channel_id and message:
+                # Try to determine if this is a DM with a service bot
+                # We'll check by trying to route it
+                event_data = {
+                    "event": "posted",
+                    "data": {
+                        "post": {
+                            "id": body.get("post_id", "incoming_webhook_post"),
+                            "channel_id": channel_id,
+                            "user_id": user_id,
+                            "message": message
+                        }
+                    }
+                }
+                
+                response = await bot.handle_post_event(event_data)
+                
+                if response:
+                    channel_id = response.get("channel_id") or channel_id
+                    response_text = response.get("text", "")
+                    
+                    if channel_id and response_text:
+                        logger.info(f"Posting DM response to channel {channel_id}")
+                        try:
+                            # For DMs, use the bot username from the message context
+                            # Check if message mentions a service bot
+                            bot_username_for_posting = None
+                            if "@gaia" in message.lower() or message.lower().startswith("gaia"):
+                                bot_username_for_posting = "gaia"
+                            
+                            await bot.post_message(
+                                channel_id=channel_id,
+                                text=response_text,
+                                attachments=response.get("attachments"),
+                                bot_username=bot_username_for_posting
+                            )
+                            logger.info("DM response posted successfully")
+                        except Exception as e:
+                            logger.error(f"Error posting DM response: {e}", exc_info=True)
+                
+                return {"status": "ok"}
         
         # Validate slash command token if present
         if "command" in body and Config.MATTERMOST_SLASH_COMMAND_TOKEN:
