@@ -138,8 +138,12 @@ class ServiceHandler:
                         response_text = data.get("response")
                         if response_text:
                             return response_text
+                        # Check for error field if response is None
+                        error_msg = data.get("error")
+                        if error_msg:
+                            return f"Error from {service_info['name']}: {error_msg}"
                         # Fallback to other fields
-                        return data.get("text") or data.get("message") or str(data)
+                        return data.get("text") or data.get("message") or "No response from Game Master service"
                     else:
                         logger.error(f"Game Master service returned {response.status_code}: {response.text}")
                         error_data = response.json() if response.text else {}
