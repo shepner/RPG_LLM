@@ -68,6 +68,27 @@ async def poll_dm_messages():
                     # Filter for DM channels
                     dm_channels = [c for c in dm_channels if c.get("type") == "D"]
                     logger.debug(f"Found {len(dm_channels)} DM channels")
+                    
+                    # Also ensure we have DMs with service bots
+                    # This creates/joins DMs so rpg-bot can monitor them
+                    service_bot_usernames = ["gaia", "thoth", "maat"]
+                    for service_username in service_bot_usernames:
+                        try:
+                            service_user = bot.driver.users.get_user_by_username(service_username)
+                            if service_user:
+                                service_user_id = service_user["id"]
+                                # Create/join DM with service bot
+                                try:
+                                    dm_channel = bot.driver.channels.create_direct_channel([bot_user_id, service_user_id])
+                                    channel_id = dm_channel.get("id")
+                                    # Add to list if not already there
+                                    if not any(c.get("id") == channel_id for c in dm_channels):
+                                        dm_channels.append(dm_channel)
+                                        logger.info(f"Joined DM with {service_username}: {channel_id}")
+                                except Exception as e:
+                                    logger.debug(f"Could not create/join DM with {service_username}: {e}")
+                        except Exception as e:
+                            logger.debug(f"Could not get service bot {service_username}: {e}")
                 except Exception as e:
                     logger.warning(f"Error getting DM channels: {e}")
                     dm_channels = []
