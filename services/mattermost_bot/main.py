@@ -228,6 +228,14 @@ async def handle_webhook(request: Request):
                 # Remove @ symbol if present
                 bot_username = trigger_word.lstrip("@").lower()
             
+            # Also check if message contains @gaia mention even if trigger_word is just 'gaia'
+            if not bot_username and message:
+                mentions = message.split()
+                for word in mentions:
+                    if word.lower().startswith("@gaia") or word.lower() == "gaia":
+                        bot_username = "gaia"
+                        break
+            
             # Remove trigger word from message if present
             if trigger_word and message.startswith(trigger_word):
                 message = message[len(trigger_word):].strip()
