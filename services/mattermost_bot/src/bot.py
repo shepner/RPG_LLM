@@ -9,6 +9,7 @@ from .channel_manager import ChannelManager
 from .message_router import MessageRouter
 from .character_handler import CharacterHandler
 from .admin_handler import AdminHandler
+from .service_handler import ServiceHandler
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ class MattermostBot:
             self.character_handler = None
         
         self.admin_handler = AdminHandler(self.auth_bridge)
+        self.service_handler = ServiceHandler(self.auth_bridge)
     
     def _connect(self):
         """Connect to Mattermost."""
@@ -119,6 +121,57 @@ class MattermostBot:
                 command, args = self.message_router.parse_command(message)
                 response = await self.admin_handler.handle_command(command, args, user_id)
                 return response
+            
+            # Check if message is in a DM with a service bot or mentions a service bot
+            try:
+                channel_info = self.driver.channels.get_channel(channel_id)
+                channel_type = channel_info.get("type", "")
+                
+                # Check for DM with service bot
+                if channel_type == "D":
+                    # Get other user in DM
+                    other_user_id = None
+                    for member_id in channel_info.get("members", []):
+                        if member_id != user_id:
+                            other_user_id = member_id
+                            break
+                    
+                    if other_user_id:
+                        try:
+                            other_user = self.driver.users.get_user(other_user_id)
+                            other_username = other_user.get("username", "").lower()
+                            
+                            # Check if it's a service bot
+                            if self.service_handler.is_service_bot(other_username):
+                                response_text = await self.service_handler.handle_service_message(
+                                    bot_username=other_username,
+                                    message=message,
+                                    mattermost_user_id=user_id
+                                )
+                                if response_text:
+                                    return {
+                                        "text": response_text,
+                                        "channel_id": channel_id
+                                    }
+                        except Exception as e:
+                            logger.debug(f"Could not check DM user: {e}")
+                
+                # Check for @mentions of service bots
+                mentions = self.message_router.extract_mentions(message)
+                for mentioned_username in mentions:
+                    if self.service_handler.is_service_bot(mentioned_username.lower()):
+                        response_text = await self.service_handler.handle_service_message(
+                            bot_username=mentioned_username.lower(),
+                            message=message,
+                            mattermost_user_id=user_id
+                        )
+                        if response_text:
+                            return {
+                                "text": response_text,
+                                "channel_id": channel_id
+                            }
+            except Exception as e:
+                logger.debug(f"Error checking service bot routing: {e}")
             
             # Otherwise, try to route as character message
             being_id = self.channel_manager.get_being_id_from_channel(channel_id)
