@@ -10,6 +10,9 @@ Usage:
     MATTERMOST_ADMIN_EMAIL=admin@example.com \
     MATTERMOST_ADMIN_PASSWORD=password \
     python3 scripts/create-mattermost-bot.py test "Test Bot" "Test bot for RPG_LLM"
+    
+Note: This script will automatically add the bot to the bot registry.
+For better bot management, use: python3 scripts/manage-bots.py create <username>
 """
 
 import os
@@ -17,12 +20,21 @@ import sys
 import json
 import secrets
 
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 try:
     import requests
 except ImportError:
     print("Error: 'requests' library is required.")
     print("Install it with: pip install requests")
     sys.exit(1)
+
+try:
+    from shared.bot_registry import BotRegistry
+    BOT_REGISTRY_AVAILABLE = True
+except ImportError:
+    BOT_REGISTRY_AVAILABLE = False
 
 def create_bot(username: str, display_name: str = None, description: str = None):
     """Create a bot account in Mattermost."""
@@ -175,6 +187,36 @@ def create_bot(username: str, display_name: str = None, description: str = None)
                     print(f"  System Console → Integrations → Bot Accounts → {username} → Regenerate Token")
                 
                 print("\nYou can now use this bot in Mattermost!")
+                
+                # Add to bot registry if available
+                if BOT_REGISTRY_AVAILABLE and bot_token:
+                    try:
+                        registry = BotRegistry()
+                        registry.add_bot(
+                            username=username,
+                            token=bot_token,
+                            display_name=display_name,
+                            description=description,
+                            user_id=bot_user_id
+                        )
+                        print(f"✅ Bot '{username}' added to bot registry")
+                    except ValueError:
+                        # Bot already in registry, update it
+                        try:
+                            registry.update_bot(
+                                username=username,
+                                token=bot_token,
+                                display_name=display_name,
+                                description=description,
+                                user_id=bot_user_id
+                            )
+                            print(f"✅ Bot '{username}' updated in bot registry")
+                        except Exception as e:
+                            print(f"⚠️  Could not update bot registry: {e}")
+                    except Exception as e:
+                        print(f"⚠️  Could not add bot to registry: {e}")
+                        print("You can add it manually with: python3 scripts/manage-bots.py add")
+                
                 return bot_result
             else:
                 error_data = bot_response.json() if bot_response.text else {}

@@ -42,7 +42,9 @@ class AdminHandler:
         Returns:
             Dictionary with response data for Mattermost
         """
+        logger.info(f"AdminHandler.handle_command: user_id={mattermost_user_id}, username={mattermost_username}, email={mattermost_email}")
         auth_headers = await self.auth_bridge.get_auth_headers(mattermost_user_id, mattermost_username, mattermost_email)
+        logger.info(f"Auth headers received: {list(auth_headers.keys()) if auth_headers else 'EMPTY'}")
         
         handlers = {
             "create-character": self._handle_create_character,
@@ -74,6 +76,7 @@ class AdminHandler:
     
     async def _handle_create_character(self, args: list, auth_headers: Dict, mattermost_user_id: str, mattermost_username: Optional[str] = None, mattermost_email: Optional[str] = None) -> Dict:
         """Handle character creation command."""
+        logger.info(f"_handle_create_character: auth_headers={auth_headers}, user_id={mattermost_user_id}")
         name = args[0] if args else None
         
         request_data = {
@@ -81,12 +84,14 @@ class AdminHandler:
             "conversational": True  # Enable conversational creation
         }
         
+        logger.info(f"Making request to {Config.BEING_REGISTRY_URL}/beings/create with headers: {list(auth_headers.keys())}")
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 f"{Config.BEING_REGISTRY_URL}/beings/create",
                 json=request_data,
                 headers=auth_headers
             )
+            logger.info(f"Response status: {response.status_code}, body: {response.text[:200]}")
             
             if response.status_code == 200:
                 data = response.json()

@@ -8,6 +8,17 @@ from typing import Optional, Dict
 from src.bot import MattermostBot
 from src.config import Config
 
+# Import bot registry for API endpoints
+try:
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
+    from bot_registry import BotRegistry
+    BOT_REGISTRY_AVAILABLE = True
+except ImportError:
+    BOT_REGISTRY_AVAILABLE = False
+    BotRegistry = None
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -98,6 +109,8 @@ async def handle_webhook(request: Request):
             text = body.get("text", "").strip()
             
             logger.info(f"Received slash command: command='{command}', text='{text}'")
+            logger.info(f"DEBUG: Full body keys: {list(body.keys())}")
+            logger.info(f"DEBUG: Body user_id: {body.get('user_id')}, user_name: {body.get('user_name')}, username: {body.get('username')}")
             
             # Handle both formats:
             # 1. /rpg-health (command="/rpg-health", text="")
@@ -114,24 +127,42 @@ async def handle_webhook(request: Request):
                     args = text.split() if text else []
                 
                 logger.info(f"Parsed command: command_name='{command_name}', args={args}")
+                logger.info(f"TEST: About to get user_id from body")
                 
                 user_id = body.get("user_id")
                 channel_id = body.get("channel_id")
+                logger.info(f"TEST: Got user_id={user_id}, channel_id={channel_id}")
                 
                 # Get Mattermost user info for authentication
                 mattermost_username = None
                 mattermost_email = None
+                
+                # First try to get from request body (slash commands include user_name)
+                mattermost_username = body.get("user_name") or body.get("username")
+                logger.info(f"Username from body: {mattermost_username}, user_id: {user_id}")
+                
+                # Try to get more info from Mattermost API if driver is available
                 if bot and bot.driver and user_id:
                     try:
+                        logger.info(f"Attempting to get Mattermost user info for user_id={user_id}")
                         user_info = bot.driver.users.get_user(user_id)
-                        mattermost_username = user_info.get("username")
+                        mattermost_username = mattermost_username or user_info.get("username")
                         mattermost_email = user_info.get("email")
                         logger.info(f"Got Mattermost user info: username={mattermost_username}, email={mattermost_email}")
                     except Exception as e:
-                        logger.warning(f"Could not get Mattermost user info: {e}")
+                        logger.warning(f"Could not get Mattermost user info via API: {e}")
+                        # Continue with username from body if available
+                
+                # If still no username, use user_id as fallback
+                if not mattermost_username and user_id:
+                    mattermost_username = f"mm_user_{user_id[:8]}"
+                    logger.info(f"Using fallback username: {mattermost_username}")
+                
+                logger.info(f"Final auth info: username={mattermost_username}, email={mattermost_email}, user_id={user_id}")
                 
                 if command_name:
                     try:
+                        logger.info(f"Calling handle_command with user_id={user_id}, username={mattermost_username}, email={mattermost_email}")
                         response = await bot.admin_handler.handle_command(
                             command_name, 
                             args, 
@@ -301,3 +332,66 @@ async def health():
         "status": "healthy",
         "bot_initialized": bot is not None
     }
+
+
+# Bot Registry API endpoints
+if BOT_REGISTRY_AVAILABLE:
+    @app.get("/api/bots")
+    async def list_bots(active_only: bool = True):
+        """
+        List all bots in the registry.
+        
+        Args:
+            active_only: If True, only return active bots
+        """
+        try:
+            registry = BotRegistry()
+            bots = registry.list_bots(active_only=active_only)
+            return {
+                "bots": [bot.to_dict() for bot in bots],
+                "count": len(bots)
+            }
+        except Exception as e:
+            logger.error(f"Error listing bots: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/bots/{username}")
+    async def get_bot(username: str):
+        """Get a specific bot by username."""
+        try:
+            registry = BotRegistry()
+            bot_info = registry.get_bot(username)
+            if not bot_info:
+                raise HTTPException(status_code=404, detail=f"Bot '{username}' not found")
+            return bot_info.to_dict()
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error getting bot: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/bots/{username}/token")
+    async def get_bot_token(username: str):
+        """Get a bot's token by username (for internal use)."""
+        try:
+            registry = BotRegistry()
+            token = registry.get_bot_token(username)
+            if not token:
+                raise HTTPException(status_code=404, detail=f"Bot '{username}' not found or inactive")
+            return {"username": username, "token": token}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error getting bot token: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/bots/tokens/all")
+    async def get_all_bot_tokens(active_only: bool = True):
+        """Get all bot tokens (for internal use)."""
+        try:
+            registry = BotRegistry()
+            tokens = registry.get_all_tokens(active_only=active_only)
+            return {"tokens": tokens, "count": len(tokens)}
+        except Exception as e:
+            logger.error(f"Error getting all bot tokens: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
