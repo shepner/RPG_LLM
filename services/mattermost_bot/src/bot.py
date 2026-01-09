@@ -233,22 +233,23 @@ class MattermostBot:
             # Get bot token - prefer specific bot if provided
             bot_token = None
             if bot_username:
-                # Try to get token from registry
+                # Try to read token directly from registry JSON file
                 try:
-                    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
-                    from bot_registry.registry import BotRegistry
-                    # Use the same data directory as configured
-                    import os
+                    import json
                     data_dir = os.getenv("RPG_LLM_DATA_DIR", "/app/RPG_LLM_DATA")
-                    registry = BotRegistry(data_dir=data_dir)
-                    bot_info = registry.get_bot(bot_username)
-                    if bot_info:
-                        bot_token = bot_info.token
-                        logger.info(f"Using token for bot '{bot_username}' from registry")
-                    else:
-                        logger.warning(f"Bot '{bot_username}' not found in registry")
+                    registry_file = os.path.join(data_dir, "bots", "registry.json")
+                    
+                    if os.path.exists(registry_file):
+                        with open(registry_file, 'r') as f:
+                            registry_data = json.load(f)
+                            if bot_username in registry_data:
+                                bot_data = registry_data[bot_username]
+                                if bot_data.get("is_active", True):
+                                    bot_token = bot_data.get("token")
+                                    if bot_token:
+                                        logger.info(f"Using token for bot '{bot_username}' from registry file")
                 except Exception as e:
-                    logger.warning(f"Could not get token from registry for {bot_username}: {e}", exc_info=True)
+                    logger.debug(f"Could not read token from registry file for {bot_username}: {e}")
             
             # Fallback to primary bot token
             if not bot_token:
