@@ -149,7 +149,17 @@ class MattermostBot:
                     if channel_type == "D":
                         # Get other user in DM
                         other_user_id = None
-                        for member_id in channel_info.get("members", []):
+                        # Try to get members from channel info
+                        members = channel_info.get("members", [])
+                        if not members:
+                            # If members not in channel info, try to get them via API
+                            try:
+                                channel_members = self.driver.channels.get_channel_members(channel_id)
+                                members = [m.get("user_id") for m in channel_members]
+                            except Exception:
+                                pass
+                        
+                        for member_id in members:
                             if member_id != user_id:
                                 other_user_id = member_id
                                 break
@@ -171,7 +181,8 @@ class MattermostBot:
                                         logger.info(f"Service bot response generated: {response_text[:100]}")
                                         return {
                                             "text": response_text,
-                                            "channel_id": channel_id
+                                            "channel_id": channel_id,
+                                            "bot_username": other_username  # Include bot username for posting
                                         }
                             except Exception as e:
                                 logger.debug(f"Could not check DM user: {e}")
@@ -269,6 +280,10 @@ class MattermostBot:
                 "channel_id": channel_id,
                 "message": text
             }
+            
+            # Override username to make it appear as the service bot
+            if bot_username:
+                post_data["override_username"] = bot_username
             
             if attachments:
                 post_data["props"] = {"attachments": attachments}

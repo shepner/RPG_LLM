@@ -132,11 +132,35 @@ async def handle_webhook(request: Request):
                     if channel_id and response_text:
                         logger.info(f"Posting DM response to channel {channel_id}")
                         try:
-                            # For DMs, use the bot username from the message context
-                            # Check if message mentions a service bot
-                            bot_username_for_posting = None
-                            if "@gaia" in message.lower() or message.lower().startswith("gaia"):
-                                bot_username_for_posting = "gaia"
+                            # Get bot username from response if available (set by handle_post_event)
+                            bot_username_for_posting = response.get("bot_username")
+                            
+                            # If not in response, try to detect from channel
+                            if not bot_username_for_posting and bot.driver:
+                                try:
+                                    channel_info = bot.driver.channels.get_channel(channel_id)
+                                    if channel_info.get("type") == "D":
+                                        # Get other user in DM
+                                        members = channel_info.get("members", [])
+                                        if not members:
+                                            try:
+                                                channel_members = bot.driver.channels.get_channel_members(channel_id)
+                                                members = [m.get("user_id") for m in channel_members]
+                                            except Exception:
+                                                pass
+                                        
+                                        for member_id in members:
+                                            if member_id != user_id:
+                                                try:
+                                                    other_user = bot.driver.users.get_user(member_id)
+                                                    other_username = other_user.get("username", "").lower()
+                                                    if bot.service_handler.is_service_bot(other_username):
+                                                        bot_username_for_posting = other_username
+                                                        break
+                                                except Exception:
+                                                    pass
+                                except Exception as e:
+                                    logger.debug(f"Could not detect bot from channel: {e}")
                             
                             await bot.post_message(
                                 channel_id=channel_id,
@@ -144,7 +168,7 @@ async def handle_webhook(request: Request):
                                 attachments=response.get("attachments"),
                                 bot_username=bot_username_for_posting
                             )
-                            logger.info("DM response posted successfully")
+                            logger.info(f"DM response posted successfully as {bot_username_for_posting or 'rpg-bot'}")
                         except Exception as e:
                             logger.error(f"Error posting DM response: {e}", exc_info=True)
                 
