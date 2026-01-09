@@ -62,11 +62,14 @@ async def poll_dm_messages():
                 
                 bot_user_id = bot_user["id"]
                 
-                # Get all channels the bot is in
-                channels = bot.driver.channels.get_channels_for_user(bot_user_id, "")
-                
-                # Filter for DM channels
-                dm_channels = [c for c in channels if c.get("type") == "D"]
+                # Get DM channels directly (DMs are not team-specific)
+                try:
+                    dm_channels = bot.driver.channels.get_channels_for_user(bot_user_id, "")
+                    # Filter for DM channels
+                    dm_channels = [c for c in dm_channels if c.get("type") == "D"]
+                except Exception as e:
+                    logger.debug(f"Error getting DM channels: {e}")
+                    dm_channels = []
                 
                 for channel in dm_channels:
                     channel_id = channel.get("id")
@@ -89,6 +92,7 @@ async def poll_dm_messages():
                             
                             # Check if it's a service bot
                             if bot.service_handler.is_service_bot(other_username):
+                                logger.info(f"Found DM channel with service bot: {other_username} (channel: {channel_id})")
                                 # Get recent posts in this channel
                                 try:
                                     # Get posts since last check
