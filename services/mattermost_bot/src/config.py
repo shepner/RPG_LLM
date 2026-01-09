@@ -6,7 +6,16 @@ from typing import Optional, Dict
 from pathlib import Path
 
 # Add shared directory to path for bot registry
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
+# Try multiple paths
+shared_paths = [
+    Path(__file__).parent.parent.parent.parent / "shared",  # From src/config.py -> shared/
+    Path("/app/shared"),  # Docker container path
+    Path(__file__).parent.parent.parent / "shared",  # Alternative
+]
+for shared_path in shared_paths:
+    if shared_path.exists():
+        sys.path.insert(0, str(shared_path))
+        break
 
 try:
     from bot_registry import BotRegistry
