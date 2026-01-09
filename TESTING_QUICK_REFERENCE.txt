@@ -1,0 +1,13 @@
+
+=== Quick Reference ===
+
+1. Start: docker-compose up -d mattermost_db mattermost mattermost_bot
+2. Open: http://localhost:8065
+3. Create admin account
+4. Create bot (System Console → Integrations → Bot Accounts)
+5. Add token to .env: MATTERMOST_BOT_TOKEN=...
+6. Restart: docker-compose restart mattermost_bot
+7. Test: Type '/rpg-health' in Mattermost
+
+See TESTING_GUIDE.md for full details.
+

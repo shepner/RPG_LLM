@@ -84,6 +84,30 @@ async def create_session(session_data: SessionCreate, gm_user_id: str):
         time_mode_preference=session_data.time_mode_preference,
         settings=session_data.settings
     )
+    
+    # Create Mattermost channel for session (if bot service is available)
+    try:
+        import httpx
+        mattermost_bot_url = os.getenv("MATTERMOST_BOT_URL", "http://mattermost_bot:8008")
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            try:
+                # Try to create channel (will fail gracefully if Mattermost not configured)
+                await client.post(
+                    f"{mattermost_bot_url}/create-session-channel",
+                    params={
+                        "session_id": session.session_id,
+                        "session_name": session.name,
+                        "member_mattermost_ids": []  # Will be populated when users join
+                    },
+                    timeout=2.0
+                )
+            except Exception:
+                # Mattermost bot not available or not configured - continue without channel
+                pass
+    except Exception:
+        # Don't fail session creation if Mattermost integration fails
+        pass
+    
     # Broadcast session update via WebSocket
     await ws_manager.broadcast({
         "type": "session_updated",

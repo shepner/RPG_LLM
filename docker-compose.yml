@@ -167,6 +167,66 @@ services:
       - worlds
       - game_master
 
+  mattermost_db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: mmuser
+      POSTGRES_PASSWORD: ${MATTERMOST_DB_PASSWORD:-mmuser_password}
+      POSTGRES_DB: mattermost
+    volumes:
+      - mattermost_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mmuser"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mattermost:
+    image: mattermost/mattermost-team-edition:latest
+    ports:
+      - "8065:8065"
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mmuser:${MATTERMOST_DB_PASSWORD:-mmuser_password}@mattermost_db:5432/mattermost?sslmode=disable&connect_timeout=10
+      MM_SERVICESETTINGS_SITEURL: ${MATTERMOST_SITE_URL:-http://localhost:8065}
+      MM_SERVICESETTINGS_LISTENADDRESS: 0.0.0.0:8065
+    volumes:
+      - mattermost_data:/mattermost/data
+      - mattermost_config:/mattermost/config
+    depends_on:
+      mattermost_db:
+        condition: service_healthy
+
+  mattermost_bot:
+    build:
+      context: .
+      dockerfile: ./services/mattermost_bot/Dockerfile
+    ports:
+      - "8008:8008"
+    environment:
+      - MATTERMOST_URL=${MATTERMOST_URL:-http://mattermost:8065}
+      - MATTERMOST_BOT_TOKEN=${MATTERMOST_BOT_TOKEN}
+      - MATTERMOST_BOT_USERNAME=${MATTERMOST_BOT_USERNAME:-rpg-bot}
+      - AUTH_URL=http://auth:8000
+      - BEING_URL=http://being:8006
+      - BEING_REGISTRY_URL=http://being_registry:8007
+      - GAME_SESSION_URL=http://game_session:8001
+      - GAME_MASTER_URL=http://game_master:8005
+      - RULES_ENGINE_URL=http://rules_engine:8002
+      - WORLDS_URL=http://worlds:8004
+      - TIME_MANAGEMENT_URL=http://time_management:8003
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    volumes:
+      - ./RPG_LLM_DATA:/app/RPG_LLM_DATA
+    depends_on:
+      - mattermost
+      - auth
+      - being
+      - being_registry
+
 volumes:
   redis_data:
+  mattermost_db_data:
+  mattermost_data:
+  mattermost_config:
 

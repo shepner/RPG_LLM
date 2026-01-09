@@ -376,6 +376,31 @@ async def create_character(
                     pass
                 # #endregion
         
+        # Create Mattermost channel for character (if bot service is available)
+        try:
+            mattermost_bot_url = os.getenv("MATTERMOST_BOT_URL", "http://mattermost_bot:8008")
+            # Get Mattermost user ID for owner (would need mapping service)
+            # For now, we'll create the channel without owner mapping
+            # The channel can be created later when user logs into Mattermost
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                try:
+                    # Try to create channel (will fail gracefully if Mattermost not configured)
+                    await client.post(
+                        f"{mattermost_bot_url}/create-character-channel",
+                        params={
+                            "being_id": being_id,
+                            "character_name": character_name or f"Character {being_id[:8]}",
+                            "owner_mattermost_id": ""  # Will be set when user maps their account
+                        },
+                        timeout=2.0
+                    )
+                except Exception:
+                    # Mattermost bot not available or not configured - continue without channel
+                    logger.debug(f"Mattermost bot not available for channel creation (this is okay)")
+        except Exception as e:
+            # Don't fail character creation if Mattermost integration fails
+            logger.debug(f"Could not create Mattermost channel: {e}")
+        
         return {
             "being_id": being_id,
             "registry": registry_entry,

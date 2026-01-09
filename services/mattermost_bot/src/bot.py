@@ -1,0 +1,224 @@
+"""Mattermost bot client."""
+
+import logging
+from typing import Optional
+from mattermostdriver import Driver
+from .config import Config
+from .auth_bridge import AuthBridge
+from .channel_manager import ChannelManager
+from .message_router import MessageRouter
+from .character_handler import CharacterHandler
+from .admin_handler import AdminHandler
+
+logger = logging.getLogger(__name__)
+
+
+class MattermostBot:
+    """Main Mattermost bot class."""
+    
+    def __init__(self):
+        """Initialize Mattermost bot."""
+        # Don't validate token here - allow bot to start for initial setup
+        if not Config.MATTERMOST_BOT_TOKEN:
+            logger.warning("MATTERMOST_BOT_TOKEN not set - bot will not function until configured")
+            self.driver = None
+            return
+        
+        # Initialize Mattermost driver
+        try:
+            # Parse URL to extract components
+            from urllib.parse import urlparse
+            parsed = urlparse(Config.MATTERMOST_URL)
+            
+            self.driver = Driver({
+                "url": parsed.hostname or "mattermost",
+                "token": Config.MATTERMOST_BOT_TOKEN,
+                "scheme": parsed.scheme or "http",
+                "port": parsed.port or 8065,
+                "basepath": "/api/v4",
+                "verify": False  # For self-signed certs in development
+            })
+        except Exception as e:
+            logger.warning(f"Could not initialize Mattermost driver: {e}")
+            self.driver = None
+        
+        # Initialize components
+        self.auth_bridge = AuthBridge()
+        if self.driver:
+            self.channel_manager = ChannelManager(self.driver)
+            self.message_router = MessageRouter(self.channel_manager)
+            self.character_handler = CharacterHandler(self.auth_bridge, self.channel_manager)
+            # Connect to Mattermost
+            self._connect()
+        else:
+            # Create dummy components if driver not available
+            self.channel_manager = None
+            self.message_router = None
+            self.character_handler = None
+        
+        self.admin_handler = AdminHandler(self.auth_bridge)
+    
+    def _connect(self):
+        """Connect to Mattermost."""
+        try:
+            # Test connection
+            user = self.driver.users.get_user_by_username(Config.MATTERMOST_BOT_USERNAME)
+            if user:
+                logger.info(f"Connected to Mattermost as {user['username']}")
+            else:
+                logger.warning("Could not find bot user in Mattermost - bot may not be fully configured")
+        except Exception as e:
+            logger.warning(f"Could not connect to Mattermost: {e}")
+            logger.warning("Bot will start but may not function until Mattermost is configured")
+            # Don't raise - allow bot to start even if Mattermost isn't ready
+    
+    async def handle_post_event(self, event_data: dict) -> Optional[dict]:
+        """
+        Handle a Mattermost post event.
+        
+        Args:
+            event_data: Mattermost event data
+            
+        Returns:
+            Response data for Mattermost, or None
+        """
+        if not self.driver:
+            return {
+                "text": "Bot is not configured. Please set MATTERMOST_BOT_TOKEN in environment variables.",
+                "response_type": "ephemeral"
+            }
+        
+        try:
+            # Extract event information
+            event_type = event_data.get("event")
+            post_data = event_data.get("data", {}).get("post", {})
+            
+            if event_type != "posted":
+                return None
+            
+            # Get post details
+            post_id = post_data.get("id")
+            channel_id = post_data.get("channel_id")
+            user_id = post_data.get("user_id")
+            message = post_data.get("message", "").strip()
+            
+            # Ignore bot's own messages
+            try:
+                bot_user = self.driver.users.get_user_by_username(Config.MATTERMOST_BOT_USERNAME)
+                if bot_user and user_id == bot_user["id"]:
+                    return None
+            except Exception:
+                pass  # Continue if we can't check
+            
+            # Ignore empty messages
+            if not message:
+                return None
+            
+            # Check if it's a command
+            if self.message_router.is_command(message):
+                command, args = self.message_router.parse_command(message)
+                response = await self.admin_handler.handle_command(command, args, user_id)
+                return response
+            
+            # Otherwise, try to route as character message
+            being_id = self.channel_manager.get_being_id_from_channel(channel_id)
+            if being_id:
+                # This is a character DM
+                response_text = await self.character_handler.handle_message(
+                    being_id=being_id,
+                    message=message,
+                    mattermost_user_id=user_id,
+                    channel_id=channel_id
+                )
+                
+                if response_text:
+                    return {
+                        "text": response_text,
+                        "channel_id": channel_id
+                    }
+            
+            # Check if it's a session channel with mentions
+            session_id = self.channel_manager.get_session_id_from_channel(channel_id)
+            if session_id:
+                mentions = self.message_router.extract_mentions(message)
+                if mentions:
+                    # Handle being-to-being conversation
+                    # For now, just return None (would need to resolve mentions to being_ids)
+                    pass
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error handling post event: {e}", exc_info=True)
+            return {
+                "text": f"Error processing message: {str(e)}",
+                "response_type": "ephemeral"
+            }
+    
+    async def post_message(self, channel_id: str, text: str, attachments: Optional[list] = None):
+        """
+        Post a message to a Mattermost channel.
+        
+        Args:
+            channel_id: Mattermost channel ID
+            text: Message text
+            attachments: Optional message attachments
+        """
+        if not self.driver:
+            logger.warning("Cannot post message - bot driver not initialized")
+            return
+        
+        try:
+            post_data = {
+                "channel_id": channel_id,
+                "message": text
+            }
+            
+            if attachments:
+                post_data["props"] = {"attachments": attachments}
+            
+            self.driver.posts.create_post(post_data)
+            logger.info(f"Posted message to channel {channel_id}")
+            
+        except Exception as e:
+            logger.error(f"Error posting message: {e}", exc_info=True)
+    
+    async def create_character_channel(self, being_id: str, character_name: str, owner_mattermost_id: str) -> Optional[str]:
+        """
+        Create a DM channel for a character.
+        
+        Args:
+            being_id: Being ID
+            character_name: Character name
+            owner_mattermost_id: Mattermost user ID of owner
+            
+        Returns:
+            Channel ID if created, None otherwise
+        """
+        if not self.channel_manager:
+            logger.warning("Cannot create channel - bot not initialized")
+            return None
+        
+        return await self.channel_manager.create_character_dm(
+            being_id, character_name, owner_mattermost_id
+        )
+    
+    async def create_session_channel(self, session_id: str, session_name: str, member_mattermost_ids: list) -> Optional[str]:
+        """
+        Create a channel for a game session.
+        
+        Args:
+            session_id: Session ID
+            session_name: Session name
+            member_mattermost_ids: List of Mattermost user IDs
+            
+        Returns:
+            Channel ID if created, None otherwise
+        """
+        if not self.channel_manager:
+            logger.warning("Cannot create channel - bot not initialized")
+            return None
+        
+        return await self.channel_manager.create_session_channel(
+            session_id, session_name, member_mattermost_ids
+        )
