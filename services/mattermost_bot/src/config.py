@@ -11,6 +11,7 @@ class Config:
     MATTERMOST_URL: str = os.getenv("MATTERMOST_URL", "http://localhost:8065")
     MATTERMOST_BOT_TOKEN: Optional[str] = os.getenv("MATTERMOST_BOT_TOKEN")
     MATTERMOST_BOT_USERNAME: str = os.getenv("MATTERMOST_BOT_USERNAME", "rpg-bot")
+    MATTERMOST_SLASH_COMMAND_TOKEN: Optional[str] = os.getenv("MATTERMOST_SLASH_COMMAND_TOKEN")
     
     # RPG Service URLs
     AUTH_URL: str = os.getenv("AUTH_URL", "http://localhost:8000")

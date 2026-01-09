@@ -85,6 +85,13 @@ async def handle_webhook(request: Request):
             form = await request.form()
             body = dict(form)
         
+        # Validate slash command token if present
+        if "command" in body and Config.MATTERMOST_SLASH_COMMAND_TOKEN:
+            token = body.get("token")
+            if token != Config.MATTERMOST_SLASH_COMMAND_TOKEN:
+                logger.warning(f"Invalid slash command token received")
+                raise HTTPException(status_code=401, detail="Invalid token")
+        
         # Check if it's a slash command
         if "command" in body:
             command = body.get("command", "")
