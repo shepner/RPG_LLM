@@ -231,15 +231,22 @@ async def startup_event():
                 registry = BotRegistry()
                 service_bots = ["gaia", "thoth", "maat"]
                 
+                logger.info(f"Loading bot registry from: {registry.registry_path}")
                 for bot_username in service_bots:
                     bot_info = registry.get_bot(bot_username)
-                    if bot_info and bot_info.is_active and bot_info.token:
-                        logger.info(f"Starting DM polling for {bot_username}")
-                        asyncio.create_task(poll_dm_messages_for_bot(bot_username, bot_info.token))
+                    if bot_info:
+                        logger.info(f"Found {bot_username} in registry: active={bot_info.is_active}, has_token={bool(bot_info.token)}")
+                        if bot_info.is_active and bot_info.token:
+                            logger.info(f"Starting DM polling for {bot_username}")
+                            asyncio.create_task(poll_dm_messages_for_bot(bot_username, bot_info.token))
+                        else:
+                            logger.warning(f"Service bot {bot_username} is inactive or missing token")
                     else:
-                        logger.warning(f"Service bot {bot_username} not found or inactive in registry")
+                        logger.warning(f"Service bot {bot_username} not found in registry")
             except Exception as e:
-                logger.warning(f"Could not start service bot DM polling: {e}")
+                logger.error(f"Could not start service bot DM polling: {e}", exc_info=True)
+        else:
+            logger.warning("Bot registry not available - DM polling for service bots disabled")
         
         logger.info("Started DM message polling for service bots")
     except Exception as e:
