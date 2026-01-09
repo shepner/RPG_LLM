@@ -1114,27 +1114,37 @@ async function submitBeingMessage() {
                 addSystemMessage(`Warning: Character "${currentBeingChatId}" returned no response. Check being service logs.`, 'warning');
             }
             
-            // Add response to history
-            addBeingChatMessage(currentBeingChatId, 'assistant', responseText, {
-                target_being_id: targetBeingId,
-                mentions: mentions.length > 0 ? mentions : (data.mentions || [])
-            });
+            // Determine who is responding
+            const currentBeingName = document.getElementById('being-chat-character-name')?.textContent || `Character ${currentBeingChatId.substring(0, 8)}`;
+            let responseLabel = currentBeingName;
             
-            // If message was sent to another being (via @mention), also add it to that being's chat history
+            // If message was sent to another being (via @mention), clarify the response
             if (targetBeingId && targetBeingId !== currentBeingChatId) {
-                // Store message in target being's history so they can see it when they open their chat
                 const targetBeingName = mentions.find(m => m.being_id === targetBeingId)?.name || `Character ${targetBeingId.substring(0, 8)}`;
+                // The current being is responding to the mention
+                responseLabel = `${currentBeingName} (to @${targetBeingName})`;
+                // Notify user that message was sent to mentioned being
+                addSystemMessage(`${currentBeingName} sent a message to @${targetBeingName}`, 'info');
+                
+                // Store message in target being's history so they can see it when they open their chat
                 addBeingChatMessage(targetBeingId, 'user', message, {
                     source_being_id: currentBeingChatId,
+                    source_being_name: currentBeingName,
                     visible_to_players: false
                 });
                 addBeingChatMessage(targetBeingId, 'assistant', responseText, {
                     source_being_id: currentBeingChatId,
+                    source_being_name: currentBeingName,
                     conversation_type: 'being_to_being'
                 });
-                // Notify user that message was sent to mentioned being
-                addSystemMessage(`Message sent to @${targetBeingName}`, 'info');
             }
+            
+            // Add response to history with clear labeling
+            addBeingChatMessage(currentBeingChatId, 'assistant', responseText, {
+                target_being_id: targetBeingId,
+                mentions: mentions.length > 0 ? mentions : (data.mentions || []),
+                response_label: responseLabel
+            });
             
             // Check if character name was provided in the message and update registry
             // This handles the case where user provides name like "My name is Bob" or "Call me Bob"
@@ -1330,7 +1340,7 @@ async function loadBeingChatCharacters() {
             characterList.innerHTML = characters.map(char => `
                 <div class="being-chat-item" data-being-id="${char.being_id}" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 1.1em;">🧠</span>
-                    <span>${char.name || char.being_id.substring(0, 8)}</span>
+                    <span>${escapeHTML(char.name || `Character ${char.being_id.substring(0, 8)}`)}</span>
                 </div>
             `).join('');
             
