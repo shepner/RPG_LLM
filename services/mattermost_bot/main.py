@@ -305,17 +305,20 @@ async def handle_webhook(request: Request):
                     )
                     
                     if response_text:
-                        response = {
+                        # For outgoing webhooks, return the response directly
+                        # Mattermost will post it automatically
+                        logger.info(f"Returning webhook response for Mattermost to post")
+                        return {
                             "text": response_text,
-                            "channel_id": channel_id
+                            "username": bot_username  # This makes it appear as the bot
                         }
                     else:
                         response = None
                 except Exception as e:
                     logger.error(f"Error handling service message: {e}", exc_info=True)
-                    response = {
+                    return {
                         "text": f"Error processing message: {str(e)}",
-                        "channel_id": channel_id
+                        "username": bot_username
                     }
             elif message:
                 # Fallback to regular event handling
@@ -346,8 +349,14 @@ async def handle_webhook(request: Request):
             # Handle the event
             response = await bot.handle_post_event(event_data)
         
+        # If response was already returned (for outgoing webhooks), don't post again
+        if isinstance(response, dict) and "username" in response:
+            # This is a webhook response that Mattermost will post automatically
+            logger.info("Returning webhook response for Mattermost to post automatically")
+            return response
+        
         if response:
-            # Post response back to Mattermost
+            # Post response back to Mattermost (for other webhook types)
             channel_id = response.get("channel_id") or body.get("channel_id")
             response_text = response.get("text", "")
             
