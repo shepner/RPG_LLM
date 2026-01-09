@@ -702,8 +702,20 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
         const newInput = inputEl.cloneNode(true);
         inputEl.parentNode.replaceChild(newInput, inputEl);
         
+        // Setup @mention autocomplete FIRST (so it can handle keys before the Enter handler)
+        setupMentionAutocomplete(newInput);
+        
         // Simple handler: Enter sends message, everything else is default behavior
+        // This runs AFTER autocomplete handler, so autocomplete can prevent default if needed
         const keyHandler = (e) => {
+            // If autocomplete is visible, let it handle Enter/Tab
+            if (mentionAutocompleteVisible) {
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                    // Autocomplete handler will handle this, don't interfere
+                    return;
+                }
+            }
+            
             // Enter alone (without modifiers) sends message
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                 e.preventDefault();
@@ -715,9 +727,6 @@ function switchBeingChat(beingId, beingName, chatType = 'being') {
         };
         
         newInput.addEventListener('keydown', keyHandler);
-        
-        // Setup @mention autocomplete
-        setupMentionAutocomplete(newInput);
         
         // Prevent form submission on Enter (handled by keyHandler above)
         const form = newInput.closest('form');
@@ -824,22 +833,47 @@ function setupMentionAutocomplete(input) {
         
         if (e.key === 'ArrowDown') {
             e.preventDefault();
+            e.stopPropagation();
             mentionAutocompleteSelectedIndex = Math.min(mentionAutocompleteSelectedIndex + 1, document.querySelectorAll('#mention-autocomplete .mention-item').length - 1);
             updateMentionAutocompleteSelection();
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
+            e.stopPropagation();
             mentionAutocompleteSelectedIndex = Math.max(mentionAutocompleteSelectedIndex - 1, -1);
             updateMentionAutocompleteSelection();
-        } else if (e.key === 'Enter' && mentionAutocompleteSelectedIndex >= 0) {
+        } else if (e.key === 'Enter') {
             e.preventDefault();
+            e.stopPropagation();
             const items = document.querySelectorAll('#mention-autocomplete .mention-item');
-            if (items[mentionAutocompleteSelectedIndex]) {
-                items[mentionAutocompleteSelectedIndex].click();
+            // If something is selected, use it; otherwise use first item
+            const selectedIndex = mentionAutocompleteSelectedIndex >= 0 ? mentionAutocompleteSelectedIndex : 0;
+            if (items[selectedIndex]) {
+                items[selectedIndex].click();
+            } else if (items.length > 0) {
+                items[0].click();
+            }
+        } else if (e.key === 'Tab') {
+            e.preventDefault();
+            e.stopPropagation();
+            const items = document.querySelectorAll('#mention-autocomplete .mention-item');
+            // Tab selects first item if nothing selected, or moves to next
+            if (mentionAutocompleteSelectedIndex < 0 && items.length > 0) {
+                mentionAutocompleteSelectedIndex = 0;
+                updateMentionAutocompleteSelection();
+            } else if (items[mentionAutocompleteSelectedIndex + 1]) {
+                mentionAutocompleteSelectedIndex++;
+                updateMentionAutocompleteSelection();
+            } else if (items.length > 0) {
+                // Wrap to first
+                mentionAutocompleteSelectedIndex = 0;
+                updateMentionAutocompleteSelection();
             }
         } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
             hideMentionAutocomplete(autocompleteDiv);
         }
-    });
+    }, true); // Use capture phase to run before other handlers
     
     // Hide autocomplete when clicking outside
     document.addEventListener('click', (e) => {
@@ -1325,17 +1359,52 @@ async function submitBeingMessage() {
 // Load user's characters for being chat
 async function loadBeingChatCharacters() {
     const token = authToken || localStorage.getItem('authToken');
-    if (!token) return;
+    
+    // #region agent log
+    console.log('loadBeingChatCharacters called', { hasToken: !!token });
+    fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1326',message:'loadBeingChatCharacters called',data:{hasToken:!!token},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    
+    if (!token) {
+        console.warn('No token available for loadBeingChatCharacters');
+        return;
+    }
     
     try {
         const response = await fetch(`${BEING_REGISTRY_URL}/beings/my-characters`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
+        // #region agent log
+        console.log('Characters fetch response', { status: response.status, ok: response.ok });
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1334',message:'Characters fetch response',data:{status:response.status,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        
         if (response.ok) {
             const data = await response.json();
             const characters = data.characters || [];
+            
+            // #region agent log
+            console.log('Characters loaded', { count: characters.length, ids: characters.map(c => c.being_id) });
+            fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1340',message:'Characters loaded',data:{characterCount:characters.length,characterIds:characters.map(c=>c.being_id),characterNames:characters.map(c=>c.name)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            
             const characterList = document.getElementById('being-character-list');
+            
+            // #region agent log
+            console.log('Character list element check', { elementExists: !!characterList });
+            fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1345',message:'Character list element check',data:{elementExists:!!characterList},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            
+            if (!characterList) {
+                console.error('being-character-list element not found in DOM');
+                return;
+            }
+            
+            if (characters.length === 0) {
+                characterList.innerHTML = '<div style="color: #888; font-size: 0.85em; padding: 8px; font-style: italic;">No characters yet</div>';
+                return;
+            }
             
             characterList.innerHTML = characters.map(char => `
                 <div class="being-chat-item" data-being-id="${char.being_id}" style="padding: 8px 10px; border-radius: 4px; cursor: pointer; background: #2a2a2a; color: #e0e0e0; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
@@ -1354,9 +1423,17 @@ async function loadBeingChatCharacters() {
                     });
                 }
             });
+        } else {
+            // #region agent log
+            console.error('Failed to load characters:', response.status);
+            fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1370',message:'Characters fetch failed',data:{status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
         }
     } catch (error) {
+        // #region agent log
         console.error('Error loading characters:', error);
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1375',message:'Error loading characters',data:{error:error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
     }
 }
 
