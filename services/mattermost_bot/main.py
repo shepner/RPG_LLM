@@ -95,20 +95,56 @@ async def handle_webhook(request: Request):
         # Check if it's a slash command
         if "command" in body:
             command = body.get("command", "")
-            if command.startswith("/rpg-"):
-                command_name = command[5:]  # Remove "/rpg-" prefix
-                args = body.get("text", "").split() if body.get("text") else []
+            text = body.get("text", "").strip()
+            
+            logger.info(f"Received slash command: command='{command}', text='{text}'")
+            
+            # Handle both formats:
+            # 1. /rpg-health (command="/rpg-health", text="")
+            # 2. /rpg health (command="/rpg", text="health")
+            if command == "/rpg" or command.startswith("/rpg-"):
+                if command == "/rpg":
+                    # Format: /rpg health -> command_name="health"
+                    parts = text.split() if text else []
+                    command_name = parts[0] if parts else ""
+                    args = parts[1:] if len(parts) > 1 else []
+                else:
+                    # Format: /rpg-health -> command_name="health"
+                    command_name = command[5:]  # Remove "/rpg-" prefix
+                    args = text.split() if text else []
+                
+                logger.info(f"Parsed command: command_name='{command_name}', args={args}")
+                
                 user_id = body.get("user_id")
                 channel_id = body.get("channel_id")
                 
-                response = await bot.admin_handler.handle_command(command_name, args, user_id)
+                if command_name:
+                    try:
+                        response = await bot.admin_handler.handle_command(command_name, args, user_id)
+                        logger.info(f"Command response: {response}")
+                    except Exception as e:
+                        logger.error(f"Error handling command: {e}", exc_info=True)
+                        response = {
+                            "text": f"Error executing command: {str(e)}",
+                            "response_type": "ephemeral"
+                        }
+                else:
+                    # No subcommand provided - show help
+                    response = {
+                        "text": "Available commands: `/rpg health`, `/rpg create-character [name]`, `/rpg list-characters`, `/rpg create-session [name]`, `/rpg roll <dice>`, `/rpg world-event <description>`, `/rpg system-status`",
+                        "response_type": "ephemeral"
+                    }
                 
                 # Return response for Mattermost slash command
-                return {
-                    "response_type": response.get("response_type", "in_channel"),
+                result = {
+                    "response_type": response.get("response_type", "ephemeral"),
                     "text": response.get("text", ""),
-                    "attachments": response.get("attachments", [])
                 }
+                if "attachments" in response:
+                    result["attachments"] = response.get("attachments", [])
+                
+                logger.info(f"Returning response: {result}")
+                return result
         
         # Otherwise, treat as webhook event
         event_data = {
