@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY services/mattermost_bot/src/ ./src/
 COPY services/mattermost_bot/main.py .
+COPY shared/ ./shared/
 
 ENV PYTHONPATH=/app
 
