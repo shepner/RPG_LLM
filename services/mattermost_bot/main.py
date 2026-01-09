@@ -211,14 +211,49 @@ async def handle_webhook(request: Request):
                 logger.info(f"Returning response: {result}")
                 return result
         
-        # Otherwise, treat as webhook event
-        event_data = {
-            "event": body.get("event", "posted"),
-            "data": body.get("data", body)
-        }
+        # Check if it's an outgoing webhook (has trigger_word)
+        if "trigger_word" in body or "text" in body:
+            # This is an outgoing webhook from Mattermost
+            logger.info(f"Received outgoing webhook: trigger_word={body.get('trigger_word')}, text={body.get('text')}")
+            
+            # Extract message and channel info
+            message = body.get("text", "").strip()
+            channel_id = body.get("channel_id")
+            user_id = body.get("user_id")
+            trigger_word = body.get("trigger_word", "")
+            
+            # Remove trigger word from message if present
+            if trigger_word and message.startswith(trigger_word):
+                message = message[len(trigger_word):].strip()
+            
+            if message:
+                # Create event data format
+                event_data = {
+                    "event": "posted",
+                    "data": {
+                        "post": {
+                            "id": body.get("post_id", "webhook_post"),
+                            "channel_id": channel_id,
+                            "user_id": user_id,
+                            "message": message
+                        }
+                    }
+                }
+                
+                # Handle the event
+                response = await bot.handle_post_event(event_data)
+            else:
+                response = None
         
-        # Handle the event
-        response = await bot.handle_post_event(event_data)
+        # Otherwise, treat as regular webhook event
+        else:
+            event_data = {
+                "event": body.get("event", "posted"),
+                "data": body.get("data", body)
+            }
+            
+            # Handle the event
+            response = await bot.handle_post_event(event_data)
         
         if response:
             # Post response back to Mattermost
