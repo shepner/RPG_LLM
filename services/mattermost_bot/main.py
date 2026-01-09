@@ -67,8 +67,9 @@ async def poll_dm_messages():
                     dm_channels = bot.driver.channels.get_channels_for_user(bot_user_id, "")
                     # Filter for DM channels
                     dm_channels = [c for c in dm_channels if c.get("type") == "D"]
+                    logger.debug(f"Found {len(dm_channels)} DM channels")
                 except Exception as e:
-                    logger.debug(f"Error getting DM channels: {e}")
+                    logger.warning(f"Error getting DM channels: {e}")
                     dm_channels = []
                 
                 for channel in dm_channels:
