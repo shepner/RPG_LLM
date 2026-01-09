@@ -22,7 +22,7 @@ class ServiceHandler:
         "thoth": {
             "name": "Thoth (Game Master Service)",
             "url": Config.GAME_MASTER_URL,
-            "endpoint": "/narrate"  # May need adjustment
+            "endpoint": "/query"  # Game Master query endpoint
         }
     }
     
