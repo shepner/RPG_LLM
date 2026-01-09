@@ -41,6 +41,67 @@ app.add_middleware(
 bot: Optional[MattermostBot] = None
 
 
+async def poll_dm_messages():
+    """Poll for new DM messages with service bots."""
+    import asyncio
+    while True:
+        try:
+            await asyncio.sleep(5)  # Poll every 5 seconds
+            
+            if not bot or not bot.driver:
+                continue
+            
+            try:
+                # Get bot user ID
+                bot_user = bot.driver.users.get_user_by_username(Config.MATTERMOST_BOT_USERNAME)
+                if not bot_user:
+                    continue
+                
+                bot_user_id = bot_user["id"]
+                
+                # Get all channels the bot is in
+                channels = bot.driver.channels.get_channels_for_user(bot_user_id, "")
+                
+                # Filter for DM channels
+                dm_channels = [c for c in channels if c.get("type") == "D"]
+                
+                for channel in dm_channels:
+                    channel_id = channel.get("id")
+                    
+                    # Get channel members to identify the service bot
+                    try:
+                        members = bot.driver.channels.get_channel_members(channel_id)
+                        member_ids = [m.get("user_id") for m in members]
+                        
+                        # Find the other user (not the bot)
+                        other_user_id = None
+                        for member_id in member_ids:
+                            if member_id != bot_user_id:
+                                other_user_id = member_id
+                                break
+                        
+                        if other_user_id:
+                            other_user = bot.driver.users.get_user(other_user_id)
+                            other_username = other_user.get("username", "").lower()
+                            
+                            # Check if it's a service bot
+                            if bot.service_handler.is_service_bot(other_username):
+                                # Get recent posts in this channel
+                                # We'll track the last post ID we've seen
+                                # For now, just check if there are new posts
+                                # TODO: Implement proper tracking of processed posts
+                                pass
+                    except Exception as e:
+                        logger.debug(f"Error checking DM channel {channel_id}: {e}")
+                        
+            except Exception as e:
+                logger.debug(f"Error polling DM messages: {e}")
+                
+        except Exception as e:
+            logger.error(f"Error in DM polling loop: {e}")
+            await asyncio.sleep(10)  # Wait longer on error
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize bot on startup."""
@@ -48,6 +109,11 @@ async def startup_event():
     try:
         bot = MattermostBot()
         logger.info("Mattermost bot initialized")
+        
+        # Start DM polling in background
+        import asyncio
+        asyncio.create_task(poll_dm_messages())
+        logger.info("Started DM message polling")
     except Exception as e:
         logger.warning(f"Bot initialization had issues: {e}")
         logger.warning("Bot service will start but may not function until Mattermost is configured")
