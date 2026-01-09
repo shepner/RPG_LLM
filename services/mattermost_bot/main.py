@@ -62,128 +62,140 @@ async def poll_dm_messages():
                 
                 bot_user_id = bot_user["id"]
                 
-                # Get DM channels directly (DMs are not team-specific)
+                # Get DM channels for this bot (DMs it receives)
                 try:
-                    dm_channels = bot.driver.channels.get_channels_for_user(bot_user_id, "")
+                    dm_channels = bot_driver.channels.get_channels_for_user(bot_user_id, "")
                     # Filter for DM channels
                     dm_channels = [c for c in dm_channels if c.get("type") == "D"]
-                    logger.debug(f"Found {len(dm_channels)} DM channels")
-                    
-                    # Also ensure we have DMs with service bots
-                    # This creates/joins DMs so rpg-bot can monitor them
-                    service_bot_usernames = ["gaia", "thoth", "maat"]
-                    for service_username in service_bot_usernames:
-                        try:
-                            service_user = bot.driver.users.get_user_by_username(service_username)
-                            if service_user:
-                                service_user_id = service_user["id"]
-                                # Create/join DM with service bot
-                                try:
-                                    dm_channel = bot.driver.channels.create_direct_channel([bot_user_id, service_user_id])
-                                    channel_id = dm_channel.get("id")
-                                    # Add to list if not already there
-                                    if not any(c.get("id") == channel_id for c in dm_channels):
-                                        dm_channels.append(dm_channel)
-                                        logger.info(f"Joined DM with {service_username}: {channel_id}")
-                                except Exception as e:
-                                    logger.debug(f"Could not create/join DM with {service_username}: {e}")
-                        except Exception as e:
-                            logger.debug(f"Could not get service bot {service_username}: {e}")
+                    logger.debug(f"{bot_username}: Found {len(dm_channels)} DM channels")
                 except Exception as e:
-                    logger.warning(f"Error getting DM channels: {e}")
+                    logger.warning(f"Error getting DM channels for {bot_username}: {e}")
                     dm_channels = []
                 
                 for channel in dm_channels:
                     channel_id = channel.get("id")
                     
-                    # Get channel members to identify the service bot
+                    # Get channel members
                     try:
-                        members = bot.driver.channels.get_channel_members(channel_id)
+                        members = bot_driver.channels.get_channel_members(channel_id)
                         member_ids = [m.get("user_id") for m in members]
                         
-                        # Find the other user (not the bot)
-                        other_user_id = None
-                        for member_id in member_ids:
-                            if member_id != bot_user_id:
-                                other_user_id = member_id
-                                break
-                        
-                        if other_user_id:
-                            other_user = bot.driver.users.get_user(other_user_id)
-                            other_username = other_user.get("username", "").lower()
+                        # Get recent posts in this channel
+                        try:
+                            # Get posts since last check
+                            last_post_ids = _last_post_ids.get(bot_username, {})
+                            last_post_id = last_post_ids.get(channel_id, "")
                             
-                            # Check if it's a service bot
-                            if bot.service_handler.is_service_bot(other_username):
-                                logger.info(f"Found DM channel with service bot: {other_username} (channel: {channel_id})")
-                                # Get recent posts in this channel
+                            if last_post_id:
+                                posts = bot_driver.posts.get_posts_for_channel(
+                                    channel_id,
+                                    params={"since": last_post_id}
+                                )
+                            else:
+                                # First time checking - get last 20 posts
+                                posts = bot_driver.posts.get_posts_for_channel(
+                                    channel_id,
+                                    params={"per_page": 20}
+                                )
+                            
+                            post_list = posts.get("posts", {})
+                            order = posts.get("order", [])
+                            
+                            # Process new posts (excluding bot's own posts)
+                            for post_id in order:
+                                if post_id == last_post_id:
+                                    continue
+                                
+                                post = post_list.get(post_id, {})
+                                post_user_id = post.get("user_id")
+                                message = post.get("message", "").strip()
+                                
+                                # Skip bot's own messages and empty messages
+                                if post_user_id == bot_user_id or not message:
+                                    continue
+                                
+                                # Get the user who sent the message
                                 try:
-                                    # Get posts since last check
-                                    last_post_id = _last_post_ids.get(channel_id, "")
-                                    posts = bot.driver.posts.get_posts_for_channel(
-                                        channel_id,
-                                        params={"since": last_post_id} if last_post_id else {}
+                                    sender_user = bot_driver.users.get_user(post_user_id)
+                                    sender_username = sender_user.get("username", "")
+                                except Exception:
+                                    sender_username = "unknown"
+                                
+                                # Process the message as this service bot
+                                logger.info(f"{bot_username}: Processing DM from {sender_username}: {message[:50]}")
+                                
+                                # Route to service handler
+                                if bot and bot.service_handler:
+                                    response_text = await bot.service_handler.handle_service_message(
+                                        bot_username=bot_username,
+                                        message=message,
+                                        mattermost_user_id=post_user_id
                                     )
                                     
-                                    post_list = posts.get("posts", {})
-                                    order = posts.get("order", [])
-                                    
-                                    # Process new posts (excluding bot's own posts)
-                                    for post_id in order:
-                                        if post_id == last_post_id:
-                                            continue
-                                        
-                                        post = post_list.get(post_id, {})
-                                        post_user_id = post.get("user_id")
-                                        message = post.get("message", "").strip()
-                                        
-                                        # Skip bot's own messages and empty messages
-                                        if post_user_id == bot_user_id or not message:
-                                            continue
-                                        
-                                        # Process the message
-                                        logger.info(f"Processing DM message from {post_user_id} to {other_username}: {message[:50]}")
-                                        
-                                        event_data = {
-                                            "event": "posted",
-                                            "data": {
-                                                "post": {
-                                                    "id": post_id,
-                                                    "channel_id": channel_id,
-                                                    "user_id": post_user_id,
-                                                    "message": message
-                                                }
-                                            }
-                                        }
-                                        
-                                        response = await bot.handle_post_event(event_data)
-                                        
-                                        if response:
-                                            response_text = response.get("text", "")
-                                            bot_username_for_posting = response.get("bot_username", other_username)
-                                            
-                                            if response_text:
-                                                await bot.post_message(
-                                                    channel_id=channel_id,
-                                                    text=response_text,
-                                                    attachments=response.get("attachments"),
-                                                    bot_username=bot_username_for_posting
-                                                )
-                                                logger.info(f"Posted DM response as {bot_username_for_posting}")
-                                        
-                                        # Update last processed post ID
-                                        _last_post_ids[channel_id] = post_id
-                                        
-                                except Exception as e:
-                                    logger.debug(f"Error processing posts in DM channel {channel_id}: {e}")
+                                    if response_text:
+                                        # Post response as this bot using its token
+                                        await post_message_as_bot(
+                                            bot_driver=bot_driver,
+                                            channel_id=channel_id,
+                                            text=response_text,
+                                            bot_username=bot_username
+                                        )
+                                        logger.info(f"{bot_username}: Posted DM response")
+                                
+                                # Update last processed post ID
+                                if bot_username not in _last_post_ids:
+                                    _last_post_ids[bot_username] = {}
+                                _last_post_ids[bot_username][channel_id] = post_id
+                                
+                        except Exception as e:
+                            logger.debug(f"Error processing posts in DM channel {channel_id} for {bot_username}: {e}")
                     except Exception as e:
-                        logger.debug(f"Error checking DM channel {channel_id}: {e}")
+                        logger.debug(f"Error checking DM channel {channel_id} for {bot_username}: {e}")
                         
             except Exception as e:
-                logger.debug(f"Error polling DM messages: {e}")
+                logger.debug(f"Error polling DM messages for {bot_username}: {e}")
                 
         except Exception as e:
-            logger.error(f"Error in DM polling loop: {e}")
+            logger.error(f"Error in DM polling loop for {bot_username}: {e}")
             await asyncio.sleep(10)  # Wait longer on error
+
+
+async def post_message_as_bot(bot_driver, channel_id: str, text: str, bot_username: str):
+    """Post a message as a specific bot using its driver."""
+    try:
+        import httpx
+        from urllib.parse import urlparse
+        
+        # Get token from driver
+        token = bot_driver.options.get("token")
+        if not token:
+            logger.warning(f"Cannot post message - no token for {bot_username}")
+            return
+        
+        # Use HTTP API directly
+        parsed = urlparse(Config.MATTERMOST_URL)
+        api_url = f"{parsed.scheme or 'http'}://{parsed.hostname or 'mattermost'}:{parsed.port or 8065}/api/v4"
+        
+        post_data = {
+            "channel_id": channel_id,
+            "message": text,
+            "override_username": bot_username  # Make it appear as the bot
+        }
+        
+        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+            response = await client.post(
+                f"{api_url}/posts",
+                json=post_data,
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            
+            if response.status_code == 201:
+                logger.debug(f"{bot_username}: Posted message to channel {channel_id}")
+            else:
+                logger.error(f"{bot_username}: Error posting message: {response.status_code} - {response.text}")
+        
+    except Exception as e:
+        logger.error(f"Error posting message as {bot_username}: {e}", exc_info=True)
 
 
 @app.on_event("startup")
@@ -194,10 +206,26 @@ async def startup_event():
         bot = MattermostBot()
         logger.info("Mattermost bot initialized")
         
-        # Start DM polling in background
+        # Start DM polling for each service bot in background
         import asyncio
-        asyncio.create_task(poll_dm_messages())
-        logger.info("Started DM message polling")
+        
+        # Load bot registry and start polling for each service bot
+        if BOT_REGISTRY_AVAILABLE:
+            try:
+                registry = BotRegistry()
+                service_bots = ["gaia", "thoth", "maat"]
+                
+                for bot_username in service_bots:
+                    bot_info = registry.get_bot(bot_username)
+                    if bot_info and bot_info.is_active and bot_info.token:
+                        logger.info(f"Starting DM polling for {bot_username}")
+                        asyncio.create_task(poll_dm_messages_for_bot(bot_username, bot_info.token))
+                    else:
+                        logger.warning(f"Service bot {bot_username} not found or inactive in registry")
+            except Exception as e:
+                logger.warning(f"Could not start service bot DM polling: {e}")
+        
+        logger.info("Started DM message polling for service bots")
     except Exception as e:
         logger.warning(f"Bot initialization had issues: {e}")
         logger.warning("Bot service will start but may not function until Mattermost is configured")
