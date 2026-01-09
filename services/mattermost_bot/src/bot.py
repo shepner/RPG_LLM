@@ -213,7 +213,7 @@ class MattermostBot:
                 "response_type": "ephemeral"
             }
     
-    async def post_message(self, channel_id: str, text: str, attachments: Optional[list] = None):
+    async def post_message(self, channel_id: str, text: str, attachments: Optional[list] = None, bot_username: Optional[str] = None):
         """
         Post a message to a Mattermost channel.
         
@@ -221,14 +221,37 @@ class MattermostBot:
             channel_id: Mattermost channel ID
             text: Message text
             attachments: Optional message attachments
+            bot_username: Optional bot username to use for posting (uses that bot's token)
         """
-        if not Config.MATTERMOST_BOT_TOKEN:
-            logger.warning("Cannot post message - bot token not configured")
-            return
-        
         try:
             import httpx
             from urllib.parse import urlparse
+            import os
+            import sys
+            from pathlib import Path
+            
+            # Get bot token - prefer specific bot if provided
+            bot_token = None
+            if bot_username:
+                # Try to get token from registry
+                try:
+                    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
+                    from bot_registry.registry import BotRegistry
+                    registry = BotRegistry()
+                    bot_info = registry.get_bot(bot_username)
+                    if bot_info:
+                        bot_token = bot_info.token
+                        logger.info(f"Using token for bot '{bot_username}' from registry")
+                except Exception as e:
+                    logger.debug(f"Could not get token from registry for {bot_username}: {e}")
+            
+            # Fallback to primary bot token
+            if not bot_token:
+                bot_token = Config.MATTERMOST_BOT_TOKEN
+            
+            if not bot_token:
+                logger.warning("Cannot post message - bot token not configured")
+                return
             
             # Use HTTP API directly instead of driver (more reliable)
             parsed = urlparse(Config.MATTERMOST_URL)
@@ -246,7 +269,7 @@ class MattermostBot:
                 response = await client.post(
                     f"{api_url}/posts",
                     json=post_data,
-                    headers={"Authorization": f"Bearer {Config.MATTERMOST_BOT_TOKEN}"}
+                    headers={"Authorization": f"Bearer {bot_token}"}
                 )
                 
                 if response.status_code == 201:

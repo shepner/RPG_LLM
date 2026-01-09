@@ -292,10 +292,17 @@ async def handle_webhook(request: Request):
             if channel_id and response_text:
                 logger.info(f"Posting response to channel {channel_id}: {response_text[:100]}")
                 try:
+                    # Use the bot token for the specific service bot if available
+                    bot_username_for_posting = None
+                    if "trigger_word" in body:
+                        trigger_word = body.get("trigger_word", "")
+                        bot_username_for_posting = trigger_word.lstrip("@").lower()
+                    
                     await bot.post_message(
                         channel_id=channel_id,
                         text=response_text,
-                        attachments=response.get("attachments")
+                        attachments=response.get("attachments"),
+                        bot_username=bot_username_for_posting
                     )
                     logger.info("Response posted successfully")
                 except Exception as e:
