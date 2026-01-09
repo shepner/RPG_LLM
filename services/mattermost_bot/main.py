@@ -212,7 +212,7 @@ async def handle_webhook(request: Request):
                 return result
         
         # Check if it's an outgoing webhook (has trigger_word)
-        if "trigger_word" in body or "text" in body:
+        if "trigger_word" in body or ("text" in body and not "command" in body):
             # This is an outgoing webhook from Mattermost
             logger.info(f"Received outgoing webhook: trigger_word={body.get('trigger_word')}, text={body.get('text')}")
             
@@ -222,12 +222,41 @@ async def handle_webhook(request: Request):
             user_id = body.get("user_id")
             trigger_word = body.get("trigger_word", "")
             
+            # Determine which bot this is for based on trigger word
+            bot_username = None
+            if trigger_word:
+                # Remove @ symbol if present
+                bot_username = trigger_word.lstrip("@").lower()
+            
             # Remove trigger word from message if present
             if trigger_word and message.startswith(trigger_word):
                 message = message[len(trigger_word):].strip()
             
-            if message:
-                # Create event data format
+            if message and bot_username and bot.service_handler:
+                # Route directly to service handler for this bot
+                logger.info(f"Routing webhook message to service bot: {bot_username}")
+                try:
+                    response_text = await bot.service_handler.handle_service_message(
+                        bot_username=bot_username,
+                        message=message,
+                        mattermost_user_id=user_id
+                    )
+                    
+                    if response_text:
+                        response = {
+                            "text": response_text,
+                            "channel_id": channel_id
+                        }
+                    else:
+                        response = None
+                except Exception as e:
+                    logger.error(f"Error handling service message: {e}", exc_info=True)
+                    response = {
+                        "text": f"Error processing message: {str(e)}",
+                        "channel_id": channel_id
+                    }
+            elif message:
+                # Fallback to regular event handling
                 event_data = {
                     "event": "posted",
                     "data": {
