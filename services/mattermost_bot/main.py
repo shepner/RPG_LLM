@@ -41,23 +41,39 @@ app.add_middleware(
 bot: Optional[MattermostBot] = None
 
 
-# Track last processed post ID per channel
-_last_post_ids = {}
+# Track last processed post ID per channel per bot
+_last_post_ids = {}  # Format: {bot_username: {channel_id: post_id}}
 
-async def poll_dm_messages():
-    """Poll for new DM messages with service bots."""
+async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
+    """Poll for new DM messages for a specific service bot."""
     import asyncio
+    from mattermostdriver import Driver
+    from urllib.parse import urlparse
+    
+    logger.info(f"Starting DM polling for {bot_username}")
+    await asyncio.sleep(2)  # Initial delay
+    
+    # Create a driver for this specific bot
+    parsed = urlparse(Config.MATTERMOST_URL)
+    bot_driver = Driver({
+        "url": parsed.hostname or "mattermost",
+        "token": bot_token,
+        "scheme": parsed.scheme or "http",
+        "port": parsed.port or 8065,
+        "basepath": "/api/v4",
+        "verify": False
+    })
+    
     while True:
         try:
             await asyncio.sleep(5)  # Poll every 5 seconds
             
-            if not bot or not bot.driver:
-                continue
-            
             try:
-                # Get bot user ID
-                bot_user = bot.driver.users.get_user_by_username(Config.MATTERMOST_BOT_USERNAME)
+                # Get this bot's user ID
+                bot_user = bot_driver.users.get_user("me")
                 if not bot_user:
+                    logger.warning(f"Could not get user info for {bot_username}")
+                    await asyncio.sleep(10)
                     continue
                 
                 bot_user_id = bot_user["id"]
