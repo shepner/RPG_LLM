@@ -230,31 +230,13 @@ class MattermostBot:
             import sys
             from pathlib import Path
             
-            # Get bot token - prefer specific bot if provided
-            bot_token = None
-            if bot_username:
-                # Try to read token directly from registry JSON file
-                try:
-                    import json
-                    data_dir = os.getenv("RPG_LLM_DATA_DIR", "/app/RPG_LLM_DATA")
-                    registry_file = os.path.join(data_dir, "bots", "registry.json")
-                    
-                    if os.path.exists(registry_file):
-                        with open(registry_file, 'r') as f:
-                            registry_data = json.load(f)
-                            if bot_username in registry_data:
-                                bot_data = registry_data[bot_username]
-                                if bot_data.get("is_active", True):
-                                    bot_token = bot_data.get("token")
-                                    if bot_token:
-                                        logger.info(f"Using token for bot '{bot_username}' from registry file")
-                except Exception as e:
-                    logger.debug(f"Could not read token from registry file for {bot_username}: {e}")
-            
-            # Fallback to primary bot token (rpg-bot has system_admin, should work)
-            if not bot_token:
-                bot_token = Config.MATTERMOST_BOT_TOKEN
-                logger.info(f"Using primary bot token (rpg-bot) for posting")
+            # For posting, always use rpg-bot token (has system_admin permissions)
+            # The specific bot token is only used for identification, not posting
+            bot_token = Config.MATTERMOST_BOT_TOKEN
+            if bot_token:
+                logger.info(f"Using rpg-bot token for posting (system_admin permissions)")
+            else:
+                logger.warning("No rpg-bot token available for posting")
             
             if not bot_token:
                 logger.warning("Cannot post message - bot token not configured")
