@@ -15,6 +15,7 @@ Usage:
 import os
 import sys
 import json
+import secrets
 
 try:
     import requests
@@ -81,14 +82,60 @@ def create_bot(username: str, display_name: str = None, description: str = None)
             "description": description or f"Bot account: {username}"
         }
         
-        # Create bot
+        # Create bot - try two approaches:
+        # 1. Direct bot creation (requires admin)
+        # 2. Create user then convert to bot (works with system_admin)
         try:
-            bot_response = session.post(
-                f"{api_url}/bots",
-                json=bot_data
+            # First, try creating a regular user
+            user_data = {
+                "username": username,
+                "email": f"{username}@localhost",
+                "password": secrets.token_urlsafe(16),
+                "nickname": display_name,
+                "first_name": display_name.split()[0] if display_name else username.title(),
+                "last_name": " ".join(display_name.split()[1:]) if display_name and len(display_name.split()) > 1 else ""
+            }
+            
+            user_response = session.post(
+                f"{api_url}/users",
+                json=user_data
             )
             
-            if bot_response.status_code == 201:
+            if user_response.status_code == 201:
+                user = user_response.json()
+                user_id = user['id']
+                
+                # Convert user to bot
+                convert_response = session.post(
+                    f"{api_url}/users/{user_id}/convert_to_bot",
+                    json=bot_data
+                )
+                
+                if convert_response.status_code in [200, 201]:
+                    bot_result = convert_response.json()
+                    bot_result['user_id'] = user_id
+                else:
+                    # Fallback: try direct bot creation
+                    bot_response = session.post(
+                        f"{api_url}/bots",
+                        json=bot_data
+                    )
+                    if bot_response.status_code == 201:
+                        bot_result = bot_response.json()
+                    else:
+                        raise Exception(f"Failed to create bot: {convert_response.text}")
+            else:
+                # User might already exist, try direct bot creation
+                bot_response = session.post(
+                    f"{api_url}/bots",
+                    json=bot_data
+                )
+                if bot_response.status_code == 201:
+                    bot_result = bot_response.json()
+                else:
+                    raise Exception(f"Failed to create user or bot: {user_response.text}")
+            
+            if bot_result:
                 bot_result = bot_response.json()
                 
                 print("\n✅ Bot created successfully!")
@@ -96,13 +143,32 @@ def create_bot(username: str, display_name: str = None, description: str = None)
                 print(f"Bot ID: {bot_result.get('user_id', 'N/A')}")
                 print(f"Bot Display Name: {bot_result.get('display_name', display_name)}")
                 
-                # Get bot token - Mattermost API returns token in creation response
-                bot_token = bot_result.get('token')
-                if bot_token:
-                    print(f"\n⚠️  IMPORTANT: Save this token - it won't be shown again!")
-                    print(f"Bot Token: {bot_token}")
-                    print(f"\nTo use this bot, add to your .env file:")
-                    print(f"MATTERMOST_BOT_TOKEN={bot_token}")
+                # Get bot token - need to create it separately
+                bot_user_id = bot_result.get('user_id') or bot_result.get('id')
+                if bot_user_id:
+                    # Create a token for the bot
+                    token_data = {"description": f"Bot access token for {username}"}
+                    token_response = session.post(
+                        f"{api_url}/users/{bot_user_id}/tokens",
+                        json=token_data
+                    )
+                    
+                    if token_response.status_code in [200, 201]:
+                        token_result = token_response.json()
+                        bot_token = token_result.get('token') or token_result.get('id')
+                        if bot_token:
+                            print(f"\n⚠️  IMPORTANT: Save this token - it won't be shown again!")
+                            print(f"Bot Token: {bot_token}")
+                            print(f"\nTo use this bot, add to your .env file:")
+                            print(f"MATTERMOST_BOT_TOKEN={bot_token}")
+                        else:
+                            print("\n⚠️  Token not returned in creation response.")
+                            print("You may need to regenerate it via the Mattermost UI:")
+                            print(f"  System Console → Integrations → Bot Accounts → {username} → Regenerate Token")
+                    else:
+                        print("\n⚠️  Could not create token automatically.")
+                        print("You may need to create it via the Mattermost UI:")
+                        print(f"  System Console → Integrations → Bot Accounts → {username} → Regenerate Token")
                 else:
                     print("\n⚠️  Token not returned in creation response.")
                     print("You may need to regenerate it via the Mattermost UI:")
