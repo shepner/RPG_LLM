@@ -1107,20 +1107,32 @@ async function submitBeingMessage() {
             ? `${BEING_REGISTRY_URL}/beings/${currentBeingChatId}/query`
             : `${BEING_URL}/query`; // Fallback for non-being queries
         
+        const requestBody = {
+            query: message,
+            being_id: currentBeingChatId,
+            target_being_id: targetBeingId,
+            session_id: sessionId,
+            game_system: currentSession ? currentSession.game_system_type : null
+        };
+        
+        // #region agent log
+        console.log('Sending query', { queryUrl, requestBody });
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1115',message:'Sending query',data:{queryUrl,requestBody},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+        
         const response = await fetch(queryUrl, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                query: message,
-                being_id: currentBeingChatId,
-                target_being_id: targetBeingId,
-                session_id: sessionId,
-                game_system: currentSession ? currentSession.game_system_type : null
-            })
+            body: JSON.stringify(requestBody)
         });
+        
+        // #region agent log
+        console.log('Query response', { status: response.status, ok: response.ok });
+        fetch('http://127.0.0.1:7242/ingest/a72a0cbe-2d6f-4267-8f50-7b71184c1dc8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1128',message:'Query response',data:{status:response.status,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         
         // Remove typing indicator
         const typingEl = document.getElementById(typingId);
