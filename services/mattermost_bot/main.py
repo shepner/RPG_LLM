@@ -118,9 +118,27 @@ async def handle_webhook(request: Request):
                 user_id = body.get("user_id")
                 channel_id = body.get("channel_id")
                 
+                # Get Mattermost user info for authentication
+                mattermost_username = None
+                mattermost_email = None
+                if bot and bot.driver and user_id:
+                    try:
+                        user_info = bot.driver.users.get_user(user_id)
+                        mattermost_username = user_info.get("username")
+                        mattermost_email = user_info.get("email")
+                        logger.info(f"Got Mattermost user info: username={mattermost_username}, email={mattermost_email}")
+                    except Exception as e:
+                        logger.warning(f"Could not get Mattermost user info: {e}")
+                
                 if command_name:
                     try:
-                        response = await bot.admin_handler.handle_command(command_name, args, user_id)
+                        response = await bot.admin_handler.handle_command(
+                            command_name, 
+                            args, 
+                            user_id,
+                            mattermost_username=mattermost_username,
+                            mattermost_email=mattermost_email
+                        )
                         logger.info(f"Command response: {response}")
                     except Exception as e:
                         logger.error(f"Error handling command: {e}", exc_info=True)

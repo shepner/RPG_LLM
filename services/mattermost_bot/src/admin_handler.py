@@ -25,7 +25,9 @@ class AdminHandler:
         self,
         command: str,
         args: list,
-        mattermost_user_id: str
+        mattermost_user_id: str,
+        mattermost_username: Optional[str] = None,
+        mattermost_email: Optional[str] = None
     ) -> Dict:
         """
         Handle an administrative command.
@@ -34,11 +36,13 @@ class AdminHandler:
             command: Command name
             args: Command arguments
             mattermost_user_id: Mattermost user ID
+            mattermost_username: Optional Mattermost username
+            mattermost_email: Optional Mattermost email
             
         Returns:
             Dictionary with response data for Mattermost
         """
-        auth_headers = self.auth_bridge.get_auth_headers(mattermost_user_id)
+        auth_headers = await self.auth_bridge.get_auth_headers(mattermost_user_id, mattermost_username, mattermost_email)
         
         handlers = {
             "create-character": self._handle_create_character,
@@ -55,7 +59,7 @@ class AdminHandler:
         handler = handlers.get(command)
         if handler:
             try:
-                return await handler(args, auth_headers, mattermost_user_id)
+                return await handler(args, auth_headers, mattermost_user_id, mattermost_username, mattermost_email)
             except Exception as e:
                 logger.error(f"Error handling command {command}: {e}", exc_info=True)
                 return {
@@ -68,7 +72,7 @@ class AdminHandler:
                 "response_type": "ephemeral"
             }
     
-    async def _handle_create_character(self, args: list, auth_headers: Dict, mattermost_user_id: str) -> Dict:
+    async def _handle_create_character(self, args: list, auth_headers: Dict, mattermost_user_id: str, mattermost_username: Optional[str] = None, mattermost_email: Optional[str] = None) -> Dict:
         """Handle character creation command."""
         name = args[0] if args else None
         
@@ -103,7 +107,7 @@ class AdminHandler:
                     "response_type": "ephemeral"
                 }
     
-    async def _handle_list_characters(self, args: list, auth_headers: Dict, mattermost_user_id: str) -> Dict:
+    async def _handle_list_characters(self, args: list, auth_headers: Dict, mattermost_user_id: str, mattermost_username: Optional[str] = None, mattermost_email: Optional[str] = None) -> Dict:
         """Handle list characters command."""
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
@@ -139,7 +143,7 @@ class AdminHandler:
                     "response_type": "ephemeral"
                 }
     
-    async def _handle_delete_character(self, args: list, auth_headers: Dict, mattermost_user_id: str) -> Dict:
+    async def _handle_delete_character(self, args: list, auth_headers: Dict, mattermost_user_id: str, mattermost_username: Optional[str] = None, mattermost_email: Optional[str] = None) -> Dict:
         """Handle delete character command."""
         if not args:
             return {
@@ -166,7 +170,7 @@ class AdminHandler:
                     "response_type": "ephemeral"
                 }
     
-    async def _handle_create_session(self, args: list, auth_headers: Dict, mattermost_user_id: str) -> Dict:
+    async def _handle_create_session(self, args: list, auth_headers: Dict, mattermost_user_id: str, mattermost_username: Optional[str] = None, mattermost_email: Optional[str] = None) -> Dict:
         """Handle create session command."""
         name = args[0] if args else "New Session"
         
@@ -206,7 +210,7 @@ class AdminHandler:
                     "response_type": "ephemeral"
                 }
     
-    async def _handle_join_session(self, args: list, auth_headers: Dict, mattermost_user_id: str) -> Dict:
+    async def _handle_join_session(self, args: list, auth_headers: Dict, mattermost_user_id: str, mattermost_username: Optional[str] = None, mattermost_email: Optional[str] = None) -> Dict:
         """Handle join session command."""
         if not args:
             return {
@@ -234,7 +238,7 @@ class AdminHandler:
                     "response_type": "ephemeral"
                 }
     
-    async def _handle_health(self, args: list, auth_headers: Dict, mattermost_user_id: str) -> Dict:
+    async def _handle_health(self, args: list, auth_headers: Dict, mattermost_user_id: str, mattermost_username: Optional[str] = None, mattermost_email: Optional[str] = None) -> Dict:
         """Handle health check command."""
         services = {
             "Auth": Config.AUTH_URL,
@@ -267,7 +271,7 @@ class AdminHandler:
             "attachments": [{"fields": results}]
         }
     
-    async def _handle_roll(self, args: list, auth_headers: Dict, mattermost_user_id: str) -> Dict:
+    async def _handle_roll(self, args: list, auth_headers: Dict, mattermost_user_id: str, mattermost_username: Optional[str] = None, mattermost_email: Optional[str] = None) -> Dict:
         """Handle dice roll command."""
         if not args:
             return {
@@ -295,7 +299,7 @@ class AdminHandler:
                     "response_type": "ephemeral"
                 }
     
-    async def _handle_world_event(self, args: list, auth_headers: Dict, mattermost_user_id: str) -> Dict:
+    async def _handle_world_event(self, args: list, auth_headers: Dict, mattermost_user_id: str, mattermost_username: Optional[str] = None, mattermost_email: Optional[str] = None) -> Dict:
         """Handle world event recording command."""
         if not args:
             return {
@@ -329,7 +333,7 @@ class AdminHandler:
                     "response_type": "ephemeral"
                 }
     
-    async def _handle_system_status(self, args: list, auth_headers: Dict, mattermost_user_id: str) -> Dict:
+    async def _handle_system_status(self, args: list, auth_headers: Dict, mattermost_user_id: str, mattermost_username: Optional[str] = None, mattermost_email: Optional[str] = None) -> Dict:
         """Handle system status command."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:

@@ -43,7 +43,7 @@ class MattermostBot:
             self.driver = None
         
         # Initialize components
-        self.auth_bridge = AuthBridge()
+        self.auth_bridge = AuthBridge(mattermost_driver=self.driver)
         if self.driver:
             self.channel_manager = ChannelManager(self.driver)
             self.message_router = MessageRouter(self.channel_manager)
