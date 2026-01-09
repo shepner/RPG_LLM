@@ -25,9 +25,9 @@ class ServiceHandler:
             "endpoint": "/query"  # Game Master query endpoint
         },
         "maat": {
-            "name": "Ma'at (Time Management Service)",
-            "url": Config.TIME_MANAGEMENT_URL,
-            "endpoint": "/query"  # Time Management query endpoint
+            "name": "Ma'at (Rules Engine Service)",
+            "url": Config.RULES_ENGINE_URL,
+            "endpoint": "/query"  # Rules Engine query endpoint
         }
     }
     
@@ -157,7 +157,7 @@ class ServiceHandler:
                         return error_msg
             
             elif bot_username_lower == "maat":
-                # Time Management service query endpoint
+                # Rules Engine service query endpoint
                 query_data = {
                     "query": message,
                     "context": context,
@@ -173,7 +173,7 @@ class ServiceHandler:
                     
                     if response.status_code == 200:
                         data = response.json()
-                        # Time Management service returns response in "response" field
+                        # Rules Engine service returns response in "response" field
                         response_text = data.get("response")
                         if response_text:
                             return response_text
@@ -182,7 +182,7 @@ class ServiceHandler:
                         if error_msg:
                             return f"Error from {service_info['name']}: {error_msg}"
                         # Fallback to other fields
-                        return data.get("text") or data.get("message") or "No response from Time Management service"
+                        return data.get("text") or data.get("message") or "No response from Rules Engine service"
                     else:
                         logger.error(f"Time Management service returned {response.status_code}: {response.text}")
                         error_data = response.json() if response.text else {}
