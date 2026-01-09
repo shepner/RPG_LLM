@@ -1,12 +1,11 @@
 # Environment and secrets
-.env
-.env.local
-.env.*.local
-secrets/.env
-secrets/*.env
-*.env
+# Exclude all .env files and variants
+.env*
 !*.env.example
 !.env.example
+# Also exclude files ending in .env (like config.env)
+*.env
+!*.env.example
 
 # Configuration files with actual values
 config/config.yaml
