@@ -117,30 +117,30 @@ class ServiceHandler:
                             error_msg += " (Authentication required)"
                         return error_msg
                         
-                   elif bot_username_lower == "thoth":
-                       # Game Master service query endpoint
-                       query_data = {
-                           "query": message,
-                           "context": context,
-                           "session_id": session_id
-                       }
-                       
-                       async with httpx.AsyncClient(timeout=60.0) as client:
-                           response = await client.post(
-                               f"{service_url}{endpoint}",
-                               json=query_data,
-                               headers=auth_headers
-                           )
-                           
-                           if response.status_code == 200:
-                               data = response.json()
-                               return data.get("response") or data.get("text") or data.get("message")
-                           else:
-                               logger.error(f"Game Master service returned {response.status_code}: {response.text}")
-                               error_data = response.json() if response.text else {}
-                               error_msg_detail = error_data.get("error", {}).get("message", error_data.get("message", response.text))
-                               error_msg = f"Error from {service_info['name']}: {error_msg_detail}"
-                               return error_msg
+            elif bot_username_lower == "thoth":
+                # Game Master service query endpoint
+                query_data = {
+                    "query": message,
+                    "context": context,
+                    "session_id": session_id
+                }
+                
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        f"{service_url}{endpoint}",
+                        json=query_data,
+                        headers=auth_headers
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        return data.get("response") or data.get("text") or data.get("message")
+                    else:
+                        logger.error(f"Game Master service returned {response.status_code}: {response.text}")
+                        error_data = response.json() if response.text else {}
+                        error_msg_detail = error_data.get("error", {}).get("message", error_data.get("message", response.text))
+                        error_msg = f"Error from {service_info['name']}: {error_msg_detail}"
+                        return error_msg
             
             else:
                 return f"Service {bot_username} is not yet fully integrated."
