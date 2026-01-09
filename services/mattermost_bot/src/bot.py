@@ -237,13 +237,18 @@ class MattermostBot:
                 try:
                     sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
                     from bot_registry.registry import BotRegistry
-                    registry = BotRegistry()
+                    # Use the same data directory as configured
+                    import os
+                    data_dir = os.getenv("RPG_LLM_DATA_DIR", "/app/RPG_LLM_DATA")
+                    registry = BotRegistry(data_dir=data_dir)
                     bot_info = registry.get_bot(bot_username)
                     if bot_info:
                         bot_token = bot_info.token
                         logger.info(f"Using token for bot '{bot_username}' from registry")
+                    else:
+                        logger.warning(f"Bot '{bot_username}' not found in registry")
                 except Exception as e:
-                    logger.debug(f"Could not get token from registry for {bot_username}: {e}")
+                    logger.warning(f"Could not get token from registry for {bot_username}: {e}", exc_info=True)
             
             # Fallback to primary bot token
             if not bot_token:
