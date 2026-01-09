@@ -41,6 +41,9 @@ app.add_middleware(
 bot: Optional[MattermostBot] = None
 
 
+# Track last processed post ID per channel
+_last_post_ids = {}
+
 async def poll_dm_messages():
     """Poll for new DM messages with service bots."""
     import asyncio
@@ -87,10 +90,65 @@ async def poll_dm_messages():
                             # Check if it's a service bot
                             if bot.service_handler.is_service_bot(other_username):
                                 # Get recent posts in this channel
-                                # We'll track the last post ID we've seen
-                                # For now, just check if there are new posts
-                                # TODO: Implement proper tracking of processed posts
-                                pass
+                                try:
+                                    # Get posts since last check
+                                    last_post_id = _last_post_ids.get(channel_id, "")
+                                    posts = bot.driver.posts.get_posts_for_channel(
+                                        channel_id,
+                                        params={"since": last_post_id} if last_post_id else {}
+                                    )
+                                    
+                                    post_list = posts.get("posts", {})
+                                    order = posts.get("order", [])
+                                    
+                                    # Process new posts (excluding bot's own posts)
+                                    for post_id in order:
+                                        if post_id == last_post_id:
+                                            continue
+                                        
+                                        post = post_list.get(post_id, {})
+                                        post_user_id = post.get("user_id")
+                                        message = post.get("message", "").strip()
+                                        
+                                        # Skip bot's own messages and empty messages
+                                        if post_user_id == bot_user_id or not message:
+                                            continue
+                                        
+                                        # Process the message
+                                        logger.info(f"Processing DM message from {post_user_id} to {other_username}: {message[:50]}")
+                                        
+                                        event_data = {
+                                            "event": "posted",
+                                            "data": {
+                                                "post": {
+                                                    "id": post_id,
+                                                    "channel_id": channel_id,
+                                                    "user_id": post_user_id,
+                                                    "message": message
+                                                }
+                                            }
+                                        }
+                                        
+                                        response = await bot.handle_post_event(event_data)
+                                        
+                                        if response:
+                                            response_text = response.get("text", "")
+                                            bot_username_for_posting = response.get("bot_username", other_username)
+                                            
+                                            if response_text:
+                                                await bot.post_message(
+                                                    channel_id=channel_id,
+                                                    text=response_text,
+                                                    attachments=response.get("attachments"),
+                                                    bot_username=bot_username_for_posting
+                                                )
+                                                logger.info(f"Posted DM response as {bot_username_for_posting}")
+                                        
+                                        # Update last processed post ID
+                                        _last_post_ids[channel_id] = post_id
+                                        
+                                except Exception as e:
+                                    logger.debug(f"Error processing posts in DM channel {channel_id}: {e}")
                     except Exception as e:
                         logger.debug(f"Error checking DM channel {channel_id}: {e}")
                         
