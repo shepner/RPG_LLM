@@ -617,9 +617,8 @@ function renderBeingChat(beingId, beingName) {
                 <div style="flex: 1; ${isUser ? 'text-align: right;' : ''} min-width: 0;">
                     <div style="display: flex; align-items: baseline; gap: 4px; margin-bottom: 1px; ${isUser ? 'justify-content: flex-end;' : ''}">
                         <span style="font-weight: bold; color: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; font-size: 0.7em;">
-                            ${isUser ? (isGMMessage ? 'GM' : 'You') : (msg.metadata?.response_label || beingName)}
+                            ${isUser ? (isGMMessage ? 'GM' : 'You') : beingName}
                         </span>
-                        ${!isUser && msg.metadata?.target_being_id ? `<span style="font-size: 0.6em; color: #888; margin-left: 4px;">(via @mention)</span>` : ''}
                         <span style="font-size: 0.65em; color: #888;">${timestamp}</span>
                     </div>
                     <div style="background: ${isUser ? (isGMMessage ? '#3a2a1a' : '#2a4a6a') : '#2a1a3a'}; padding: 4px 6px; border-radius: 3px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; font-size: 0.8em; line-height: 1.3;">
@@ -1160,37 +1159,20 @@ async function submitBeingMessage() {
                 addSystemMessage(`Warning: Character "${currentBeingChatId}" returned no response. Check being service logs.`, 'warning');
             }
             
-            // Determine who is responding
-            const currentBeingName = document.getElementById('being-chat-character-name')?.textContent || `Character ${currentBeingChatId.substring(0, 8)}`;
-            let responseLabel = currentBeingName;
-            
-            // If message was sent to another being (via @mention), clarify the response
-            if (targetBeingId && targetBeingId !== currentBeingChatId) {
-                const targetBeingName = mentions.find(m => m.being_id === targetBeingId)?.name || `Character ${targetBeingId.substring(0, 8)}`;
-                // The current being is responding to the mention
-                responseLabel = `${currentBeingName} (to @${targetBeingName})`;
-                // Notify user that message was sent to mentioned being
-                addSystemMessage(`${currentBeingName} sent a message to @${targetBeingName}`, 'info');
-                
-                // Store message in target being's history so they can see it when they open their chat
-                addBeingChatMessage(targetBeingId, 'user', message, {
-                    source_being_id: currentBeingChatId,
-                    source_being_name: currentBeingName,
-                    visible_to_players: false
-                });
-                addBeingChatMessage(targetBeingId, 'assistant', responseText, {
-                    source_being_id: currentBeingChatId,
-                    source_being_name: currentBeingName,
-                    conversation_type: 'being_to_being'
-                });
-            }
-            
-            // Add response to history with clear labeling
+            // Add response to history - just use the being's name, no confusing labels
             addBeingChatMessage(currentBeingChatId, 'assistant', responseText, {
                 target_being_id: targetBeingId,
-                mentions: mentions.length > 0 ? mentions : (data.mentions || []),
-                response_label: responseLabel
+                mentions: mentions.length > 0 ? mentions : (data.mentions || [])
             });
+            
+            // If message mentioned another being, note it but don't change the response label
+            if (targetBeingId && targetBeingId !== currentBeingChatId) {
+                const targetBeingName = mentions.find(m => m.being_id === targetBeingId)?.name || `Character ${targetBeingId.substring(0, 8)}`;
+                const currentBeingName = document.getElementById('being-chat-character-name')?.textContent || `Character ${currentBeingChatId.substring(0, 8)}`;
+                
+                // Just note that the message mentioned another being (for future being-to-being direct messaging)
+                // Don't store it in the target being's history yet - that should only happen when we implement direct being-to-being messaging
+            }
             
             // Check if character name was provided in the message and update registry
             // This handles the case where user provides name like "My name is Bob" or "Call me Bob"

@@ -240,12 +240,16 @@ Remember:
         else:
             system_prompt = base_system_prompt
         
-        # Build prompt
+        # Build prompt - include mention context if applicable
+        mention_context = ""
+        if request.target_being_id:
+            mention_context = f"\n\nNOTE: This message mentions another being. Respond naturally as yourself, acknowledging the mention if it makes sense in context."
+        
         prompt = f"""QUERY:
 {request.query}
 
 ADDITIONAL CONTEXT:
-{request.context or "None"}
+{request.context or "None"}{mention_context}
 
 Respond naturally as your character would. Consider your personality, goals, relationships, and current situation."""
         
