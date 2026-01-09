@@ -282,7 +282,7 @@ async def handle_webhook(request: Request):
                 # Remove @ symbol if present
                 bot_username = trigger_word.lstrip("@").lower()
             
-            # Also check if message contains @gaia or @thoth mention even if trigger_word is just the name
+            # Also check if message contains @gaia, @thoth, or @maat mention even if trigger_word is just the name
             if not bot_username and message:
                 mentions = message.split()
                 for word in mentions:
@@ -291,6 +291,9 @@ async def handle_webhook(request: Request):
                         break
                     elif word.lower().startswith("@thoth") or word.lower() == "thoth":
                         bot_username = "thoth"
+                        break
+                    elif word.lower().startswith("@maat") or word.lower() == "maat" or word.lower().startswith("@ma'at") or word.lower() == "ma'at":
+                        bot_username = "maat"
                         break
             
             # Remove trigger word from message if present
