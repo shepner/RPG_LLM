@@ -617,8 +617,9 @@ function renderBeingChat(beingId, beingName) {
                 <div style="flex: 1; ${isUser ? 'text-align: right;' : ''} min-width: 0;">
                     <div style="display: flex; align-items: baseline; gap: 4px; margin-bottom: 1px; ${isUser ? 'justify-content: flex-end;' : ''}">
                         <span style="font-weight: bold; color: ${isUser ? (isGMMessage ? '#f59e0b' : '#4a9eff') : '#8b5cf6'}; font-size: 0.7em;">
-                            ${isUser ? (isGMMessage ? 'GM' : 'You') : beingName}
+                            ${isUser ? (isGMMessage ? 'GM' : 'You') : (msg.metadata?.response_label || beingName)}
                         </span>
+                        ${!isUser && msg.metadata?.target_being_id ? `<span style="font-size: 0.6em; color: #888; margin-left: 4px;">(via @mention)</span>` : ''}
                         <span style="font-size: 0.65em; color: #888;">${timestamp}</span>
                     </div>
                     <div style="background: ${isUser ? (isGMMessage ? '#3a2a1a' : '#2a4a6a') : '#2a1a3a'}; padding: 4px 6px; border-radius: 3px; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; font-size: 0.8em; line-height: 1.3;">
@@ -793,10 +794,19 @@ function setupMentionAutocomplete(input) {
         
         if (mentionMatch) {
             const query = mentionMatch[1].toLowerCase();
-            const matches = mentionAutocompleteData.filter(b => {
+            // Prioritize prefix matches (startsWith) over contains matches
+            const prefixMatches = mentionAutocompleteData.filter(b => {
                 const name = (b.name || '').toLowerCase();
-                return name.includes(query) || name.startsWith(query);
-            }).slice(0, 5); // Limit to 5 matches
+                return name.startsWith(query);
+            });
+            // Only include contains matches if we don't have enough prefix matches
+            const containsMatches = prefixMatches.length < 5 
+                ? mentionAutocompleteData.filter(b => {
+                    const name = (b.name || '').toLowerCase();
+                    return !name.startsWith(query) && name.includes(query);
+                }).slice(0, 5 - prefixMatches.length)
+                : [];
+            const matches = [...prefixMatches, ...containsMatches].slice(0, 5); // Limit to 5 matches total
             
             if (matches.length > 0) {
                 mentionAutocompleteSelectedIndex = -1;
