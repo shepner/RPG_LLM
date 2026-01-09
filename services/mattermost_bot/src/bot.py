@@ -222,11 +222,18 @@ class MattermostBot:
             text: Message text
             attachments: Optional message attachments
         """
-        if not self.driver:
-            logger.warning("Cannot post message - bot driver not initialized")
+        if not Config.MATTERMOST_BOT_TOKEN:
+            logger.warning("Cannot post message - bot token not configured")
             return
         
         try:
+            import httpx
+            from urllib.parse import urlparse
+            
+            # Use HTTP API directly instead of driver (more reliable)
+            parsed = urlparse(Config.MATTERMOST_URL)
+            api_url = f"{parsed.scheme or 'http'}://{parsed.hostname or 'mattermost'}:{parsed.port or 8065}/api/v4"
+            
             post_data = {
                 "channel_id": channel_id,
                 "message": text
@@ -235,8 +242,17 @@ class MattermostBot:
             if attachments:
                 post_data["props"] = {"attachments": attachments}
             
-            self.driver.posts.create_post(post_data)
-            logger.info(f"Posted message to channel {channel_id}")
+            async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+                response = await client.post(
+                    f"{api_url}/posts",
+                    json=post_data,
+                    headers={"Authorization": f"Bearer {Config.MATTERMOST_BOT_TOKEN}"}
+                )
+                
+                if response.status_code == 201:
+                    logger.info(f"Posted message to channel {channel_id}")
+                else:
+                    logger.error(f"Error posting message: {response.status_code} - {response.text}")
             
         except Exception as e:
             logger.error(f"Error posting message: {e}", exc_info=True)
