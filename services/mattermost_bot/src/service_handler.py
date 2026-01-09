@@ -80,7 +80,7 @@ class ServiceHandler:
         
         try:
             # Get auth headers
-            auth_headers = self.auth_bridge.get_auth_headers(mattermost_user_id)
+            auth_headers = await self.auth_bridge.get_auth_headers(mattermost_user_id)
             
             # Prepare request based on service
             if bot_username_lower == "gaia":
