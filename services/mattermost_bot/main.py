@@ -131,7 +131,23 @@ async def handle_webhook(request: Request):
                 else:
                     # No subcommand provided - show help
                     response = {
-                        "text": "Available commands: `/rpg health`, `/rpg create-character [name]`, `/rpg list-characters`, `/rpg create-session [name]`, `/rpg roll <dice>`, `/rpg world-event <description>`, `/rpg system-status`",
+                        "text": "**RPG LLM Commands**\n\nType `/rpg` followed by one of these commands:\n\n" +
+                                "**Character Management:**\n" +
+                                "• `health` - Check service status\n" +
+                                "• `create-character [name]` - Create a new character\n" +
+                                "• `list-characters` - List your characters\n" +
+                                "• `delete-character <id>` - Delete a character\n\n" +
+                                "**Game Sessions:**\n" +
+                                "• `create-session [name]` - Create a game session\n" +
+                                "• `join-session <id>` - Join a session\n\n" +
+                                "**Gameplay:**\n" +
+                                "• `roll <dice>` - Roll dice (e.g., `roll 1d20`)\n" +
+                                "• `world-event <description>` - Record world event\n" +
+                                "• `system-status` - Get system status (GM only)\n\n" +
+                                "**Examples:**\n" +
+                                "• `/rpg health`\n" +
+                                "• `/rpg create-character Gandalf`\n" +
+                                "• `/rpg roll 2d6+3`",
                         "response_type": "ephemeral"
                     }
                 
