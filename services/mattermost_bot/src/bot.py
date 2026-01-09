@@ -251,8 +251,14 @@ class MattermostBot:
                 "message": text
             }
             
+            # If posting for a specific bot, set the username so it appears as that bot
+            if bot_username:
+                post_data["props"] = {"override_username": bot_username}
+            
             if attachments:
-                post_data["props"] = {"attachments": attachments}
+                if "props" not in post_data:
+                    post_data["props"] = {}
+                post_data["props"]["attachments"] = attachments
             
             async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
                 response = await client.post(
