@@ -251,9 +251,10 @@ class MattermostBot:
                 except Exception as e:
                     logger.debug(f"Could not read token from registry file for {bot_username}: {e}")
             
-            # Fallback to primary bot token
+            # Fallback to primary bot token (rpg-bot has system_admin, should work)
             if not bot_token:
                 bot_token = Config.MATTERMOST_BOT_TOKEN
+                logger.info(f"Using primary bot token (rpg-bot) for posting")
             
             if not bot_token:
                 logger.warning("Cannot post message - bot token not configured")
