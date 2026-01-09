@@ -134,7 +134,12 @@ class ServiceHandler:
                     
                     if response.status_code == 200:
                         data = response.json()
-                        return data.get("response") or data.get("text") or data.get("message")
+                        # Game Master service returns response in "response" field
+                        response_text = data.get("response")
+                        if response_text:
+                            return response_text
+                        # Fallback to other fields
+                        return data.get("text") or data.get("message") or str(data)
                     else:
                         logger.error(f"Game Master service returned {response.status_code}: {response.text}")
                         error_data = response.json() if response.text else {}
