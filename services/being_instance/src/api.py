@@ -235,6 +235,34 @@ Remember:
         
         base_system_prompt = await get_character_system_prompt()
         
+        # If target_being_id is set, the message mentions another being
+        # The current being should respond naturally, acknowledging the mention if appropriate
+        if request.target_being_id:
+            # Get target being's name for context
+            target_being_name = f"Character {request.target_being_id[:8]}"
+            try:
+                import httpx
+                being_registry_url = os.getenv("BEING_REGISTRY_URL", "http://localhost:8007")
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    auth_header = {}
+                    if http_request:
+                        auth_header_value = http_request.headers.get("Authorization")
+                        if auth_header_value:
+                            auth_header = {"Authorization": auth_header_value}
+                    
+                    target_response = await client.get(
+                        f"{being_registry_url}/beings/{request.target_being_id}",
+                        headers=auth_header
+                    )
+                    if target_response.status_code == 200:
+                        target_data = target_response.json()
+                        target_being_name = target_data.get("name") or target_being_name
+            except Exception as e:
+                logger.warning(f"Could not fetch target being name: {e}")
+            
+            # Add context about the mention - the being should respond as themselves, not as the mentioned being
+            base_system_prompt += f"\n\nIMPORTANT: The message mentions another being ({target_being_name}). You should respond naturally as YOURSELF, acknowledging the mention if appropriate. Do NOT speak as or pretend to be the mentioned being. You are yourself, respond as yourself."
+        
         if active_prompts:
             system_prompt = f"{base_system_prompt}\n\n## Additional Context and Instructions\n{active_prompts}"
         else:
