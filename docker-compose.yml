@@ -183,6 +183,7 @@ services:
 
   mattermost:
     image: mattermost/mattermost-team-edition:latest
+    platform: linux/amd64  # Mattermost server is AMD64-only; Docker will use emulation on ARM64
     ports:
       - "8065:8065"
     environment:
