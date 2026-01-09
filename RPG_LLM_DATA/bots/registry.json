@@ -7,5 +7,14 @@
     "user_id": null,
     "created_at": "2026-01-09T14:52:42.401325",
     "is_active": true
+  },
+  "gaia": {
+    "username": "gaia",
+    "token": "c8hisgwmobb7bfss8y4dmztc4w",
+    "display_name": "Gaia",
+    "description": "Gaia (Worlds) - World state tracking and logical consistency",
+    "user_id": "9pwzijw5et883qsqdn36qmnzbe",
+    "created_at": "2026-01-09T14:58:49.632093",
+    "is_active": true
   }
 }
