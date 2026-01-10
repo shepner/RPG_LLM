@@ -182,7 +182,8 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                             response_text = await bot.service_handler.handle_service_message(
                                                 bot_username=bot_username,
                                                 message=message,
-                                                mattermost_user_id=post_user_id
+                                                mattermost_user_id=post_user_id,
+                                                mattermost_username=sender_username  # Pass username to avoid auth_bridge lookup
                                             )
                                             
                                             if response_text:

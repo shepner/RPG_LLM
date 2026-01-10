@@ -58,7 +58,8 @@ class ServiceHandler:
         message: str,
         mattermost_user_id: str,
         context: Optional[Dict] = None,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        mattermost_username: Optional[str] = None
     ) -> Optional[str]:
         """
         Handle a message to a service bot.
@@ -84,8 +85,11 @@ class ServiceHandler:
         endpoint = service_info["endpoint"]
         
         try:
-            # Get auth headers
-            auth_headers = await self.auth_bridge.get_auth_headers(mattermost_user_id)
+            # Get auth headers (pass username if available to avoid mattermostdriver lookup)
+            auth_headers = await self.auth_bridge.get_auth_headers(
+                mattermost_user_id,
+                mattermost_username=mattermost_username
+            )
             
             # Prepare request based on service
             if bot_username_lower == "gaia":
