@@ -121,7 +121,8 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                             order = posts.get("order", [])
                             
                             # Process new posts (excluding bot's own posts)
-                            for post_id in order:
+                            # Process in reverse order (newest first) to handle the most recent message
+                            for post_id in reversed(order):
                                 if post_id == last_post_id:
                                     continue
                                 
@@ -131,6 +132,13 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 
                                 # Skip bot's own messages and empty messages
                                 if post_user_id == bot_user_id or not message:
+                                    if post_user_id == bot_user_id:
+                                        logger.debug(f"{bot_username}: Skipping own message {post_id}")
+                                    continue
+                                
+                                # Check if we've already processed this post
+                                if last_post_id and post_id == last_post_id:
+                                    logger.debug(f"{bot_username}: Already processed post {post_id}")
                                     continue
                                 
                                 # Get the user who sent the message
@@ -170,10 +178,14 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 else:
                                     logger.warning(f"{bot_username}: Bot or service_handler not available")
                                 
-                                # Update last processed post ID
+                                # Update last processed post ID (use the latest post ID)
                                 if bot_username not in _last_post_ids:
                                     _last_post_ids[bot_username] = {}
-                                _last_post_ids[bot_username][channel_id] = post_id
+                                # Track the latest post ID we've seen
+                                current_latest = _last_post_ids[bot_username].get(channel_id, "")
+                                if not current_latest or post_id > current_latest:
+                                    _last_post_ids[bot_username][channel_id] = post_id
+                                    logger.debug(f"{bot_username}: Updated last_post_id for {channel_id} to {post_id}")
                                 
                         except Exception as e:
                             logger.debug(f"Error processing posts in DM channel {channel_id} for {bot_username}: {e}")
