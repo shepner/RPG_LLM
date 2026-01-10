@@ -109,8 +109,8 @@ class ServiceHandler:
                 oldest_request = min(_rate_limit_tracker[service_name])
                 wait_time = _RATE_LIMIT_WINDOW - (current_time - oldest_request) + 1
                 if wait_time > 0:
-                    logger.warning(f"Rate limit reached for {service_name}. Waiting {wait_time:.1f} seconds...")
-                    return f"⚠️ Rate limit reached. Please wait {int(wait_time)} seconds before sending another message. (Free tier: 5 requests/minute)"
+                    logger.warning(f"Rate limit reached for {service_name}. {len(_rate_limit_tracker[service_name])} requests in last {_RATE_LIMIT_WINDOW}s. Waiting {wait_time:.1f} seconds...")
+                    return f"⚠️ Rate limit reached ({len(_rate_limit_tracker[service_name])}/{_RATE_LIMIT_RPM} requests in last minute). Please wait {int(wait_time)} seconds before sending another message. (Free tier: 5 requests/minute)"
             
             # Get auth headers (pass username if available to avoid mattermostdriver lookup)
             auth_headers = await self.auth_bridge.get_auth_headers(
