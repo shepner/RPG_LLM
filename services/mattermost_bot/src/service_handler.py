@@ -2,11 +2,20 @@
 
 import logging
 import httpx
+import asyncio
+import time
 from typing import Optional, Dict
+from collections import defaultdict
 from .config import Config
 from .auth_bridge import AuthBridge
 
 logger = logging.getLogger(__name__)
+
+# Rate limiting: Track requests per minute per service
+# Free tier: 5 requests/minute per model
+_rate_limit_tracker = defaultdict(list)  # service_name -> list of request timestamps
+_RATE_LIMIT_RPM = 4  # Conservative limit: 4 requests/minute (leave 1 buffer)
+_RATE_LIMIT_WINDOW = 60  # 60 second window
 
 
 class ServiceHandler:
@@ -85,6 +94,24 @@ class ServiceHandler:
         endpoint = service_info["endpoint"]
         
         try:
+            # Check rate limit before making request
+            current_time = time.time()
+            service_name = bot_username_lower
+            
+            # Clean old timestamps (older than 60 seconds)
+            _rate_limit_tracker[service_name] = [
+                ts for ts in _rate_limit_tracker[service_name]
+                if current_time - ts < _RATE_LIMIT_WINDOW
+            ]
+            
+            # Check if we're at the rate limit
+            if len(_rate_limit_tracker[service_name]) >= _RATE_LIMIT_RPM:
+                oldest_request = min(_rate_limit_tracker[service_name])
+                wait_time = _RATE_LIMIT_WINDOW - (current_time - oldest_request) + 1
+                if wait_time > 0:
+                    logger.warning(f"Rate limit reached for {service_name}. Waiting {wait_time:.1f} seconds...")
+                    return f"⚠️ Rate limit reached. Please wait {int(wait_time)} seconds before sending another message. (Free tier: 5 requests/minute)"
+            
             # Get auth headers (pass username if available to avoid mattermostdriver lookup)
             auth_headers = await self.auth_bridge.get_auth_headers(
                 mattermost_user_id,
@@ -99,6 +126,9 @@ class ServiceHandler:
                     "context": context,
                     "session_id": session_id
                 }
+                
+                # Record this request
+                _rate_limit_tracker[service_name].append(current_time)
                 
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(
@@ -119,6 +149,17 @@ class ServiceHandler:
                             return f"Error from {service_info['name']}: {error_msg}"
                         # If no response, return a default message
                         return f"Received query but no response from {service_info['name']}"
+                    elif response.status_code == 429:
+                        # Rate limit error from API - extract retry time if available
+                        try:
+                            error_data = response.json()
+                            error_msg = error_data.get("error", {}).get("message", "Rate limit exceeded")
+                            # Try to extract retry time from error message
+                            if "retry in" in error_msg.lower():
+                                return f"⚠️ API rate limit exceeded. {error_msg}"
+                            return f"⚠️ API rate limit exceeded. Please wait a moment and try again. (Free tier: 5 requests/minute)"
+                        except:
+                            return f"⚠️ API rate limit exceeded. Please wait ~10 seconds and try again. (Free tier: 5 requests/minute)"
                     else:
                         logger.error(f"Worlds service returned {response.status_code}: {response.text}")
                         error_msg = f"Error: Could not get response from {service_info['name']}"
@@ -133,6 +174,9 @@ class ServiceHandler:
                     "context": context,
                     "session_id": session_id
                 }
+                
+                # Record this request
+                _rate_limit_tracker[service_name].append(current_time)
                 
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(
@@ -153,6 +197,15 @@ class ServiceHandler:
                             return f"Error from {service_info['name']}: {error_msg}"
                         # Fallback to other fields
                         return data.get("text") or data.get("message") or "No response from Game Master service"
+                    elif response.status_code == 429:
+                        try:
+                            error_data = response.json()
+                            error_msg = error_data.get("error", {}).get("message", "Rate limit exceeded")
+                            if "retry in" in error_msg.lower():
+                                return f"⚠️ API rate limit exceeded. {error_msg}"
+                            return f"⚠️ API rate limit exceeded. Please wait a moment and try again. (Free tier: 5 requests/minute)"
+                        except:
+                            return f"⚠️ API rate limit exceeded. Please wait ~10 seconds and try again. (Free tier: 5 requests/minute)"
                     else:
                         logger.error(f"Game Master service returned {response.status_code}: {response.text}")
                         error_data = response.json() if response.text else {}
@@ -167,6 +220,9 @@ class ServiceHandler:
                     "context": context,
                     "session_id": session_id
                 }
+                
+                # Record this request
+                _rate_limit_tracker[service_name].append(current_time)
                 
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(
@@ -187,8 +243,17 @@ class ServiceHandler:
                             return f"Error from {service_info['name']}: {error_msg}"
                         # Fallback to other fields
                         return data.get("text") or data.get("message") or "No response from Rules Engine service"
+                    elif response.status_code == 429:
+                        try:
+                            error_data = response.json()
+                            error_msg = error_data.get("error", {}).get("message", "Rate limit exceeded")
+                            if "retry in" in error_msg.lower():
+                                return f"⚠️ API rate limit exceeded. {error_msg}"
+                            return f"⚠️ API rate limit exceeded. Please wait a moment and try again. (Free tier: 5 requests/minute)"
+                        except:
+                            return f"⚠️ API rate limit exceeded. Please wait ~10 seconds and try again. (Free tier: 5 requests/minute)"
                     else:
-                        logger.error(f"Time Management service returned {response.status_code}: {response.text}")
+                        logger.error(f"Rules Engine service returned {response.status_code}: {response.text}")
                         error_data = response.json() if response.text else {}
                         error_msg_detail = error_data.get("error", {}).get("message", error_data.get("message", response.text))
                         error_msg = f"Error from {service_info['name']}: {error_msg_detail}"
