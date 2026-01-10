@@ -83,7 +83,10 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                     dm_channels = bot_driver.channels.get_channels_for_user(bot_user_id, "")
                     # Filter for DM channels
                     dm_channels = [c for c in dm_channels if c.get("type") == "D"]
-                    logger.debug(f"{bot_username}: Found {len(dm_channels)} DM channels")
+                    if len(dm_channels) > 0:
+                        logger.info(f"{bot_username}: Found {len(dm_channels)} DM channels")
+                    else:
+                        logger.debug(f"{bot_username}: Found {len(dm_channels)} DM channels")
                 except Exception as e:
                     logger.warning(f"Error getting DM channels for {bot_username}: {e}")
                     dm_channels = []
@@ -142,21 +145,30 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 
                                 # Route to service handler
                                 if bot and bot.service_handler:
-                                    response_text = await bot.service_handler.handle_service_message(
-                                        bot_username=bot_username,
-                                        message=message,
-                                        mattermost_user_id=post_user_id
-                                    )
-                                    
-                                    if response_text:
-                                        # Post response as this bot using its token
-                                        await post_message_as_bot(
-                                            bot_driver=bot_driver,
-                                            channel_id=channel_id,
-                                            text=response_text,
-                                            bot_username=bot_username
+                                    logger.info(f"{bot_username}: Routing to service handler")
+                                    try:
+                                        response_text = await bot.service_handler.handle_service_message(
+                                            bot_username=bot_username,
+                                            message=message,
+                                            mattermost_user_id=post_user_id
                                         )
-                                        logger.info(f"{bot_username}: Posted DM response")
+                                        
+                                        if response_text:
+                                            logger.info(f"{bot_username}: Got response: {response_text[:100]}")
+                                            # Post response as this bot using its token
+                                            await post_message_as_bot(
+                                                bot_driver=bot_driver,
+                                                channel_id=channel_id,
+                                                text=response_text,
+                                                bot_username=bot_username
+                                            )
+                                            logger.info(f"{bot_username}: Posted DM response")
+                                        else:
+                                            logger.warning(f"{bot_username}: Service handler returned no response")
+                                    except Exception as e:
+                                        logger.error(f"{bot_username}: Error in service handler: {e}", exc_info=True)
+                                else:
+                                    logger.warning(f"{bot_username}: Bot or service_handler not available")
                                 
                                 # Update last processed post ID
                                 if bot_username not in _last_post_ids:
