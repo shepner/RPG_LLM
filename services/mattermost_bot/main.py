@@ -214,8 +214,8 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 
                             except Exception as e:
                                 logger.debug(f"Error processing posts in DM channel {channel_id} for {bot_username}: {e}")
-                    except Exception as e:
-                        logger.debug(f"Error checking DM channel {channel_id} for {bot_username}: {e}")
+                        except Exception as e:
+                            logger.debug(f"Error checking DM channel {channel_id} for {bot_username}: {e}")
                         
             except Exception as e:
                 logger.debug(f"Error polling DM messages for {bot_username}: {e}")
