@@ -124,6 +124,14 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                         headers=headers,
                                         params={"since": last_post_id}
                                     )
+                                    # If "since" parameter fails (400), fall back to getting recent posts
+                                    if posts_response.status_code == 400:
+                                        logger.debug(f"{bot_username}: 'since' parameter failed for {channel_id}, using per_page instead")
+                                        posts_response = await client.get(
+                                            f"{api_url}/channels/{channel_id}/posts",
+                                            headers=headers,
+                                            params={"per_page": 20}
+                                        )
                                 else:
                                     # First time checking - get last 20 posts
                                     posts_response = await client.get(
@@ -133,7 +141,7 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                     )
                                 
                                 if posts_response.status_code != 200:
-                                    logger.debug(f"{bot_username}: Could not get posts for {channel_id}: {posts_response.status_code}")
+                                    logger.warning(f"{bot_username}: Could not get posts for {channel_id}: {posts_response.status_code} - {posts_response.text[:100]}")
                                     continue
                                 
                                 posts = posts_response.json()
@@ -245,9 +253,16 @@ async def post_message_as_bot_httpx(api_url: str, bot_token: str, channel_id: st
             )
             
             if response.status_code == 201:
-                logger.debug(f"{bot_username}: Posted message to channel {channel_id}")
+                logger.info(f"{bot_username}: Successfully posted message to channel {channel_id}")
             else:
-                logger.error(f"{bot_username}: Error posting message: {response.status_code} - {response.text}")
+                logger.error(f"{bot_username}: Error posting message: {response.status_code} - {response.text[:200]}")
+                # Try to extract error details
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("message", error_data.get("error", response.text[:200]))
+                    logger.error(f"{bot_username}: Post error details: {error_msg}")
+                except:
+                    pass
         
     except Exception as e:
         logger.error(f"Error posting message as {bot_username}: {e}", exc_info=True)
