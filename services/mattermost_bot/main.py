@@ -47,86 +47,98 @@ _last_post_ids = {}  # Format: {bot_username: {channel_id: post_id}}
 async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
     """Poll for new DM messages for a specific service bot."""
     import asyncio
-    from mattermostdriver import Driver
+    import httpx
     from urllib.parse import urlparse
     
     logger.info(f"Starting DM polling for {bot_username}")
     await asyncio.sleep(2)  # Initial delay
     
-    # Create a driver for this specific bot
+    # Use httpx directly instead of mattermostdriver (avoids websocket issues)
     parsed = urlparse(Config.MATTERMOST_URL)
-    bot_driver = Driver({
-        "url": parsed.hostname or "mattermost",
-        "token": bot_token,
-        "scheme": parsed.scheme or "http",
-        "port": parsed.port or 8065,
-        "basepath": "/api/v4",
-        "verify": False
-    })
+    api_url = f"{parsed.scheme or 'http'}://{parsed.hostname or 'mattermost'}:{parsed.port or 8065}/api/v4"
+    headers = {"Authorization": f"Bearer {bot_token}"}
     
     while True:
         try:
             await asyncio.sleep(5)  # Poll every 5 seconds
             
             try:
-                # Get this bot's user ID
-                try:
-                    bot_user = bot_driver.users.get_user("me")
-                    if not bot_user:
-                        logger.warning(f"{bot_username}: Could not get user info")
+                # Get this bot's user ID using httpx
+                async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+                    try:
+                        user_response = await client.get(f"{api_url}/users/me", headers=headers)
+                        if user_response.status_code != 200:
+                            logger.warning(f"{bot_username}: Could not get user info: {user_response.status_code} - {user_response.text[:100]}")
+                            await asyncio.sleep(10)
+                            continue
+                        bot_user = user_response.json()
+                        bot_user_id = bot_user["id"]
+                        logger.debug(f"{bot_username}: Bot user ID: {bot_user_id}")
+                    except Exception as e:
+                        logger.error(f"{bot_username}: Error getting bot user: {e}", exc_info=True)
                         await asyncio.sleep(10)
                         continue
-                    bot_user_id = bot_user["id"]
-                    logger.debug(f"{bot_username}: Bot user ID: {bot_user_id}")
-                except Exception as e:
-                    logger.error(f"{bot_username}: Error getting bot user: {e}", exc_info=True)
-                    await asyncio.sleep(10)
-                    continue
-                
-                # Get DM channels for this bot (DMs it receives)
-                try:
-                    all_channels = bot_driver.channels.get_channels_for_user(bot_user_id, "")
-                    logger.debug(f"{bot_username}: Got {len(all_channels)} total channels")
-                    # Filter for DM channels
-                    dm_channels = [c for c in all_channels if c.get("type") == "D"]
-                    if len(dm_channels) > 0:
-                        logger.info(f"{bot_username}: Found {len(dm_channels)} DM channels")
-                        for dm in dm_channels:
-                            logger.debug(f"{bot_username}: DM channel ID: {dm.get('id')}")
-                    else:
-                        logger.debug(f"{bot_username}: Found {len(dm_channels)} DM channels (no DMs yet)")
-                except Exception as e:
-                    logger.error(f"{bot_username}: Error getting DM channels: {e}", exc_info=True)
-                    dm_channels = []
-                
-                for channel in dm_channels:
-                    channel_id = channel.get("id")
                     
-                    # Get channel members
+                    # Get DM channels for this bot (DMs it receives)
                     try:
-                        members = bot_driver.channels.get_channel_members(channel_id)
-                        member_ids = [m.get("user_id") for m in members]
-                        
-                        # Get recent posts in this channel
-                        try:
-                            # Get posts since last check
-                            last_post_ids = _last_post_ids.get(bot_username, {})
-                            last_post_id = last_post_ids.get(channel_id, "")
-                            
-                            if last_post_id:
-                                posts = bot_driver.posts.get_posts_for_channel(
-                                    channel_id,
-                                    params={"since": last_post_id}
-                                )
+                        channels_response = await client.get(f"{api_url}/users/{bot_user_id}/channels", headers=headers)
+                        if channels_response.status_code != 200:
+                            logger.warning(f"{bot_username}: Could not get channels: {channels_response.status_code}")
+                            dm_channels = []
+                        else:
+                            all_channels = channels_response.json()
+                            logger.debug(f"{bot_username}: Got {len(all_channels)} total channels")
+                            # Filter for DM channels
+                            dm_channels = [c for c in all_channels if c.get("type") == "D"]
+                            if len(dm_channels) > 0:
+                                logger.info(f"{bot_username}: Found {len(dm_channels)} DM channels")
+                                for dm in dm_channels:
+                                    logger.debug(f"{bot_username}: DM channel ID: {dm.get('id')}")
                             else:
-                                # First time checking - get last 20 posts
-                                posts = bot_driver.posts.get_posts_for_channel(
-                                    channel_id,
-                                    params={"per_page": 20}
-                                )
+                                logger.debug(f"{bot_username}: Found {len(dm_channels)} DM channels (no DMs yet)")
+                    except Exception as e:
+                        logger.error(f"{bot_username}: Error getting DM channels: {e}", exc_info=True)
+                        dm_channels = []
+                
+                    for channel in dm_channels:
+                        channel_id = channel.get("id")
+                        
+                        # Get channel members
+                        try:
+                            members_response = await client.get(f"{api_url}/channels/{channel_id}/members", headers=headers)
+                            if members_response.status_code != 200:
+                                logger.debug(f"{bot_username}: Could not get members for {channel_id}")
+                                continue
+                            members = members_response.json()
+                            member_ids = [m.get("user_id") for m in members]
                             
-                            post_list = posts.get("posts", {})
-                            order = posts.get("order", [])
+                            # Get recent posts in this channel
+                            try:
+                                # Get posts since last check
+                                last_post_ids = _last_post_ids.get(bot_username, {})
+                                last_post_id = last_post_ids.get(channel_id, "")
+                                
+                                if last_post_id:
+                                    posts_response = await client.get(
+                                        f"{api_url}/channels/{channel_id}/posts",
+                                        headers=headers,
+                                        params={"since": last_post_id}
+                                    )
+                                else:
+                                    # First time checking - get last 20 posts
+                                    posts_response = await client.get(
+                                        f"{api_url}/channels/{channel_id}/posts",
+                                        headers=headers,
+                                        params={"per_page": 20}
+                                    )
+                                
+                                if posts_response.status_code != 200:
+                                    logger.debug(f"{bot_username}: Could not get posts for {channel_id}: {posts_response.status_code}")
+                                    continue
+                                
+                                posts = posts_response.json()
+                                post_list = posts.get("posts", {})
+                                order = posts.get("order", [])
                             
                             # Process new posts (excluding bot's own posts)
                             # Process in reverse order (newest first) to handle the most recent message
@@ -151,8 +163,12 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 
                                 # Get the user who sent the message
                                 try:
-                                    sender_user = bot_driver.users.get_user(post_user_id)
-                                    sender_username = sender_user.get("username", "")
+                                    user_response = await client.get(f"{api_url}/users/{post_user_id}", headers=headers)
+                                    if user_response.status_code == 200:
+                                        sender_user = user_response.json()
+                                        sender_username = sender_user.get("username", "")
+                                    else:
+                                        sender_username = "unknown"
                                 except Exception:
                                     sender_username = "unknown"
                                 
@@ -169,16 +185,17 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                             mattermost_user_id=post_user_id
                                         )
                                         
-                                        if response_text:
-                                            logger.info(f"{bot_username}: Got response: {response_text[:100]}")
-                                            # Post response as this bot using its token
-                                            await post_message_as_bot(
-                                                bot_driver=bot_driver,
-                                                channel_id=channel_id,
-                                                text=response_text,
-                                                bot_username=bot_username
-                                            )
-                                            logger.info(f"{bot_username}: Posted DM response")
+                                    if response_text:
+                                        logger.info(f"{bot_username}: Got response: {response_text[:100]}")
+                                        # Post response as this bot using httpx
+                                        await post_message_as_bot_httpx(
+                                            api_url=api_url,
+                                            bot_token=bot_token,
+                                            channel_id=channel_id,
+                                            text=response_text,
+                                            bot_username=bot_username
+                                        )
+                                        logger.info(f"{bot_username}: Posted DM response")
                                         else:
                                             logger.warning(f"{bot_username}: Service handler returned no response")
                                     except Exception as e:
@@ -208,21 +225,10 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
             await asyncio.sleep(10)  # Wait longer on error
 
 
-async def post_message_as_bot(bot_driver, channel_id: str, text: str, bot_username: str):
-    """Post a message as a specific bot using its driver."""
+async def post_message_as_bot_httpx(api_url: str, bot_token: str, channel_id: str, text: str, bot_username: str):
+    """Post a message as a specific bot using httpx."""
     try:
         import httpx
-        from urllib.parse import urlparse
-        
-        # Get token from driver
-        token = bot_driver.options.get("token")
-        if not token:
-            logger.warning(f"Cannot post message - no token for {bot_username}")
-            return
-        
-        # Use HTTP API directly
-        parsed = urlparse(Config.MATTERMOST_URL)
-        api_url = f"{parsed.scheme or 'http'}://{parsed.hostname or 'mattermost'}:{parsed.port or 8065}/api/v4"
         
         post_data = {
             "channel_id": channel_id,
@@ -234,7 +240,7 @@ async def post_message_as_bot(bot_driver, channel_id: str, text: str, bot_userna
             response = await client.post(
                 f"{api_url}/posts",
                 json=post_data,
-                headers={"Authorization": f"Bearer {token}"}
+                headers={"Authorization": f"Bearer {bot_token}"}
             )
             
             if response.status_code == 201:
