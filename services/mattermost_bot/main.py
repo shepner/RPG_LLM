@@ -70,25 +70,33 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
             
             try:
                 # Get this bot's user ID
-                bot_user = bot_driver.users.get_user("me")
-                if not bot_user:
-                    logger.warning(f"Could not get user info for {bot_username}")
+                try:
+                    bot_user = bot_driver.users.get_user("me")
+                    if not bot_user:
+                        logger.warning(f"{bot_username}: Could not get user info")
+                        await asyncio.sleep(10)
+                        continue
+                    bot_user_id = bot_user["id"]
+                    logger.debug(f"{bot_username}: Bot user ID: {bot_user_id}")
+                except Exception as e:
+                    logger.error(f"{bot_username}: Error getting bot user: {e}", exc_info=True)
                     await asyncio.sleep(10)
                     continue
                 
-                bot_user_id = bot_user["id"]
-                
                 # Get DM channels for this bot (DMs it receives)
                 try:
-                    dm_channels = bot_driver.channels.get_channels_for_user(bot_user_id, "")
+                    all_channels = bot_driver.channels.get_channels_for_user(bot_user_id, "")
+                    logger.debug(f"{bot_username}: Got {len(all_channels)} total channels")
                     # Filter for DM channels
-                    dm_channels = [c for c in dm_channels if c.get("type") == "D"]
+                    dm_channels = [c for c in all_channels if c.get("type") == "D"]
                     if len(dm_channels) > 0:
                         logger.info(f"{bot_username}: Found {len(dm_channels)} DM channels")
+                        for dm in dm_channels:
+                            logger.debug(f"{bot_username}: DM channel ID: {dm.get('id')}")
                     else:
-                        logger.debug(f"{bot_username}: Found {len(dm_channels)} DM channels")
+                        logger.debug(f"{bot_username}: Found {len(dm_channels)} DM channels (no DMs yet)")
                 except Exception as e:
-                    logger.warning(f"Error getting DM channels for {bot_username}: {e}")
+                    logger.error(f"{bot_username}: Error getting DM channels: {e}", exc_info=True)
                     dm_channels = []
                 
                 for channel in dm_channels:
