@@ -185,17 +185,17 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                             mattermost_user_id=post_user_id
                                         )
                                         
-                                    if response_text:
-                                        logger.info(f"{bot_username}: Got response: {response_text[:100]}")
-                                        # Post response as this bot using httpx
-                                        await post_message_as_bot_httpx(
-                                            api_url=api_url,
-                                            bot_token=bot_token,
-                                            channel_id=channel_id,
-                                            text=response_text,
-                                            bot_username=bot_username
-                                        )
-                                        logger.info(f"{bot_username}: Posted DM response")
+                                        if response_text:
+                                            logger.info(f"{bot_username}: Got response: {response_text[:100]}")
+                                            # Post response as this bot using httpx
+                                            await post_message_as_bot_httpx(
+                                                api_url=api_url,
+                                                bot_token=bot_token,
+                                                channel_id=channel_id,
+                                                text=response_text,
+                                                bot_username=bot_username
+                                            )
+                                            logger.info(f"{bot_username}: Posted DM response")
                                         else:
                                             logger.warning(f"{bot_username}: Service handler returned no response")
                                     except Exception as e:
