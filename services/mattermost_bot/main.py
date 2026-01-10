@@ -143,66 +143,66 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 # Process new posts (excluding bot's own posts)
                                 # Process in reverse order (newest first) to handle the most recent message
                                 for post_id in reversed(order):
-                                if post_id == last_post_id:
-                                    continue
-                                
-                                post = post_list.get(post_id, {})
-                                post_user_id = post.get("user_id")
-                                message = post.get("message", "").strip()
-                                
-                                # Skip bot's own messages and empty messages
-                                if post_user_id == bot_user_id or not message:
-                                    if post_user_id == bot_user_id:
-                                        logger.debug(f"{bot_username}: Skipping own message {post_id}")
-                                    continue
-                                
-                                # Check if we've already processed this post
-                                if last_post_id and post_id == last_post_id:
-                                    logger.debug(f"{bot_username}: Already processed post {post_id}")
-                                    continue
-                                
-                                # Get the user who sent the message
-                                try:
-                                    user_response = await client.get(f"{api_url}/users/{post_user_id}", headers=headers)
-                                    if user_response.status_code == 200:
-                                        sender_user = user_response.json()
-                                        sender_username = sender_user.get("username", "")
-                                    else:
-                                        sender_username = "unknown"
-                                except Exception:
-                                    sender_username = "unknown"
-                                
-                                # Process the message as this service bot
-                                logger.info(f"{bot_username}: Processing DM from {sender_username}: {message[:50]}")
-                                
-                                # Route to service handler
-                                if bot and bot.service_handler:
-                                    logger.info(f"{bot_username}: Routing to service handler")
+                                    if post_id == last_post_id:
+                                        continue
+                                    
+                                    post = post_list.get(post_id, {})
+                                    post_user_id = post.get("user_id")
+                                    message = post.get("message", "").strip()
+                                    
+                                    # Skip bot's own messages and empty messages
+                                    if post_user_id == bot_user_id or not message:
+                                        if post_user_id == bot_user_id:
+                                            logger.debug(f"{bot_username}: Skipping own message {post_id}")
+                                        continue
+                                    
+                                    # Check if we've already processed this post
+                                    if last_post_id and post_id == last_post_id:
+                                        logger.debug(f"{bot_username}: Already processed post {post_id}")
+                                        continue
+                                    
+                                    # Get the user who sent the message
                                     try:
-                                        response_text = await bot.service_handler.handle_service_message(
-                                            bot_username=bot_username,
-                                            message=message,
-                                            mattermost_user_id=post_user_id
-                                        )
-                                        
-                                        if response_text:
-                                            logger.info(f"{bot_username}: Got response: {response_text[:100]}")
-                                            # Post response as this bot using httpx
-                                            await post_message_as_bot_httpx(
-                                                api_url=api_url,
-                                                bot_token=bot_token,
-                                                channel_id=channel_id,
-                                                text=response_text,
-                                                bot_username=bot_username
-                                            )
-                                            logger.info(f"{bot_username}: Posted DM response")
+                                        user_response = await client.get(f"{api_url}/users/{post_user_id}", headers=headers)
+                                        if user_response.status_code == 200:
+                                            sender_user = user_response.json()
+                                            sender_username = sender_user.get("username", "")
                                         else:
-                                            logger.warning(f"{bot_username}: Service handler returned no response")
-                                    except Exception as e:
-                                        logger.error(f"{bot_username}: Error in service handler: {e}", exc_info=True)
-                                else:
-                                    logger.warning(f"{bot_username}: Bot or service_handler not available")
-                                
+                                            sender_username = "unknown"
+                                    except Exception:
+                                        sender_username = "unknown"
+                                    
+                                    # Process the message as this service bot
+                                    logger.info(f"{bot_username}: Processing DM from {sender_username}: {message[:50]}")
+                                    
+                                    # Route to service handler
+                                    if bot and bot.service_handler:
+                                        logger.info(f"{bot_username}: Routing to service handler")
+                                        try:
+                                            response_text = await bot.service_handler.handle_service_message(
+                                                bot_username=bot_username,
+                                                message=message,
+                                                mattermost_user_id=post_user_id
+                                            )
+                                            
+                                            if response_text:
+                                                logger.info(f"{bot_username}: Got response: {response_text[:100]}")
+                                                # Post response as this bot using httpx
+                                                await post_message_as_bot_httpx(
+                                                    api_url=api_url,
+                                                    bot_token=bot_token,
+                                                    channel_id=channel_id,
+                                                    text=response_text,
+                                                    bot_username=bot_username
+                                                )
+                                                logger.info(f"{bot_username}: Posted DM response")
+                                            else:
+                                                logger.warning(f"{bot_username}: Service handler returned no response")
+                                        except Exception as e:
+                                            logger.error(f"{bot_username}: Error in service handler: {e}", exc_info=True)
+                                    else:
+                                        logger.warning(f"{bot_username}: Bot or service_handler not available")
+                                    
                                     # Update last processed post ID (use the latest post ID)
                                     if bot_username not in _last_post_ids:
                                         _last_post_ids[bot_username] = {}
