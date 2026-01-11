@@ -148,11 +148,34 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 post_list = posts.get("posts", {})
                                 order = posts.get("order", [])
                                 
+                                logger.debug(f"{bot_username}: Channel {channel_id[:20]}... has {len(order)} posts, last_post_id={last_post_id[:20] if last_post_id else 'None'}...")
+                                
+                                # Determine which posts to process
+                                # Mattermost order array is sorted newest first
+                                posts_to_process = []
+                                if last_post_id and last_post_id in order:
+                                    # Find the index of last_post_id in the order
+                                    last_index = order.index(last_post_id)
+                                    # Process all posts that come before last_post_id (newer posts)
+                                    posts_to_process = order[:last_index]
+                                    logger.info(f"{bot_username}: Found {len(posts_to_process)} new posts after last_post_id")
+                                elif last_post_id:
+                                    # last_post_id exists but not in current 20 posts - process newest post to catch up
+                                    if order:
+                                        posts_to_process = [order[0]]  # Just the newest post
+                                        logger.info(f"{bot_username}: last_post_id not in current posts, processing newest post to catch up")
+                                else:
+                                    # No last_post_id - process newest post only (first time checking this channel)
+                                    if order:
+                                        posts_to_process = [order[0]]  # Just the newest post
+                                        logger.info(f"{bot_username}: No last_post_id, processing newest post only (first check)")
+                                
                                 # Process new posts (excluding bot's own posts)
                                 # Process in reverse order (newest first) to handle the most recent message
-                                for post_id in reversed(order):
-                                    # Skip if we've already processed this post
+                                for post_id in reversed(posts_to_process):
+                                    # Skip if we've already processed this post (double-check)
                                     if post_id == last_post_id:
+                                        logger.debug(f"{bot_username}: Skipping post {post_id[:20]}... (matches last_post_id)")
                                         continue
                                     
                                     post = post_list.get(post_id, {})
@@ -218,7 +241,11 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                     logger.info(f"{bot_username}: Processing DM from {sender_username or 'unknown'}: {message[:50]}")
                                     
                                     # Route to service handler
-                                    if bot and bot.service_handler:
+                                    if not bot:
+                                        logger.error(f"{bot_username}: Global bot variable is None - bot not initialized")
+                                    elif not bot.service_handler:
+                                        logger.error(f"{bot_username}: Bot service_handler is None")
+                                    else:
                                         logger.info(f"{bot_username}: Routing to service handler")
                                         try:
                                             response_text = await bot.service_handler.handle_service_message(
@@ -243,8 +270,6 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                                 logger.warning(f"{bot_username}: Service handler returned no response")
                                         except Exception as e:
                                             logger.error(f"{bot_username}: Error in service handler: {e}", exc_info=True)
-                                    else:
-                                        logger.warning(f"{bot_username}: Bot or service_handler not available")
                                 
                             except Exception as e:
                                 logger.debug(f"Error processing posts in DM channel {channel_id} for {bot_username}: {e}")
