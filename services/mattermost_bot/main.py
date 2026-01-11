@@ -124,9 +124,13 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                         headers=headers,
                                         params={"since": last_post_id}
                                     )
-                                    # If "since" parameter fails (400), fall back to getting recent posts
+                                    # If "since" parameter fails (400), the post_id is invalid/expired - clear it and use per_page
                                     if posts_response.status_code == 400:
-                                        logger.debug(f"{bot_username}: 'since' parameter failed for {channel_id}, using per_page instead")
+                                        logger.warning(f"{bot_username}: 'since' parameter failed for {channel_id} with post_id {last_post_id[:20]}... (invalid/expired), clearing and using per_page")
+                                        # Clear the invalid last_post_id
+                                        if bot_username in _last_post_ids and channel_id in _last_post_ids[bot_username]:
+                                            del _last_post_ids[bot_username][channel_id]
+                                        last_post_id = ""  # Reset for this iteration
                                         posts_response = await client.get(
                                             f"{api_url}/channels/{channel_id}/posts",
                                             headers=headers,
