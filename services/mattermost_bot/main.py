@@ -229,14 +229,6 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                             _last_post_ids[bot_username][channel_id] = post_id
                                         continue
                                     
-                                    # Update last_post_id BEFORE processing to prevent re-processing if something goes wrong
-                                    if bot_username not in _last_post_ids:
-                                        _last_post_ids[bot_username] = {}
-                                    current_latest = _last_post_ids[bot_username].get(channel_id, "")
-                                    if not current_latest or post_id > current_latest:
-                                        _last_post_ids[bot_username][channel_id] = post_id
-                                        logger.debug(f"{bot_username}: Updated last_post_id for {channel_id} to {post_id} (before processing)")
-                                    
                                     # Process the message as this service bot
                                     logger.info(f"{bot_username}: Processing DM from {sender_username or 'unknown'}: {message[:50]}")
                                     
@@ -258,7 +250,7 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                             if response_text:
                                                 logger.info(f"{bot_username}: Got response: {response_text[:100]}")
                                                 # Post response as this bot using httpx
-                                                await post_message_as_bot_httpx(
+                                                response_post_id = await post_message_as_bot_httpx(
                                                     api_url=api_url,
                                                     bot_token=bot_token,
                                                     channel_id=channel_id,
@@ -266,10 +258,44 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                                     bot_username=bot_username
                                                 )
                                                 logger.info(f"{bot_username}: Posted DM response")
+                                                
+                                                # Update last_post_id to the response post_id (newest post) to prevent re-processing
+                                                if response_post_id:
+                                                    if bot_username not in _last_post_ids:
+                                                        _last_post_ids[bot_username] = {}
+                                                    _last_post_ids[bot_username][channel_id] = response_post_id
+                                                    logger.debug(f"{bot_username}: Updated last_post_id to response post_id {response_post_id[:20]}...")
+                                                else:
+                                                    # Fallback: update to the user's post_id if we couldn't get response post_id
+                                                    if bot_username not in _last_post_ids:
+                                                        _last_post_ids[bot_username] = {}
+                                                    _last_post_ids[bot_username][channel_id] = post_id
+                                                    logger.debug(f"{bot_username}: Updated last_post_id to user post_id {post_id[:20]}...")
                                             else:
                                                 logger.warning(f"{bot_username}: Service handler returned no response")
+                                                # Still update last_post_id to prevent re-processing
+                                                if bot_username not in _last_post_ids:
+                                                    _last_post_ids[bot_username] = {}
+                                                _last_post_ids[bot_username][channel_id] = post_id
+                                                logger.debug(f"{bot_username}: Updated last_post_id to user post_id {post_id[:20]}... (no response)")
                                         except Exception as e:
                                             logger.error(f"{bot_username}: Error in service handler: {e}", exc_info=True)
+                                            # Still update last_post_id to prevent infinite loops on errors
+                                            if bot_username not in _last_post_ids:
+                                                _last_post_ids[bot_username] = {}
+                                            _last_post_ids[bot_username][channel_id] = post_id
+                                            logger.debug(f"{bot_username}: Updated last_post_id to user post_id {post_id[:20]}... (error)")
+                                    
+                                    # After processing, update last_post_id to the newest post we've seen in this channel
+                                    # This ensures we don't re-process messages even if response posting failed
+                                    if order and order[0]:  # order[0] is the newest post
+                                        newest_post_id = order[0]
+                                        if bot_username not in _last_post_ids:
+                                            _last_post_ids[bot_username] = {}
+                                        current_latest = _last_post_ids[bot_username].get(channel_id, "")
+                                        if not current_latest or newest_post_id > current_latest:
+                                            _last_post_ids[bot_username][channel_id] = newest_post_id
+                                            logger.debug(f"{bot_username}: Updated last_post_id to newest post in channel: {newest_post_id[:20]}...")
                                 
                             except Exception as e:
                                 logger.debug(f"Error processing posts in DM channel {channel_id} for {bot_username}: {e}")
@@ -284,8 +310,12 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
             await asyncio.sleep(10)  # Wait longer on error
 
 
-async def post_message_as_bot_httpx(api_url: str, bot_token: str, channel_id: str, text: str, bot_username: str):
-    """Post a message as a specific bot using httpx."""
+async def post_message_as_bot_httpx(api_url: str, bot_token: str, channel_id: str, text: str, bot_username: str) -> Optional[str]:
+    """Post a message as a specific bot using httpx.
+    
+    Returns:
+        The post_id of the created post, or None if posting failed
+    """
     try:
         import httpx
         
@@ -304,10 +334,12 @@ async def post_message_as_bot_httpx(api_url: str, bot_token: str, channel_id: st
             
             if response.status_code == 201:
                 response_data = response.json()
-                post_id = response_data.get("id", "unknown")
-                logger.info(f"{bot_username}: Successfully posted message to channel {channel_id} (post_id: {post_id})")
+                post_id = response_data.get("id")
+                logger.info(f"{bot_username}: Successfully posted message to channel {channel_id} (post_id: {post_id[:20] if post_id else 'unknown'}...)")
+                return post_id
             else:
                 logger.error(f"{bot_username}: Error posting message: {response.status_code} - {response.text[:200]}")
+                return None
                 # Try to extract error details
                 try:
                     error_data = response.json()
