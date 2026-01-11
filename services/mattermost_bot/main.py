@@ -636,36 +636,61 @@ async def handle_webhook(request: Request):
                 logger.info(f"Returning response: {result}")
                 return result
         
-        # Check if it's an outgoing webhook (has trigger_word)
-        if "trigger_word" in body or ("text" in body and not "command" in body):
-            # This is an outgoing webhook from Mattermost
-            logger.info(f"Received outgoing webhook: trigger_word={body.get('trigger_word')}, text={body.get('text')}")
+        # Check if it's an outgoing webhook (has trigger_word) or a regular post event
+        # Also handle regular post events that might come through webhooks
+        is_outgoing_webhook = "trigger_word" in body
+        is_post_event = "event" in body and body.get("event") == "posted"
+        
+        if is_outgoing_webhook or is_post_event or ("text" in body and "command" not in body and "trigger_word" not in body):
+            # This could be an outgoing webhook from Mattermost or a post event
+            logger.info(f"Received webhook/post event: trigger_word={body.get('trigger_word')}, event={body.get('event')}, channel_id={body.get('channel_id')}, text={body.get('text', body.get('data', {}).get('post', {}).get('message', ''))[:50]}")
             
-            # Extract message and channel info
-            message = body.get("text", "").strip()
-            channel_id = body.get("channel_id")
-            user_id = body.get("user_id")
+            # Extract message and channel info - handle both webhook and post event formats
+            if is_post_event:
+                # Post event format
+                post_data = body.get("data", {}).get("post", {})
+                message = post_data.get("message", "").strip()
+                channel_id = post_data.get("channel_id") or body.get("channel_id")
+                user_id = post_data.get("user_id") or body.get("user_id")
+            else:
+                # Webhook format
+                message = body.get("text", "").strip()
+                channel_id = body.get("channel_id")
+                user_id = body.get("user_id")
+            
             trigger_word = body.get("trigger_word", "")
             
-            # Determine which bot this is for based on trigger word
+            # Determine which bot this is for based on trigger word or @mentions
             bot_username = None
             if trigger_word:
                 # Remove @ symbol if present
                 bot_username = trigger_word.lstrip("@").lower()
             
-            # Also check if message contains @gaia, @thoth, or @maat mention even if trigger_word is just the name
+            # Check for @mentions in the message (for both webhooks and post events)
             if not bot_username and message:
-                mentions = message.split()
-                for word in mentions:
-                    if word.lower().startswith("@gaia") or word.lower() == "gaia":
-                        bot_username = "gaia"
-                        break
-                    elif word.lower().startswith("@thoth") or word.lower() == "thoth":
-                        bot_username = "thoth"
-                        break
-                    elif word.lower().startswith("@maat") or word.lower() == "maat" or word.lower().startswith("@ma'at") or word.lower() == "ma'at":
-                        bot_username = "maat"
-                        break
+                # Use the message router to extract mentions properly
+                if bot and bot.message_router:
+                    mentions = bot.message_router.extract_mentions(message)
+                    for mentioned_username in mentions:
+                        if bot.service_handler.is_service_bot(mentioned_username.lower()):
+                            bot_username = mentioned_username.lower()
+                            logger.info(f"Detected @mention of service bot: {bot_username}")
+                            break
+                
+                # Fallback: simple word matching
+                if not bot_username:
+                    words = message.split()
+                    for word in words:
+                        word_lower = word.lower().lstrip("@")
+                        if word_lower == "gaia" or word_lower.startswith("gaia"):
+                            bot_username = "gaia"
+                            break
+                        elif word_lower == "thoth" or word_lower.startswith("thoth"):
+                            bot_username = "thoth"
+                            break
+                        elif word_lower == "maat" or word_lower.startswith("ma'at") or word_lower.startswith("maat"):
+                            bot_username = "maat"
+                            break
             
             # Remove trigger word from message if present
             if trigger_word and message.startswith(trigger_word):
@@ -716,15 +741,20 @@ async def handle_webhook(request: Request):
             else:
                 response = None
         
-        # Otherwise, treat as regular webhook event
-        else:
+        # Otherwise, treat as regular webhook event (if it has event field)
+        elif "event" in body:
             event_data = {
                 "event": body.get("event", "posted"),
                 "data": body.get("data", body)
             }
             
+            logger.info(f"Handling post event: event={event_data.get('event')}, channel_id={event_data.get('data', {}).get('post', {}).get('channel_id')}")
             # Handle the event
             response = await bot.handle_post_event(event_data)
+        else:
+            # Unknown webhook format - log it
+            logger.warning(f"Received unknown webhook format: {list(body.keys())}")
+            response = None
         
         # If response was already returned (for outgoing webhooks), don't post again
         if isinstance(response, dict) and "username" in response:
