@@ -291,8 +291,8 @@ async def post_message_as_bot_httpx(api_url: str, bot_token: str, channel_id: st
         
         post_data = {
             "channel_id": channel_id,
-            "message": text,
-            "override_username": bot_username  # Make it appear as the bot
+            "message": text
+            # Note: override_username is not needed when using bot tokens - the message will appear as the bot user automatically
         }
         
         async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
@@ -303,7 +303,9 @@ async def post_message_as_bot_httpx(api_url: str, bot_token: str, channel_id: st
             )
             
             if response.status_code == 201:
-                logger.info(f"{bot_username}: Successfully posted message to channel {channel_id}")
+                response_data = response.json()
+                post_id = response_data.get("id", "unknown")
+                logger.info(f"{bot_username}: Successfully posted message to channel {channel_id} (post_id: {post_id})")
             else:
                 logger.error(f"{bot_username}: Error posting message: {response.status_code} - {response.text[:200]}")
                 # Try to extract error details
