@@ -215,6 +215,53 @@ class MattermostBot:
                     # For now, just return None (would need to resolve mentions to being_ids)
                     pass
             
+            # Check if message is in a channel (public/private) where a service bot is a member
+            # This handles cases where user creates a channel and adds service bots as members
+            try:
+                if self.driver:
+                    channel_info = self.driver.channels.get_channel(channel_id)
+                    channel_type = channel_info.get("type", "")
+                    
+                    # Only check for public (O) or private (P) channels, not DMs (already handled above)
+                    if channel_type in ["O", "P"]:
+                        # Get channel members
+                        try:
+                            channel_members = self.driver.channels.get_channel_members(channel_id)
+                            member_ids = [m.get("user_id") for m in channel_members]
+                            
+                            # Check if any service bots are members of this channel
+                            for member_id in member_ids:
+                                if member_id != user_id:  # Skip the message sender
+                                    try:
+                                        member_user = self.driver.users.get_user(member_id)
+                                        member_username = member_user.get("username", "").lower()
+                                        
+                                        # Check if it's a service bot
+                                        if self.service_handler.is_service_bot(member_username):
+                                            logger.info(f"Detected service bot {member_username} in channel {channel_id}")
+                                            # Only respond if message mentions the bot or is a direct question
+                                            # For now, respond to all messages (can be refined later)
+                                            response_text = await self.service_handler.handle_service_message(
+                                                bot_username=member_username,
+                                                message=message,
+                                                mattermost_user_id=user_id
+                                            )
+                                            if response_text:
+                                                logger.info(f"Service bot response generated: {response_text[:100]}")
+                                                return {
+                                                    "text": response_text,
+                                                    "channel_id": channel_id,
+                                                    "bot_username": member_username
+                                                }
+                                            # Only check first service bot found to avoid multiple responses
+                                            break
+                                    except Exception as e:
+                                        logger.debug(f"Could not check channel member {member_id}: {e}")
+                        except Exception as e:
+                            logger.debug(f"Could not get channel members: {e}")
+            except Exception as e:
+                logger.debug(f"Error checking channel for service bots: {e}")
+            
             return None
             
         except Exception as e:

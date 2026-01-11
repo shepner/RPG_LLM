@@ -151,6 +151,7 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 # Process new posts (excluding bot's own posts)
                                 # Process in reverse order (newest first) to handle the most recent message
                                 for post_id in reversed(order):
+                                    # Skip if we've already processed this post
                                     if post_id == last_post_id:
                                         continue
                                     
@@ -158,30 +159,63 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                     post_user_id = post.get("user_id")
                                     message = post.get("message", "").strip()
                                     
-                                    # Skip bot's own messages and empty messages
-                                    if post_user_id == bot_user_id or not message:
-                                        if post_user_id == bot_user_id:
-                                            logger.debug(f"{bot_username}: Skipping own message {post_id}")
+                                    # Skip empty messages
+                                    if not message:
                                         continue
                                     
-                                    # Check if we've already processed this post
-                                    if last_post_id and post_id == last_post_id:
-                                        logger.debug(f"{bot_username}: Already processed post {post_id}")
+                                    # Skip bot's own messages (check by user_id first, then by username)
+                                    if post_user_id == bot_user_id:
+                                        logger.debug(f"{bot_username}: Skipping own message {post_id} (user_id match)")
+                                        # Update last_post_id to skip this message in future polls
+                                        if bot_username not in _last_post_ids:
+                                            _last_post_ids[bot_username] = {}
+                                        current_latest = _last_post_ids[bot_username].get(channel_id, "")
+                                        if not current_latest or post_id > current_latest:
+                                            _last_post_ids[bot_username][channel_id] = post_id
                                         continue
                                     
-                                    # Get the user who sent the message
+                                    # Get the user who sent the message to check username
+                                    sender_username = None
                                     try:
                                         user_response = await client.get(f"{api_url}/users/{post_user_id}", headers=headers)
                                         if user_response.status_code == 200:
                                             sender_user = user_response.json()
-                                            sender_username = sender_user.get("username", "")
-                                        else:
-                                            sender_username = "unknown"
+                                            sender_username = sender_user.get("username", "").lower()
+                                            
+                                            # Double-check: skip if sender is this bot or any service bot
+                                            if sender_username == bot_username or (bot and bot.service_handler and bot.service_handler.is_service_bot(sender_username)):
+                                                logger.debug(f"{bot_username}: Skipping message from bot {sender_username} (post_id {post_id})")
+                                                # Update last_post_id to skip this message in future polls
+                                                if bot_username not in _last_post_ids:
+                                                    _last_post_ids[bot_username] = {}
+                                                current_latest = _last_post_ids[bot_username].get(channel_id, "")
+                                                if not current_latest or post_id > current_latest:
+                                                    _last_post_ids[bot_username][channel_id] = post_id
+                                                continue
                                     except Exception:
                                         sender_username = "unknown"
                                     
+                                    # Skip rate limit warning messages (they start with ⚠️)
+                                    if message.startswith("⚠️") or "Rate limit" in message or "rate limit" in message.lower():
+                                        logger.debug(f"{bot_username}: Skipping rate limit message {post_id}")
+                                        # Update last_post_id to skip this message in future polls
+                                        if bot_username not in _last_post_ids:
+                                            _last_post_ids[bot_username] = {}
+                                        current_latest = _last_post_ids[bot_username].get(channel_id, "")
+                                        if not current_latest or post_id > current_latest:
+                                            _last_post_ids[bot_username][channel_id] = post_id
+                                        continue
+                                    
+                                    # Update last_post_id BEFORE processing to prevent re-processing if something goes wrong
+                                    if bot_username not in _last_post_ids:
+                                        _last_post_ids[bot_username] = {}
+                                    current_latest = _last_post_ids[bot_username].get(channel_id, "")
+                                    if not current_latest or post_id > current_latest:
+                                        _last_post_ids[bot_username][channel_id] = post_id
+                                        logger.debug(f"{bot_username}: Updated last_post_id for {channel_id} to {post_id} (before processing)")
+                                    
                                     # Process the message as this service bot
-                                    logger.info(f"{bot_username}: Processing DM from {sender_username}: {message[:50]}")
+                                    logger.info(f"{bot_username}: Processing DM from {sender_username or 'unknown'}: {message[:50]}")
                                     
                                     # Route to service handler
                                     if bot and bot.service_handler:
@@ -211,15 +245,6 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                             logger.error(f"{bot_username}: Error in service handler: {e}", exc_info=True)
                                     else:
                                         logger.warning(f"{bot_username}: Bot or service_handler not available")
-                                    
-                                    # Update last processed post ID (use the latest post ID)
-                                    if bot_username not in _last_post_ids:
-                                        _last_post_ids[bot_username] = {}
-                                    # Track the latest post ID we've seen
-                                    current_latest = _last_post_ids[bot_username].get(channel_id, "")
-                                    if not current_latest or post_id > current_latest:
-                                        _last_post_ids[bot_username][channel_id] = post_id
-                                        logger.debug(f"{bot_username}: Updated last_post_id for {channel_id} to {post_id}")
                                 
                             except Exception as e:
                                 logger.debug(f"Error processing posts in DM channel {channel_id} for {bot_username}: {e}")
