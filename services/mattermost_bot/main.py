@@ -162,12 +162,15 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                     last_index = order.index(last_post_id)
                                     # Process all posts that come before last_post_id (newer posts)
                                     posts_to_process = order[:last_index]
-                                    logger.info(f"{bot_username}: Found {len(posts_to_process)} new posts after last_post_id")
+                                    logger.info(f"{bot_username}: Found {len(posts_to_process)} new posts after last_post_id {last_post_id[:20]}...")
                                 elif last_post_id:
-                                    # last_post_id exists but not in current 20 posts - process newest post to catch up
-                                    if order:
-                                        posts_to_process = [order[0]]  # Just the newest post
-                                        logger.info(f"{bot_username}: last_post_id not in current posts, processing newest post to catch up")
+                                    # last_post_id exists but not in current 20 posts
+                                    # This means either:
+                                    # 1. The post is older than the 20 posts we fetched (already processed)
+                                    # 2. The post_id is invalid (should have been cleared)
+                                    # In either case, don't process anything - we've already processed everything
+                                    logger.info(f"{bot_username}: last_post_id {last_post_id[:20]}... not in current posts - skipping (already processed)")
+                                    posts_to_process = []
                                 else:
                                     # No last_post_id - process newest post only (first time checking this channel)
                                     if order:
@@ -292,14 +295,15 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                     
                                     # After processing, update last_post_id to the newest post we've seen in this channel
                                     # This ensures we don't re-process messages even if response posting failed
-                                    if order and order[0]:  # order[0] is the newest post
+                                    # Only update if we actually processed a post (not if we skipped everything)
+                                    if posts_to_process and order and order[0]:  # order[0] is the newest post
                                         newest_post_id = order[0]
                                         if bot_username not in _last_post_ids:
                                             _last_post_ids[bot_username] = {}
                                         current_latest = _last_post_ids[bot_username].get(channel_id, "")
                                         if not current_latest or newest_post_id > current_latest:
                                             _last_post_ids[bot_username][channel_id] = newest_post_id
-                                            logger.debug(f"{bot_username}: Updated last_post_id to newest post in channel: {newest_post_id[:20]}...")
+                                            logger.info(f"{bot_username}: Updated last_post_id to newest post in channel: {newest_post_id[:20]}...")
                                 
                             except Exception as e:
                                 logger.debug(f"Error processing posts in DM channel {channel_id} for {bot_username}: {e}")
