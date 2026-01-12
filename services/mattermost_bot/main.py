@@ -665,6 +665,9 @@ async def handle_webhook(request: Request):
             
             # Log channel info for debugging
             logger.info(f"Webhook channel_id: {channel_id}, user_id: {user_id}, message: {message[:50]}, body keys: {list(body.keys())}")
+            # Log full body for debugging (truncate long values)
+            body_str = str({k: (v[:100] if isinstance(v, str) and len(v) > 100 else v) for k, v in body.items()})
+            logger.debug(f"Full webhook body: {body_str}")
             
             trigger_word = body.get("trigger_word", "")
             
@@ -730,8 +733,16 @@ async def handle_webhook(request: Request):
                         # Post the response manually using the bot API
                         # Mattermost outgoing webhooks don't always auto-post responses
                         if not channel_id:
-                            logger.error(f"Cannot post response - channel_id is missing from webhook")
-                            return {"text": f"Error: Could not determine channel. Response: {response_text}"}
+                            logger.error(f"Cannot post response - channel_id is missing from webhook. Full body: {body_str}")
+                            # Try to get channel_id from the webhook's post data if available
+                            if "post" in body:
+                                channel_id = body.get("post", {}).get("channel_id")
+                            if not channel_id and "data" in body:
+                                channel_id = body.get("data", {}).get("channel_id") or body.get("data", {}).get("post", {}).get("channel_id")
+                            if not channel_id:
+                                logger.error(f"Still no channel_id after checking all locations")
+                                return {"text": f"Error: Could not determine channel. Response: {response_text}"}
+                            logger.info(f"Found channel_id in alternative location: {channel_id}")
                         
                         # Verify channel_id is correct - check if it's a DM or group channel
                         try:
