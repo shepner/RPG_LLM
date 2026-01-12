@@ -328,9 +328,9 @@ class MattermostBot:
                 "message": text
             }
             
-            # Override username to make it appear as the service bot
-            if bot_username:
-                post_data["override_username"] = bot_username
+            # Note: override_username doesn't work with bot tokens
+            # Messages posted with bot tokens automatically appear as that bot user
+            # If we need to post as a different bot, we need to use that bot's token
             
             if attachments:
                 post_data["props"] = {"attachments": attachments}

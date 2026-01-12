@@ -658,6 +658,9 @@ async def handle_webhook(request: Request):
                 channel_id = body.get("channel_id")
                 user_id = body.get("user_id")
             
+            # Log channel info for debugging
+            logger.info(f"Webhook channel_id: {channel_id}, user_id: {user_id}, message: {message[:50]}")
+            
             trigger_word = body.get("trigger_word", "")
             
             # Determine which bot this is for based on trigger word or @mentions
@@ -709,14 +712,18 @@ async def handle_webhook(request: Request):
                     if response_text:
                         # Post the response manually using the bot API
                         # Mattermost outgoing webhooks don't always auto-post responses
-                        logger.info(f"Posting webhook response manually to channel {channel_id}")
+                        if not channel_id:
+                            logger.error(f"Cannot post response - channel_id is missing from webhook")
+                            return {"text": f"Error: Could not determine channel. Response: {response_text}"}
+                        
+                        logger.info(f"Posting webhook response manually to channel {channel_id} (from webhook)")
                         try:
                             await bot.post_message(
                                 channel_id=channel_id,
                                 text=response_text,
                                 bot_username=bot_username
                             )
-                            logger.info(f"Webhook response posted successfully as {bot_username}")
+                            logger.info(f"Webhook response posted successfully as {bot_username} to channel {channel_id}")
                         except Exception as e:
                             logger.error(f"Error posting webhook response: {e}", exc_info=True)
                             # Fallback: return response for Mattermost to post
