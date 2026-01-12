@@ -310,10 +310,12 @@ class MattermostBot:
                     logger.debug(f"Could not read token from registry file for {bot_username}: {e}")
             
             # Fallback to rpg-bot token if specific bot token not available
-            if not bot_token:
+            # For now, always use rpg-bot token since it has system_admin permissions and works reliably
+            # TODO: Fix connection issues with individual bot tokens
+            if not bot_token or bot_username:  # Always use rpg-bot token for now
                 bot_token = Config.MATTERMOST_BOT_TOKEN
                 if bot_token:
-                    logger.info(f"Using rpg-bot token as fallback (system_admin permissions)")
+                    logger.info(f"Using rpg-bot token (system_admin permissions) to post as {bot_username or 'rpg-bot'}")
             
             if not bot_token:
                 logger.warning("Cannot post message - bot token not configured")
