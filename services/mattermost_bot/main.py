@@ -716,6 +716,16 @@ async def handle_webhook(request: Request):
                             logger.error(f"Cannot post response - channel_id is missing from webhook")
                             return {"text": f"Error: Could not determine channel. Response: {response_text}"}
                         
+                        # Verify channel_id is correct - check if it's a DM or group channel
+                        try:
+                            if bot and bot.driver:
+                                channel_info = bot.driver.channels.get_channel(channel_id)
+                                channel_type = channel_info.get("type", "")
+                                channel_name = channel_info.get("name", "")
+                                logger.info(f"Posting to channel type: {channel_type}, name: {channel_name}, id: {channel_id}")
+                        except Exception as e:
+                            logger.warning(f"Could not verify channel info: {e}")
+                        
                         logger.info(f"Posting webhook response manually to channel {channel_id} (from webhook)")
                         try:
                             await bot.post_message(
