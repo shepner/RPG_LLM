@@ -45,7 +45,7 @@ bot: Optional[MattermostBot] = None
 _last_post_ids = {}  # Format: {bot_username: {channel_id: post_id}}
 
 async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
-    """Poll for new DM messages for a specific service bot."""
+    """Poll for new DM messages and channel @mentions for a specific service bot."""
     import asyncio
     import httpx
     from urllib.parse import urlparse
@@ -90,16 +90,22 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                             logger.debug(f"{bot_username}: Got {len(all_channels)} total channels")
                             # Filter for DM channels
                             dm_channels = [c for c in all_channels if c.get("type") == "D"]
+                            # Also get public/private channels where this bot is a member
+                            group_channels = [c for c in all_channels if c.get("type") in ["O", "P"]]
                             if len(dm_channels) > 0:
                                 logger.info(f"{bot_username}: Found {len(dm_channels)} DM channels")
                                 for dm in dm_channels:
                                     logger.debug(f"{bot_username}: DM channel ID: {dm.get('id')}")
                             else:
                                 logger.debug(f"{bot_username}: Found {len(dm_channels)} DM channels (no DMs yet)")
+                            if len(group_channels) > 0:
+                                logger.info(f"{bot_username}: Found {len(group_channels)} group channels (public/private)")
                     except Exception as e:
-                        logger.error(f"{bot_username}: Error getting DM channels: {e}", exc_info=True)
+                        logger.error(f"{bot_username}: Error getting channels: {e}", exc_info=True)
                         dm_channels = []
+                        group_channels = []
                 
+                    # Process DM channels
                     for channel in dm_channels:
                         channel_id = channel.get("id")
                         
@@ -309,9 +315,132 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 logger.debug(f"Error processing posts in DM channel {channel_id} for {bot_username}: {e}")
                         except Exception as e:
                             logger.debug(f"Error checking DM channel {channel_id} for {bot_username}: {e}")
+                    
+                    # Process group channels (public/private) - check for @mentions
+                    for channel in group_channels:
+                        channel_id = channel.get("id")
+                        channel_type = channel.get("type")
+                        
+                        # Get recent posts in this channel
+                        try:
+                            # Get posts since last check
+                            last_post_ids = _last_post_ids.get(bot_username, {})
+                            last_post_id = last_post_ids.get(channel_id, "")
+                            
+                            if last_post_id:
+                                posts_response = await client.get(
+                                    f"{api_url}/channels/{channel_id}/posts",
+                                    headers=headers,
+                                    params={"since": last_post_id}
+                                )
+                                if posts_response.status_code == 400:
+                                    logger.warning(f"{bot_username}: 'since' parameter failed for channel {channel_id}, clearing")
+                                    if bot_username in _last_post_ids and channel_id in _last_post_ids[bot_username]:
+                                        del _last_post_ids[bot_username][channel_id]
+                                    last_post_id = ""
+                                    posts_response = await client.get(
+                                        f"{api_url}/channels/{channel_id}/posts",
+                                        headers=headers,
+                                        params={"per_page": 20}
+                                    )
+                            else:
+                                posts_response = await client.get(
+                                    f"{api_url}/channels/{channel_id}/posts",
+                                    headers=headers,
+                                    params={"per_page": 20}
+                                )
+                            
+                            if posts_response.status_code != 200:
+                                logger.debug(f"{bot_username}: Could not get posts for channel {channel_id}: {posts_response.status_code}")
+                                continue
+                            
+                            posts = posts_response.json()
+                            post_list = posts.get("posts", {})
+                            order = posts.get("order", [])
+                            
+                            # Determine which posts to process
+                            posts_to_process = []
+                            if last_post_id and last_post_id in order:
+                                last_index = order.index(last_post_id)
+                                posts_to_process = order[:last_index]
+                            elif last_post_id:
+                                logger.debug(f"{bot_username}: last_post_id not in current posts for channel {channel_id} - skipping")
+                                posts_to_process = []
+                            else:
+                                if order:
+                                    posts_to_process = [order[0]]  # Just newest post on first check
+                            
+                            # Process posts that mention this bot
+                            for post_id in reversed(posts_to_process):
+                                if post_id == last_post_id:
+                                    continue
+                                
+                                post = post_list.get(post_id, {})
+                                post_user_id = post.get("user_id")
+                                message = post.get("message", "").strip()
+                                
+                                # Skip empty messages or bot's own messages
+                                if not message or post_user_id == bot_user_id:
+                                    continue
+                                
+                                # Check if message mentions this bot
+                                if bot and bot.message_router:
+                                    mentions = bot.message_router.extract_mentions(message)
+                                    if bot_username.lower() not in [m.lower() for m in mentions]:
+                                        # No mention of this bot - skip
+                                        continue
+                                
+                                # Skip rate limit messages
+                                if message.startswith("⚠️") or "Rate limit" in message:
+                                    continue
+                                
+                                logger.info(f"{bot_username}: Processing @mention in channel {channel_id}: {message[:50]}")
+                                
+                                # Route to service handler
+                                if bot and bot.service_handler:
+                                    try:
+                                        response_text = await bot.service_handler.handle_service_message(
+                                            bot_username=bot_username,
+                                            message=message,
+                                            mattermost_user_id=post_user_id
+                                        )
+                                        
+                                        if response_text:
+                                            logger.info(f"{bot_username}: Got response for channel message: {response_text[:100]}")
+                                            # Post response
+                                            response_post_id = await post_message_as_bot_httpx(
+                                                api_url=api_url,
+                                                bot_token=bot_token,
+                                                channel_id=channel_id,
+                                                text=response_text,
+                                                bot_username=bot_username
+                                            )
+                                            logger.info(f"{bot_username}: Posted response to channel {channel_id}")
+                                            
+                                            # Update last_post_id
+                                            if response_post_id:
+                                                if bot_username not in _last_post_ids:
+                                                    _last_post_ids[bot_username] = {}
+                                                _last_post_ids[bot_username][channel_id] = response_post_id
+                                            else:
+                                                if bot_username not in _last_post_ids:
+                                                    _last_post_ids[bot_username] = {}
+                                                _last_post_ids[bot_username][channel_id] = post_id
+                                        else:
+                                            # Update last_post_id even if no response
+                                            if bot_username not in _last_post_ids:
+                                                _last_post_ids[bot_username] = {}
+                                            _last_post_ids[bot_username][channel_id] = post_id
+                                    except Exception as e:
+                                        logger.error(f"{bot_username}: Error handling channel message: {e}", exc_info=True)
+                                        if bot_username not in _last_post_ids:
+                                            _last_post_ids[bot_username] = {}
+                                        _last_post_ids[bot_username][channel_id] = post_id
+                        except Exception as e:
+                            logger.debug(f"Error processing posts in channel {channel_id} for {bot_username}: {e}")
                         
             except Exception as e:
-                logger.debug(f"Error polling DM messages for {bot_username}: {e}")
+                logger.debug(f"Error polling messages for {bot_username}: {e}")
                 
         except Exception as e:
             logger.error(f"Error in DM polling loop for {bot_username}: {e}")
