@@ -880,6 +880,13 @@ async def handle_webhook(request: Request):
                     if response_text:
                         logger.info(f"=== WEBHOOK HANDLER: Response text received: {response_text[:100]} ===")
                         logger.info(f"=== WEBHOOK HANDLER: channel_id before check: {channel_id} ===")
+                        
+                        # Mark this post as processed by webhook to avoid duplicate processing in polling
+                        post_id = body.get("post_id")
+                        if post_id and bot_username:
+                            _webhook_processed_posts.add((bot_username.lower(), channel_id, post_id))
+                            logger.debug(f"=== WEBHOOK HANDLER: Marked post {post_id[:20]}... as processed by webhook ===")
+                        
                         # Post the response manually using the bot API
                         # Mattermost outgoing webhooks don't always auto-post responses
                         if not channel_id:
