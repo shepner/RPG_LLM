@@ -91,7 +91,7 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                             dm_channels = []
                         else:
                             all_channels = channels_response.json()
-                            logger.debug(f"{bot_username}: Got {len(all_channels)} total channels")
+                            logger.info(f"{bot_username}: Got {len(all_channels)} total channels")
                             # Filter for DM channels
                             dm_channels = [c for c in all_channels if c.get("type") == "D"]
                             # Also get public/private channels where this bot is a member
@@ -104,6 +104,11 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 logger.debug(f"{bot_username}: Found {len(dm_channels)} DM channels (no DMs yet)")
                             if len(group_channels) > 0:
                                 logger.info(f"{bot_username}: Found {len(group_channels)} group channels (public/private)")
+                                for gc in group_channels:
+                                    name = gc.get('display_name', gc.get('name', ''))
+                                    logger.info(f"{bot_username}: Group channel: {name} ({gc.get('id')})")
+                            else:
+                                logger.debug(f"{bot_username}: Found {len(group_channels)} group channels")
                     except Exception as e:
                         logger.error(f"{bot_username}: Error getting channels: {e}", exc_info=True)
                         dm_channels = []
