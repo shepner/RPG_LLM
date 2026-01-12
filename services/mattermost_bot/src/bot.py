@@ -271,7 +271,7 @@ class MattermostBot:
                 "response_type": "ephemeral"
             }
     
-    async def post_message(self, channel_id: str, text: str, attachments: Optional[list] = None, bot_username: Optional[str] = None):
+    async def post_message(self, channel_id: str, text: str, attachments: Optional[list] = None, bot_username: Optional[str] = None) -> bool:
         """
         Post a message to a Mattermost channel.
         
@@ -317,7 +317,7 @@ class MattermostBot:
             
             if not bot_token:
                 logger.warning("Cannot post message - bot token not configured")
-                return
+                return False
             
             # Use HTTP API directly instead of driver (more reliable)
             parsed = urlparse(Config.MATTERMOST_URL)
@@ -347,12 +347,15 @@ class MattermostBot:
                 )
                 
                 if response.status_code == 201:
-                    logger.info(f"Posted message to channel {channel_id}")
+                    logger.info(f"Posted message to channel {channel_id} as {bot_username or 'rpg-bot'}")
+                    return True  # Return success status
                 else:
                     logger.error(f"Error posting message: {response.status_code} - {response.text}")
+                    raise Exception(f"Failed to post message: {response.status_code} - {response.text}")
             
         except Exception as e:
             logger.error(f"Error posting message: {e}", exc_info=True)
+            return False
     
     async def create_character_channel(self, being_id: str, character_name: str, owner_mattermost_id: str) -> Optional[str]:
         """

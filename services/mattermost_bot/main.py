@@ -758,14 +758,27 @@ async def handle_webhook(request: Request):
                         logger.info(f"=== WEBHOOK HANDLER: Posting webhook response manually to channel {channel_id} (from webhook) ===")
                         try:
                             logger.info(f"=== WEBHOOK HANDLER: About to call bot.post_message with channel_id={channel_id}, bot_username={bot_username} ===")
-                            await bot.post_message(
+                            post_success = await bot.post_message(
                                 channel_id=channel_id,
                                 text=response_text,
                                 bot_username=bot_username
                             )
-                            logger.info(f"=== WEBHOOK HANDLER: Webhook response posted successfully as {bot_username} to channel {channel_id} ===")
+                            if post_success:
+                                logger.info(f"=== WEBHOOK HANDLER: Webhook response posted successfully as {bot_username} to channel {channel_id} ===")
+                            else:
+                                logger.error(f"=== WEBHOOK HANDLER: Failed to post webhook response (post_message returned False) ===")
+                                # Fallback: return response for Mattermost to post
+                                return {
+                                    "text": response_text,
+                                    "username": bot_username
+                                }
                         except Exception as e:
                             logger.error(f"=== WEBHOOK HANDLER: Error posting webhook response: {e} ===", exc_info=True)
+                            # Fallback: return response for Mattermost to post
+                            return {
+                                "text": response_text,
+                                "username": bot_username
+                            }
                             # Fallback: return response for Mattermost to post
                             return {
                                 "text": response_text,
