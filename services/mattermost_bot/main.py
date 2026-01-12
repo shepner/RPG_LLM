@@ -667,7 +667,7 @@ async def handle_webhook(request: Request):
             logger.info(f"Webhook channel_id: {channel_id}, user_id: {user_id}, message: {message[:50]}, body keys: {list(body.keys())}")
             # Log full body for debugging (truncate long values)
             body_str = str({k: (v[:100] if isinstance(v, str) and len(v) > 100 else v) for k, v in body.items()})
-            logger.debug(f"Full webhook body: {body_str}")
+            logger.info(f"Full webhook body: {body_str}")  # Changed to INFO level so we can see it
             
             trigger_word = body.get("trigger_word", "")
             
