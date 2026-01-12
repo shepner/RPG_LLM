@@ -718,18 +718,19 @@ async def handle_webhook(request: Request):
             
             if message and bot_username and bot.service_handler:
                 # Route directly to service handler for this bot
-                logger.info(f"Routing webhook message to service bot: {bot_username}")
+                logger.info(f"Routing webhook message to service bot: {bot_username}, channel_id: {channel_id}")
                 try:
-                    logger.info(f"Calling service handler for {bot_username} with message: {message[:50]}")
+                    logger.info(f"=== WEBHOOK HANDLER: Calling service handler for {bot_username} with message: {message[:50]} ===")
                     response_text = await bot.service_handler.handle_service_message(
                         bot_username=bot_username,
                         message=message,
                         mattermost_user_id=user_id
                     )
-                    logger.info(f"Service handler returned response_text: {bool(response_text)}, length: {len(response_text) if response_text else 0}")
+                    logger.info(f"=== WEBHOOK HANDLER: Service handler returned response_text: {bool(response_text)}, length: {len(response_text) if response_text else 0} ===")
                     
                     if response_text:
-                        logger.info(f"Response text received: {response_text[:100]}")
+                        logger.info(f"=== WEBHOOK HANDLER: Response text received: {response_text[:100]} ===")
+                        logger.info(f"=== WEBHOOK HANDLER: channel_id before check: {channel_id} ===")
                         # Post the response manually using the bot API
                         # Mattermost outgoing webhooks don't always auto-post responses
                         if not channel_id:
@@ -754,16 +755,17 @@ async def handle_webhook(request: Request):
                         except Exception as e:
                             logger.warning(f"Could not verify channel info: {e}")
                         
-                        logger.info(f"Posting webhook response manually to channel {channel_id} (from webhook)")
+                        logger.info(f"=== WEBHOOK HANDLER: Posting webhook response manually to channel {channel_id} (from webhook) ===")
                         try:
+                            logger.info(f"=== WEBHOOK HANDLER: About to call bot.post_message with channel_id={channel_id}, bot_username={bot_username} ===")
                             await bot.post_message(
                                 channel_id=channel_id,
                                 text=response_text,
                                 bot_username=bot_username
                             )
-                            logger.info(f"Webhook response posted successfully as {bot_username} to channel {channel_id}")
+                            logger.info(f"=== WEBHOOK HANDLER: Webhook response posted successfully as {bot_username} to channel {channel_id} ===")
                         except Exception as e:
-                            logger.error(f"Error posting webhook response: {e}", exc_info=True)
+                            logger.error(f"=== WEBHOOK HANDLER: Error posting webhook response: {e} ===", exc_info=True)
                             # Fallback: return response for Mattermost to post
                             return {
                                 "text": response_text,
