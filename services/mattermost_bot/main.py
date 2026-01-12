@@ -707,13 +707,25 @@ async def handle_webhook(request: Request):
                     )
                     
                     if response_text:
-                        # For outgoing webhooks, return the response directly
-                        # Mattermost will post it automatically
-                        logger.info(f"Returning webhook response for Mattermost to post")
-                        return {
-                            "text": response_text,
-                            "username": bot_username  # This makes it appear as the bot
-                        }
+                        # Post the response manually using the bot API
+                        # Mattermost outgoing webhooks don't always auto-post responses
+                        logger.info(f"Posting webhook response manually to channel {channel_id}")
+                        try:
+                            await bot.post_message(
+                                channel_id=channel_id,
+                                text=response_text,
+                                bot_username=bot_username
+                            )
+                            logger.info(f"Webhook response posted successfully as {bot_username}")
+                        except Exception as e:
+                            logger.error(f"Error posting webhook response: {e}", exc_info=True)
+                            # Fallback: return response for Mattermost to post
+                            return {
+                                "text": response_text,
+                                "username": bot_username
+                            }
+                        # Return empty response since we posted manually
+                        return {"text": ""}
                     else:
                         response = None
                 except Exception as e:
