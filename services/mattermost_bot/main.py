@@ -43,6 +43,8 @@ bot: Optional[MattermostBot] = None
 
 # Track last processed post ID per channel per bot
 _last_post_ids = {}  # Format: {bot_username: {channel_id: post_id}}
+# Track post IDs processed by webhooks to avoid duplicate processing in polling
+_webhook_processed_posts = set()  # Set of (bot_username, channel_id, post_id) tuples
 
 async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
     """Poll for new DM messages and channel @mentions for a specific service bot."""
@@ -382,6 +384,15 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                             # Process posts that mention this bot
                             for post_id in reversed(posts_to_process):
                                 if post_id == last_post_id:
+                                    continue
+                                
+                                # Skip if this post was already processed by webhook
+                                if (bot_username.lower(), channel_id, post_id) in _webhook_processed_posts:
+                                    logger.debug(f"{bot_username}: Skipping post {post_id[:20]}... (already processed by webhook)")
+                                    # Still update last_post_id to skip it in future polls
+                                    if bot_username not in _last_post_ids:
+                                        _last_post_ids[bot_username] = {}
+                                    _last_post_ids[bot_username][channel_id] = post_id
                                     continue
                                 
                                 post = post_list.get(post_id, {})
