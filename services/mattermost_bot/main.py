@@ -55,7 +55,11 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
     
     # Use httpx directly instead of mattermostdriver (avoids websocket issues)
     parsed = urlparse(Config.MATTERMOST_URL)
-    api_url = f"{parsed.scheme or 'http'}://{parsed.hostname or 'mattermost'}:{parsed.port or 8065}/api/v4"
+    # If hostname is localhost, use 'mattermost' for Docker networking
+    hostname = parsed.hostname or 'mattermost'
+    if hostname in ['localhost', '127.0.0.1']:
+        hostname = 'mattermost'
+    api_url = f"{parsed.scheme or 'http'}://{hostname}:{parsed.port or 8065}/api/v4"
     headers = {"Authorization": f"Bearer {bot_token}"}
     
     while True:
