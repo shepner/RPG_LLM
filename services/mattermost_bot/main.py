@@ -657,9 +657,14 @@ async def handle_webhook(request: Request):
                 message = body.get("text", "").strip()
                 channel_id = body.get("channel_id")
                 user_id = body.get("user_id")
+                # Also check for channel_id in nested data structures
+                if not channel_id:
+                    channel_id = body.get("data", {}).get("channel_id")
+                if not channel_id:
+                    channel_id = body.get("data", {}).get("post", {}).get("channel_id")
             
             # Log channel info for debugging
-            logger.info(f"Webhook channel_id: {channel_id}, user_id: {user_id}, message: {message[:50]}")
+            logger.info(f"Webhook channel_id: {channel_id}, user_id: {user_id}, message: {message[:50]}, body keys: {list(body.keys())}")
             
             trigger_word = body.get("trigger_word", "")
             
