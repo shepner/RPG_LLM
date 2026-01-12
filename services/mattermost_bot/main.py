@@ -699,6 +699,15 @@ async def handle_webhook(request: Request):
             if trigger_word and message.startswith(trigger_word):
                 message = message[len(trigger_word):].strip()
             
+            # If no bot_username from trigger_word, check for @mentions in the message
+            if not bot_username and message:
+                mentions = bot.message_router.extract_mentions(message) if bot.message_router else []
+                for mentioned_username in mentions:
+                    if bot.service_handler.is_service_bot(mentioned_username.lower()):
+                        bot_username = mentioned_username.lower()
+                        logger.info(f"Detected @mention of service bot in webhook: {bot_username}")
+                        break
+            
             if message and bot_username and bot.service_handler:
                 # Route directly to service handler for this bot
                 logger.info(f"Routing webhook message to service bot: {bot_username}")
