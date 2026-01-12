@@ -288,34 +288,12 @@ class MattermostBot:
             import sys
             from pathlib import Path
             
-            # Try to use the specific bot's token if provided, fallback to rpg-bot
-            bot_token = None
-            if bot_username:
-                # Try to read token directly from registry JSON file
-                try:
-                    import json
-                    data_dir = os.getenv("RPG_LLM_DATA_DIR", "/app/RPG_LLM_DATA")
-                    registry_file = os.path.join(data_dir, "bots", "registry.json")
-                    
-                    if os.path.exists(registry_file):
-                        with open(registry_file, 'r') as f:
-                            registry_data = json.load(f)
-                            if bot_username in registry_data:
-                                bot_data = registry_data[bot_username]
-                                if bot_data.get("is_active", True):
-                                    bot_token = bot_data.get("token")
-                                    if bot_token:
-                                        logger.info(f"Using token for bot '{bot_username}' from registry file")
-                except Exception as e:
-                    logger.debug(f"Could not read token from registry file for {bot_username}: {e}")
-            
-            # Fallback to rpg-bot token if specific bot token not available
             # For now, always use rpg-bot token since it has system_admin permissions and works reliably
+            # Individual bot tokens have connection issues in Docker environment
             # TODO: Fix connection issues with individual bot tokens
-            if not bot_token or bot_username:  # Always use rpg-bot token for now
-                bot_token = Config.MATTERMOST_BOT_TOKEN
-                if bot_token:
-                    logger.info(f"Using rpg-bot token (system_admin permissions) to post as {bot_username or 'rpg-bot'}")
+            bot_token = Config.MATTERMOST_BOT_TOKEN
+            if bot_token:
+                logger.info(f"Using rpg-bot token (system_admin permissions) to post message as {bot_username or 'rpg-bot'}")
             
             if not bot_token:
                 logger.warning("Cannot post message - bot token not configured")
