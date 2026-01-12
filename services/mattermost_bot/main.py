@@ -717,13 +717,16 @@ async def handle_webhook(request: Request):
                 # Route directly to service handler for this bot
                 logger.info(f"Routing webhook message to service bot: {bot_username}")
                 try:
+                    logger.info(f"Calling service handler for {bot_username} with message: {message[:50]}")
                     response_text = await bot.service_handler.handle_service_message(
                         bot_username=bot_username,
                         message=message,
                         mattermost_user_id=user_id
                     )
+                    logger.info(f"Service handler returned response_text: {bool(response_text)}, length: {len(response_text) if response_text else 0}")
                     
                     if response_text:
+                        logger.info(f"Response text received: {response_text[:100]}")
                         # Post the response manually using the bot API
                         # Mattermost outgoing webhooks don't always auto-post responses
                         if not channel_id:
