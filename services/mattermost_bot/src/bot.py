@@ -321,7 +321,11 @@ class MattermostBot:
             
             # Use HTTP API directly instead of driver (more reliable)
             parsed = urlparse(Config.MATTERMOST_URL)
-            api_url = f"{parsed.scheme or 'http'}://{parsed.hostname or 'mattermost'}:{parsed.port or 8065}/api/v4"
+            # If hostname is localhost, use 'mattermost' for Docker networking
+            hostname = parsed.hostname or 'mattermost'
+            if hostname in ['localhost', '127.0.0.1']:
+                hostname = 'mattermost'
+            api_url = f"{parsed.scheme or 'http'}://{hostname}:{parsed.port or 8065}/api/v4"
             
             post_data = {
                 "channel_id": channel_id,
