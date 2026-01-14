@@ -84,11 +84,10 @@ def update_bot(registry: BotRegistry, username: str, **kwargs):
 def create_bot(registry: BotRegistry, username: str, display_name: str = None, description: str = None):
     """Create a new bot in Mattermost and add to registry."""
     try:
-        import requests
+        import httpx
         import secrets
     except ImportError:
-        print("Error: 'requests' library is required.")
-        print("Install it with: pip install requests")
+        print("Error: 'httpx' library is required.")
         sys.exit(1)
     
     # Get rpg-bot token from environment or registry
@@ -120,21 +119,21 @@ def create_bot(registry: BotRegistry, username: str, display_name: str = None, d
             "last_name": " ".join(display_name.split()[1:]) if display_name and len(display_name.split()) > 1 else ""
         }
         
-        user_response = requests.post(
-            f"{api_url}/users",
-            headers=headers,
-            json=user_data,
-            verify=False
-        )
+        with httpx.Client(timeout=10.0, verify=False) as client:
+            user_response = client.post(
+                f"{api_url}/users",
+                headers=headers,
+                json=user_data,
+            )
         
         if user_response.status_code != 201:
             if user_response.status_code == 400:
                 # User might already exist, try to get it
-                get_response = requests.get(
-                    f"{api_url}/users/username/{username}",
-                    headers=headers,
-                    verify=False
-                )
+                with httpx.Client(timeout=10.0, verify=False) as client:
+                    get_response = client.get(
+                        f"{api_url}/users/username/{username}",
+                        headers=headers,
+                    )
                 if get_response.status_code == 200:
                     user = get_response.json()
                     user_id = user["id"]
@@ -157,12 +156,12 @@ def create_bot(registry: BotRegistry, username: str, display_name: str = None, d
             "description": description
         }
         
-        convert_response = requests.post(
-            f"{api_url}/users/{user_id}/convert_to_bot",
-            headers=headers,
-            json=bot_data,
-            verify=False
-        )
+        with httpx.Client(timeout=10.0, verify=False) as client:
+            convert_response = client.post(
+                f"{api_url}/users/{user_id}/convert_to_bot",
+                headers=headers,
+                json=bot_data,
+            )
         
         if convert_response.status_code not in [200, 201]:
             print(f"❌ Error converting to bot: {convert_response.text}")
@@ -171,12 +170,12 @@ def create_bot(registry: BotRegistry, username: str, display_name: str = None, d
         # Step 3: Create token
         print(f"Creating bot token...")
         token_data = {"description": f"Bot access token for {username}"}
-        token_response = requests.post(
-            f"{api_url}/users/{user_id}/tokens",
-            headers=headers,
-            json=token_data,
-            verify=False
-        )
+        with httpx.Client(timeout=10.0, verify=False) as client:
+            token_response = client.post(
+                f"{api_url}/users/{user_id}/tokens",
+                headers=headers,
+                json=token_data,
+            )
         
         if token_response.status_code not in [200, 201]:
             print(f"⚠️  Warning: Could not create token automatically: {token_response.text}")
@@ -202,10 +201,12 @@ def create_bot(registry: BotRegistry, username: str, display_name: str = None, d
         print(f"\n✅ Bot '{username}' created and added to registry!")
         print(f"   Display Name: {bot.display_name}")
         print(f"   User ID: {bot.user_id}")
-        print(f"   Token: {bot.token}")
-        print(f"\n⚠️  IMPORTANT: Save this token - it won't be shown again!")
+        # Don't print secrets in full
+        token_tail = bot.token[-4:] if bot.token else "????"
+        print(f"   Token: ****{token_tail} (saved to registry)")
+        print(f"\n⚠️  Token is stored in your local bot registry (do not commit it).")
         
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print(f"❌ Error: {e}")
         sys.exit(1)
 

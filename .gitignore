@@ -106,5 +106,9 @@ docker-data/
 volumes/
 data/
 
+# Mattermost bot registry (contains bot tokens; must never be committed)
+RPG_LLM_DATA/bots/*.json
+!RPG_LLM_DATA/bots/registry.example.json
+
 .env*
 !.env.example

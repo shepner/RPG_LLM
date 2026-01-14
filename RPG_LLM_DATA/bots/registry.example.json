@@ -1,0 +1,29 @@
+{
+  "gaia": {
+    "username": "gaia",
+    "token": "REPLACE_WITH_TOKEN",
+    "display_name": "Gaia",
+    "description": "Gaia (Worlds) - World state tracking and logical consistency",
+    "user_id": "REPLACE_WITH_USER_ID",
+    "created_at": "2026-01-01T00:00:00.000000",
+    "is_active": true
+  },
+  "thoth": {
+    "username": "thoth",
+    "token": "REPLACE_WITH_TOKEN",
+    "display_name": "Thoth",
+    "description": "Thoth (Game Master) - GM adjudication and narrative control",
+    "user_id": "REPLACE_WITH_USER_ID",
+    "created_at": "2026-01-01T00:00:00.000000",
+    "is_active": true
+  },
+  "maat": {
+    "username": "maat",
+    "token": "REPLACE_WITH_TOKEN",
+    "display_name": "Ma'at",
+    "description": "Ma'at (Rules Engine) - Rules interpretation and validation",
+    "user_id": "REPLACE_WITH_USER_ID",
+    "created_at": "2026-01-01T00:00:00.000000",
+    "is_active": true
+  }
+}
