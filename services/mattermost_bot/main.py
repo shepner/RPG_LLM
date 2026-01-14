@@ -201,21 +201,21 @@ async def poll_channel_messages_for_collab(primary_token: str):
                         ):
                             responders = service_bots[:]  # invite all
                         else:
-                        preferred = None
-                        if any(k in lower for k in ["rule", "rules", "modifier", "dice", "roll", "dc"]):
-                            preferred = "maat"
-                        elif any(k in lower for k in ["world", "lore", "setting", "map", "physics", "canon"]):
-                            preferred = "gaia"
-                        elif any(k in lower for k in ["story", "scene", "npc", "plot", "quest", "narrative"]):
-                            preferred = "thoth"
-                        elif "?" in lower:
-                            preferred = random.choice(service_bots)
+                            preferred = None
+                            if any(k in lower for k in ["rule", "rules", "modifier", "dice", "roll", "dc"]):
+                                preferred = "maat"
+                            elif any(k in lower for k in ["world", "lore", "setting", "map", "physics", "canon"]):
+                                preferred = "gaia"
+                            elif any(k in lower for k in ["story", "scene", "npc", "plot", "quest", "narrative"]):
+                                preferred = "thoth"
+                            elif "?" in lower:
+                                preferred = random.choice(service_bots)
 
-                        if preferred and random.random() < min(0.6, base_prob * 3):
-                            responders.append(preferred)
-                        if len(responders) < Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST and random.random() < base_prob:
-                            other = random.choice([b for b in service_bots if b not in responders])
-                            responders.append(other)
+                            if preferred and random.random() < min(0.6, base_prob * 3):
+                                responders.append(preferred)
+                            if len(responders) < Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST and random.random() < base_prob:
+                                other = random.choice([b for b in service_bots if b not in responders])
+                                responders.append(other)
 
                     root_id = post.get("root_id") or post_id
                     final_responders: list[str] = []
