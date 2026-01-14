@@ -166,10 +166,12 @@ Answer the GM's question about narrative, story, scenes, or game master responsi
         else:
             system_prompt = base_system_prompt
         
+        # Thoth should be extremely creative by default.
+        thoth_temperature = float(os.getenv("THOTH_TEMPERATURE", "1.2"))
         response = await gm_engine.llm_provider.generate(
             prompt=prompt,
             system_prompt=system_prompt,
-            temperature=0.7,
+            temperature=thoth_temperature,
             max_tokens=1000
         )
         

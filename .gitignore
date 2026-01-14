@@ -59,9 +59,9 @@ services/rules_engine/rules/*.json
 !services/rules_engine/rules/example/
 !services/rules_engine/rules/*.example.*
 
-# Game sessions and world state
+# Game sessions and world state (data folders only)
 **/sessions/
-**/worlds/
+RPG_LLM_DATA/worlds/
 **/game_data/
 
 # Being instances data

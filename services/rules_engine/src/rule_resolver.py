@@ -161,11 +161,13 @@ Provide a clear explanation of how the rules apply to this action."""
         try:
             # Query LLM
             max_tokens = 2000 if is_character_creation else 500
+            # Ma'at should be extremely deterministic by default.
+            maat_temperature = float(os.getenv("MAAT_TEMPERATURE", "0.0"))
             response = await self.llm_provider.generate(
                 prompt=prompt,
                 system_prompt="You are Ma'at, the Rules Engine. You interpret and apply game rules with precision and fairness." + 
                              (" When creating characters, you must return valid JSON with stats, skills, and abilities." if is_character_creation else ""),
-                temperature=0.3,  # Lower temperature for more consistent rule interpretation
+                temperature=maat_temperature,
                 max_tokens=max_tokens
             )
             

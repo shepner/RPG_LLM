@@ -869,9 +869,9 @@ async def handle_webhook(request: Request):
                             bot_username = "maat"
                             break
             
-            # Remove trigger word from message if present
-            if trigger_word and message.startswith(trigger_word):
-                message = message[len(trigger_word):].strip()
+            # Do NOT strip the trigger word (e.g. "@gaia") from the message.
+            # We want consistent behavior across channels and full visibility of mentions
+            # for downstream services.
             
             # If no bot_username from trigger_word, check for @mentions in the message
             if not bot_username and message:

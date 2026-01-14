@@ -222,10 +222,12 @@ ADDITIONAL CONTEXT:
 
 Answer the GM's question about world state, logical consistency, physics validation, world evolution, or world service responsibilities. Be helpful and provide insights into how you would handle the situation."""
         
+        # Gaia should be neutral by default (not especially deterministic nor creative).
+        gaia_temperature = float(os.getenv("GAIA_TEMPERATURE", "0.7"))
         response = await llm_provider.generate(
             prompt=prompt,
             system_prompt=system_prompt,
-            temperature=0.7,
+            temperature=gaia_temperature,
             max_tokens=1000
         )
         

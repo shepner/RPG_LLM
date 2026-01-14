@@ -247,10 +247,12 @@ Answer the GM's question about the rules. Be specific, cite relevant rules when 
             system_prompt = base_system_prompt
         
         # Query LLM
+        # Ma'at should be extremely deterministic by default.
+        maat_temperature = float(os.getenv("MAAT_TEMPERATURE", "0.0"))
         response = await resolver.llm_provider.generate(
             prompt=prompt,
             system_prompt=system_prompt,
-            temperature=0.3,
+            temperature=maat_temperature,
             max_tokens=1000
         )
         
