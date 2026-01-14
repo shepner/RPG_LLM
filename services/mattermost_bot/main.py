@@ -952,7 +952,7 @@ async def handle_webhook(request: Request):
                             if post_success:
                                 logger.info(f"=== WEBHOOK HANDLER: Webhook response posted successfully as {bot_username} to channel {channel_id} ===")
                                 # Return early to prevent duplicate posting in the code below
-                                return {"status": "ok"}
+                                return {"status": "ok", "text": ""}
                             else:
                                 logger.error(f"=== WEBHOOK HANDLER: Failed to post webhook response (post_message returned False) ===")
                                 # Fallback: return response for Mattermost to post
