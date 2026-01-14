@@ -164,10 +164,16 @@ def create_bot(registry: BotRegistry, username: str, display_name: str = None, d
             )
         
         if convert_response.status_code not in [200, 201]:
-            # If already a bot, Mattermost returns 400; treat as success
+            # If already a bot, Mattermost may return an error; verify via /bots/{user_id}
             body = convert_response.text or ""
-            if convert_response.status_code == 400 and ("already a bot" in body.lower() or "convert_to_bot" in body.lower()):
+            is_already_bot_hint = ("already a bot" in body.lower()) or ("convert_to_bot" in body.lower())
+            with httpx.Client(timeout=10.0, verify=False) as client:
+                bot_check = client.get(f"{api_url}/bots/{user_id}", headers=headers)
+            if bot_check.status_code == 200:
                 print(f"User '{username}' is already a bot, continuing...")
+            elif convert_response.status_code == 400 and is_already_bot_hint:
+                # Some Mattermost versions don't expose /bots/{user_id} consistently; assume it's fine.
+                print(f"User '{username}' appears to already be a bot, continuing...")
             else:
                 print(f"❌ Error converting to bot: {convert_response.status_code} {convert_response.text}")
                 sys.exit(1)
