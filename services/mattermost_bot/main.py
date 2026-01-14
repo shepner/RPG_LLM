@@ -100,8 +100,14 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                             logger.info(f"{bot_username}: Got {len(all_channels)} total channels")
                             # Filter for DM channels
                             dm_channels = [c for c in all_channels if c.get("type") == "D"]
-                            # Also get public/private channels where this bot is a member
-                            group_channels = [c for c in all_channels if c.get("type") in ["O", "P"]]
+                            # Also get channels where this bot is a member for @mention polling.
+                            # IMPORTANT: do NOT poll public channels ("O") because outgoing webhooks
+                            # already cover @gaia/@thoth/@maat in public channels like Town Square.
+                            # Polling public channels causes duplicate processing + extra API calls.
+                            #
+                            # We still poll private channels ("P") because outgoing webhooks do not
+                            # reliably trigger there.
+                            group_channels = [c for c in all_channels if c.get("type") in ["P"]]
                             if len(dm_channels) > 0:
                                 logger.info(f"{bot_username}: Found {len(dm_channels)} DM channels")
                                 for dm in dm_channels:
