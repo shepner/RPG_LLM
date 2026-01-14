@@ -140,7 +140,8 @@ async def poll_channel_messages_for_collab(primary_token: str):
 
                 since = last_since_ms.get(channel_id)
                 if since is None:
-                    since = now_ms - 5000  # small warm start
+                    lookback_ms = max(5, Config.CHANNEL_COLLAB_INITIAL_LOOKBACK_SECONDS) * 1000
+                    since = now_ms - lookback_ms
 
                 read_token = channel_reader_token.get(channel_id, primary_token)
                 posts_resp = await client.get(
@@ -189,6 +190,7 @@ async def poll_channel_messages_for_collab(primary_token: str):
                     mentioned_bots = [b for b in service_bots if b in mentions]
 
                     responders: list[str] = []
+                    forced_reply: str | None = None
                     if mentioned_bots:
                         responders = mentioned_bots[: Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST]
                     else:
@@ -200,6 +202,15 @@ async def poll_channel_messages_for_collab(primary_token: str):
                             k in lower for k in ["reply", "respond", "say", "answer"]
                         ):
                             responders = service_bots[:]  # invite all
+                            # Deterministic patterns so bots can comply without spending LLM calls
+                            # - "reply with 'X'" → reply exactly X
+                            # - "reply with their name" → reply bot's username
+                            import re
+                            m = re.search(r"reply\\s+with\\s+[\"']([^\"']+)[\"']", lower)
+                            if m:
+                                forced_reply = m.group(1)
+                            elif "reply with their name" in lower or "reply with your name" in lower:
+                                forced_reply = "__BOT_NAME__"
                         else:
                             preferred = None
                             if any(k in lower for k in ["rule", "rules", "modifier", "dice", "roll", "dc"]):
@@ -227,15 +238,21 @@ async def poll_channel_messages_for_collab(primary_token: str):
                             continue
                         final_responders.append(bname)
 
-                    for bname in final_responders[: Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST]:
+                    # If this was an explicit everyone-invite, allow all bots to reply (still filtered by cooldown above)
+                    reply_limit = len(final_responders) if forced_reply is not None else Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST
+
+                    for bname in final_responders[:reply_limit]:
                         try:
-                            response_text = await bot.service_handler.handle_service_message(
-                                bot_username=bname,
-                                message=msg,
-                                mattermost_user_id=user_id,
-                                mattermost_username=sender_username,
-                                context={"channel_id": channel_id, "channel_name": c.get("name"), "sender": sender_username},
-                            )
+                            if forced_reply is not None:
+                                response_text = bname if forced_reply == "__BOT_NAME__" else forced_reply
+                            else:
+                                response_text = await bot.service_handler.handle_service_message(
+                                    bot_username=bname,
+                                    message=msg,
+                                    mattermost_user_id=user_id,
+                                    mattermost_username=sender_username,
+                                    context={"channel_id": channel_id, "channel_name": c.get("name"), "sender": sender_username},
+                                )
                             if not response_text:
                                 continue
                             await bot.post_message(

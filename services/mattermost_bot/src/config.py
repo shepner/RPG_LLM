@@ -43,6 +43,8 @@ class Config:
     CHANNEL_COLLAB_BOT_COOLDOWN_SECONDS: float = float(os.getenv("CHANNEL_COLLAB_BOT_COOLDOWN_SECONDS", "20"))
     CHANNEL_COLLAB_REPLY_IN_THREAD: bool = os.getenv("CHANNEL_COLLAB_REPLY_IN_THREAD", "true").lower() in ("1", "true", "yes", "on")
     CHANNEL_COLLAB_ALLOW_BOT_TO_BOT: bool = os.getenv("CHANNEL_COLLAB_ALLOW_BOT_TO_BOT", "true").lower() in ("1", "true", "yes", "on")
+    # When the poller first sees a channel, look back this far to catch recent messages
+    CHANNEL_COLLAB_INITIAL_LOOKBACK_SECONDS: int = int(os.getenv("CHANNEL_COLLAB_INITIAL_LOOKBACK_SECONDS", "600"))
     
     # Bot registry support
     _bot_registry: Optional[BotRegistry] = None
