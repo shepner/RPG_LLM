@@ -3,6 +3,7 @@
 import logging
 import hashlib
 import time
+import random
 from fastapi import FastAPI, Request, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -49,6 +50,168 @@ _last_post_ids = {}  # Format: {bot_username: {channel_id: post_id}}
 # Format: {(bot_username, channel_id, message_hash): timestamp}
 # We use message_hash because webhooks don't always include post_id
 _webhook_processed_messages = {}  # Dict to track when messages were processed
+
+
+async def poll_channel_messages_for_collab(primary_token: str):
+    """
+    Poll public/private channels and let service bots optionally respond like humans.
+    DMs are excluded here (DM behavior remains handled by per-bot DM polling).
+    """
+    import asyncio
+    import httpx
+    from urllib.parse import urlparse
+
+    if not Config.CHANNEL_COLLAB_ENABLED:
+        logger.info("Channel collaboration disabled (CHANNEL_COLLAB_ENABLED=false)")
+        return
+
+    parsed = urlparse(Config.MATTERMOST_URL)
+    hostname = parsed.hostname or "mattermost"
+    if hostname in ["localhost", "127.0.0.1"]:
+        hostname = "mattermost"
+    api_url = f"{parsed.scheme or 'http'}://{hostname}:{parsed.port or 8065}/api/v4"
+    headers = {"Authorization": f"Bearer {primary_token}"}
+
+    service_bots = ["gaia", "thoth", "maat"]
+    known_bot_usernames = set(service_bots + [Config.MATTERMOST_BOT_USERNAME])
+
+    last_since_ms: dict[str, int] = {}
+    processed_posts: set[str] = set()
+    last_bot_response_at: dict[tuple[str, str, str], float] = {}  # (bot, channel_id, root_id_or_post_id) -> ts
+    user_cache: dict[str, tuple[str, float]] = {}  # user_id -> (username, ts)
+
+    logger.info("Starting channel collaboration poller")
+    await asyncio.sleep(2)
+
+    async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+        me = await client.get(f"{api_url}/users/me", headers=headers)
+        if me.status_code != 200:
+            logger.error(f"Channel collab: cannot auth primary token: {me.status_code} {me.text[:200]}")
+            return
+        primary_user_id = me.json().get("id")
+
+        while True:
+            await asyncio.sleep(max(1.0, Config.CHANNEL_COLLAB_POLL_SECONDS))
+
+            chans = await client.get(f"{api_url}/users/{primary_user_id}/channels", headers=headers)
+            if chans.status_code != 200:
+                logger.warning(f"Channel collab: cannot list channels: {chans.status_code} {chans.text[:120]}")
+                continue
+
+            channels = [c for c in chans.json() if c.get("type") in ["O", "P"]]
+            now_ms = int(time.time() * 1000)
+
+            for c in channels:
+                channel_id = c.get("id")
+                if not channel_id:
+                    continue
+
+                since = last_since_ms.get(channel_id)
+                if since is None:
+                    since = now_ms - 5000  # small warm start
+
+                posts_resp = await client.get(
+                    f"{api_url}/channels/{channel_id}/posts",
+                    headers=headers,
+                    params={"since": since},
+                )
+                if posts_resp.status_code != 200:
+                    continue
+
+                payload = posts_resp.json()
+                order = payload.get("order", [])
+                posts = payload.get("posts", {})
+                if not order:
+                    last_since_ms[channel_id] = now_ms
+                    continue
+
+                # Oldest -> newest
+                for post_id in reversed(order):
+                    if post_id in processed_posts:
+                        continue
+
+                    post = posts.get(post_id, {})
+                    msg = (post.get("message") or "").strip()
+                    user_id = post.get("user_id")
+                    if not msg or not user_id:
+                        processed_posts.add(post_id)
+                        continue
+
+                    cached = user_cache.get(user_id)
+                    if cached and time.time() - cached[1] < 300:
+                        sender_username = cached[0]
+                    else:
+                        u = await client.get(f"{api_url}/users/{user_id}", headers=headers)
+                        sender_username = (u.json().get("username") or "unknown").lower() if u.status_code == 200 else "unknown"
+                        user_cache[user_id] = (sender_username, time.time())
+
+                    sender_is_bot = sender_username in known_bot_usernames
+                    if sender_is_bot and not Config.CHANNEL_COLLAB_ALLOW_BOT_TO_BOT:
+                        processed_posts.add(post_id)
+                        continue
+
+                    mentions = []
+                    if bot and bot.message_router:
+                        mentions = [m.lower() for m in bot.message_router.extract_mentions(msg)]
+                    mentioned_bots = [b for b in service_bots if b in mentions]
+
+                    responders: list[str] = []
+                    if mentioned_bots:
+                        responders = mentioned_bots[: Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST]
+                    else:
+                        base_prob = Config.CHANNEL_COLLAB_BOT_TO_BOT_PROB if sender_is_bot else Config.CHANNEL_COLLAB_BASE_RESPONSE_PROB
+                        lower = msg.lower()
+
+                        preferred = None
+                        if any(k in lower for k in ["rule", "rules", "modifier", "dice", "roll", "dc"]):
+                            preferred = "maat"
+                        elif any(k in lower for k in ["world", "lore", "setting", "map", "physics", "canon"]):
+                            preferred = "gaia"
+                        elif any(k in lower for k in ["story", "scene", "npc", "plot", "quest", "narrative"]):
+                            preferred = "thoth"
+                        elif "?" in lower:
+                            preferred = random.choice(service_bots)
+
+                        if preferred and random.random() < min(0.6, base_prob * 3):
+                            responders.append(preferred)
+                        if len(responders) < Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST and random.random() < base_prob:
+                            other = random.choice([b for b in service_bots if b not in responders])
+                            responders.append(other)
+
+                    root_id = post.get("root_id") or post_id
+                    final_responders: list[str] = []
+                    for bname in responders:
+                        if sender_username == bname:
+                            continue
+                        ck = (bname, channel_id, root_id)
+                        if time.time() - last_bot_response_at.get(ck, 0.0) < Config.CHANNEL_COLLAB_BOT_COOLDOWN_SECONDS:
+                            continue
+                        final_responders.append(bname)
+
+                    for bname in final_responders[: Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST]:
+                        try:
+                            response_text = await bot.service_handler.handle_service_message(
+                                bot_username=bname,
+                                message=msg,
+                                mattermost_user_id=user_id,
+                                mattermost_username=sender_username,
+                                context={"channel_id": channel_id, "channel_name": c.get("name"), "sender": sender_username},
+                            )
+                            if not response_text:
+                                continue
+                            await bot.post_message(
+                                channel_id=channel_id,
+                                text=response_text,
+                                bot_username=bname,
+                                root_id=(post_id if Config.CHANNEL_COLLAB_REPLY_IN_THREAD else None),
+                            )
+                            last_bot_response_at[(bname, channel_id, root_id)] = time.time()
+                        except Exception as e:
+                            logger.error(f"Channel collab: error responding as {bname}: {e}", exc_info=True)
+
+                    processed_posts.add(post_id)
+
+                last_since_ms[channel_id] = now_ms
 
 async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
     """Poll for new DM messages and channel @mentions for a specific service bot."""
@@ -100,27 +263,16 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                             logger.info(f"{bot_username}: Got {len(all_channels)} total channels")
                             # Filter for DM channels
                             dm_channels = [c for c in all_channels if c.get("type") == "D"]
-                            # Also get channels where this bot is a member for @mention polling.
-                            # IMPORTANT: do NOT poll public channels ("O") because outgoing webhooks
-                            # already cover @gaia/@thoth/@maat in public channels like Town Square.
-                            # Polling public channels causes duplicate processing + extra API calls.
-                            #
-                            # We still poll private channels ("P") because outgoing webhooks do not
-                            # reliably trigger there.
-                            group_channels = [c for c in all_channels if c.get("type") in ["P"]]
+                            # IMPORTANT: DM polling should not process channels.
+                            # Channel behavior is handled by the channel collaboration poller.
+                            group_channels = []
                             if len(dm_channels) > 0:
                                 logger.info(f"{bot_username}: Found {len(dm_channels)} DM channels")
                                 for dm in dm_channels:
                                     logger.debug(f"{bot_username}: DM channel ID: {dm.get('id')}")
                             else:
                                 logger.debug(f"{bot_username}: Found {len(dm_channels)} DM channels (no DMs yet)")
-                            if len(group_channels) > 0:
-                                logger.info(f"{bot_username}: Found {len(group_channels)} group channels (public/private)")
-                                for gc in group_channels:
-                                    name = gc.get('display_name', gc.get('name', ''))
-                                    logger.info(f"{bot_username}: Group channel: {name} ({gc.get('id')})")
-                            else:
-                                logger.debug(f"{bot_username}: Found {len(group_channels)} group channels")
+                            # group_channels intentionally empty
                     except Exception as e:
                         logger.error(f"{bot_username}: Error getting channels: {e}", exc_info=True)
                         dm_channels = []
@@ -337,144 +489,8 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                         except Exception as e:
                             logger.debug(f"Error checking DM channel {channel_id} for {bot_username}: {e}")
                     
-                    # Process group channels (public/private) - check for @mentions
-                    for channel in group_channels:
-                        channel_id = channel.get("id")
-                        channel_type = channel.get("type")
-                        
-                        # Get recent posts in this channel
-                        try:
-                            # Get posts since last check
-                            last_post_ids = _last_post_ids.get(bot_username, {})
-                            last_post_id = last_post_ids.get(channel_id, "")
-                            
-                            if last_post_id:
-                                posts_response = await client.get(
-                                    f"{api_url}/channels/{channel_id}/posts",
-                                    headers=headers,
-                                    params={"since": last_post_id}
-                                )
-                                if posts_response.status_code == 400:
-                                    logger.warning(f"{bot_username}: 'since' parameter failed for channel {channel_id}, clearing")
-                                    if bot_username in _last_post_ids and channel_id in _last_post_ids[bot_username]:
-                                        del _last_post_ids[bot_username][channel_id]
-                                    last_post_id = ""
-                                    posts_response = await client.get(
-                                        f"{api_url}/channels/{channel_id}/posts",
-                                        headers=headers,
-                                        params={"per_page": 20}
-                                    )
-                            else:
-                                posts_response = await client.get(
-                                    f"{api_url}/channels/{channel_id}/posts",
-                                    headers=headers,
-                                    params={"per_page": 20}
-                                )
-                            
-                            if posts_response.status_code != 200:
-                                logger.debug(f"{bot_username}: Could not get posts for channel {channel_id}: {posts_response.status_code}")
-                                continue
-                            
-                            posts = posts_response.json()
-                            post_list = posts.get("posts", {})
-                            order = posts.get("order", [])
-                            
-                            # Determine which posts to process
-                            posts_to_process = []
-                            if last_post_id and last_post_id in order:
-                                last_index = order.index(last_post_id)
-                                posts_to_process = order[:last_index]
-                            elif last_post_id:
-                                logger.debug(f"{bot_username}: last_post_id not in current posts for channel {channel_id} - skipping")
-                                posts_to_process = []
-                            else:
-                                if order:
-                                    posts_to_process = [order[0]]  # Just newest post on first check
-                            
-                            # Process posts that mention this bot
-                            for post_id in reversed(posts_to_process):
-                                if post_id == last_post_id:
-                                    continue
-                                
-                                post = post_list.get(post_id, {})
-                                post_user_id = post.get("user_id")
-                                message = post.get("message", "").strip()
-                                
-                                # Skip empty messages or bot's own messages
-                                if not message or post_user_id == bot_user_id:
-                                    continue
-                                
-                                # Check if message mentions this bot
-                                if bot and bot.message_router:
-                                    mentions = bot.message_router.extract_mentions(message)
-                                    if bot_username.lower() not in [m.lower() for m in mentions]:
-                                        # No mention of this bot - skip
-                                        continue
-                                
-                                # Skip rate limit messages
-                                if message.startswith("⚠️") or "Rate limit" in message:
-                                    continue
-                                
-                                # Check if this message was already processed by webhook (within last 2 minutes)
-                                message_hash = hashlib.md5(f"{channel_id}:{message}".encode()).hexdigest()[:16]
-                                key = (bot_username.lower(), channel_id, message_hash)
-                                if key in _webhook_processed_messages:
-                                    processed_time = _webhook_processed_messages[key]
-                                    if time.time() - processed_time < 120:  # Within last 2 minutes
-                                        logger.info(f"{bot_username}: Skipping message (already processed by webhook {int(time.time() - processed_time)}s ago): {message[:50]}")
-                                        # Still update last_post_id to skip it in future polls
-                                        if bot_username not in _last_post_ids:
-                                            _last_post_ids[bot_username] = {}
-                                        _last_post_ids[bot_username][channel_id] = post_id
-                                        continue
-                                    else:
-                                        # Clean up old entries (older than 2 minutes)
-                                        del _webhook_processed_messages[key]
-                                
-                                logger.info(f"{bot_username}: Processing @mention in channel {channel_id}: {message[:50]}")
-                                
-                                # Route to service handler
-                                if bot and bot.service_handler:
-                                    try:
-                                        response_text = await bot.service_handler.handle_service_message(
-                                            bot_username=bot_username,
-                                            message=message,
-                                            mattermost_user_id=post_user_id
-                                        )
-                                        
-                                        if response_text:
-                                            logger.info(f"{bot_username}: Got response for channel message: {response_text[:100]}")
-                                            # Post response
-                                            response_post_id = await post_message_as_bot_httpx(
-                                                api_url=api_url,
-                                                bot_token=bot_token,
-                                                channel_id=channel_id,
-                                                text=response_text,
-                                                bot_username=bot_username
-                                            )
-                                            logger.info(f"{bot_username}: Posted response to channel {channel_id}")
-                                            
-                                            # Update last_post_id
-                                            if response_post_id:
-                                                if bot_username not in _last_post_ids:
-                                                    _last_post_ids[bot_username] = {}
-                                                _last_post_ids[bot_username][channel_id] = response_post_id
-                                            else:
-                                                if bot_username not in _last_post_ids:
-                                                    _last_post_ids[bot_username] = {}
-                                                _last_post_ids[bot_username][channel_id] = post_id
-                                        else:
-                                            # Update last_post_id even if no response
-                                            if bot_username not in _last_post_ids:
-                                                _last_post_ids[bot_username] = {}
-                                            _last_post_ids[bot_username][channel_id] = post_id
-                                    except Exception as e:
-                                        logger.error(f"{bot_username}: Error handling channel message: {e}", exc_info=True)
-                                        if bot_username not in _last_post_ids:
-                                            _last_post_ids[bot_username] = {}
-                                        _last_post_ids[bot_username][channel_id] = post_id
-                        except Exception as e:
-                            logger.debug(f"Error processing posts in channel {channel_id} for {bot_username}: {e}")
+                    # NOTE: channel handling intentionally removed here.
+                    # Public/private channel behavior is handled by `poll_channel_messages_for_collab`.
                         
             except Exception as e:
                 logger.debug(f"Error polling messages for {bot_username}: {e}")
@@ -561,6 +577,17 @@ async def startup_event():
             logger.warning("Bot registry not available - DM polling for service bots disabled")
         
         logger.info("Started DM message polling for service bots")
+
+        # Start channel collaboration poller using the primary bot token
+        try:
+            primary_token = Config.get_bot_token()
+            if primary_token:
+                asyncio.create_task(poll_channel_messages_for_collab(primary_token))
+                logger.info("Started channel collaboration poller")
+            else:
+                logger.warning("Channel collaboration poller not started: no primary bot token")
+        except Exception as e:
+            logger.error(f"Could not start channel collaboration poller: {e}", exc_info=True)
     except Exception as e:
         logger.warning(f"Bot initialization had issues: {e}")
         logger.warning("Bot service will start but may not function until Mattermost is configured")
@@ -802,6 +829,12 @@ async def handle_webhook(request: Request):
                 logger.info(f"Returning response: {result}")
                 return result
         
+        # If this is an outgoing webhook (trigger_word present), ignore it for message handling.
+        # Channel behavior is handled by the channel collaboration poller to allow "human-like"
+        # optional participation by multiple bots and to support non-directed messages.
+        if "trigger_word" in body:
+            return Response(status_code=200, content="")
+
         # Check if it's an outgoing webhook (has trigger_word) or a regular post event
         # Also handle regular post events that might come through webhooks
         is_outgoing_webhook = "trigger_word" in body

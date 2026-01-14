@@ -275,7 +275,7 @@ class MattermostBot:
                 "response_type": "ephemeral"
             }
     
-    async def post_message(self, channel_id: str, text: str, attachments: Optional[list] = None, bot_username: Optional[str] = None) -> bool:
+    async def post_message(self, channel_id: str, text: str, attachments: Optional[list] = None, bot_username: Optional[str] = None, root_id: Optional[str] = None) -> bool:
         """
         Post a message to a Mattermost channel.
         
@@ -311,6 +311,8 @@ class MattermostBot:
                 "channel_id": channel_id,
                 "message": text
             }
+            if root_id:
+                post_data["root_id"] = root_id
             
             # Note: override_username doesn't work with bot tokens
             # Messages posted with bot tokens automatically appear as that bot user

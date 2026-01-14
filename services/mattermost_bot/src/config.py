@@ -33,6 +33,16 @@ class Config:
     MATTERMOST_BOT_TOKEN: Optional[str] = os.getenv("MATTERMOST_BOT_TOKEN")
     MATTERMOST_BOT_USERNAME: str = os.getenv("MATTERMOST_BOT_USERNAME", "rpg-bot")
     MATTERMOST_SLASH_COMMAND_TOKEN: Optional[str] = os.getenv("MATTERMOST_SLASH_COMMAND_TOKEN")
+
+    # Channel collaboration behavior (channels only; DMs unchanged)
+    CHANNEL_COLLAB_ENABLED: bool = os.getenv("CHANNEL_COLLAB_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+    CHANNEL_COLLAB_POLL_SECONDS: float = float(os.getenv("CHANNEL_COLLAB_POLL_SECONDS", "2.0"))
+    CHANNEL_COLLAB_BASE_RESPONSE_PROB: float = float(os.getenv("CHANNEL_COLLAB_BASE_RESPONSE_PROB", "0.15"))
+    CHANNEL_COLLAB_BOT_TO_BOT_PROB: float = float(os.getenv("CHANNEL_COLLAB_BOT_TO_BOT_PROB", "0.05"))
+    CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST: int = int(os.getenv("CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST", "2"))
+    CHANNEL_COLLAB_BOT_COOLDOWN_SECONDS: float = float(os.getenv("CHANNEL_COLLAB_BOT_COOLDOWN_SECONDS", "20"))
+    CHANNEL_COLLAB_REPLY_IN_THREAD: bool = os.getenv("CHANNEL_COLLAB_REPLY_IN_THREAD", "true").lower() in ("1", "true", "yes", "on")
+    CHANNEL_COLLAB_ALLOW_BOT_TO_BOT: bool = os.getenv("CHANNEL_COLLAB_ALLOW_BOT_TO_BOT", "true").lower() in ("1", "true", "yes", "on")
     
     # Bot registry support
     _bot_registry: Optional[BotRegistry] = None
