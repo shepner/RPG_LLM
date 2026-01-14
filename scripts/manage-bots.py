@@ -148,7 +148,7 @@ def create_bot(registry: BotRegistry, username: str, display_name: str = None, d
             user = user_response.json()
             user_id = user["id"]
         
-        # Step 2: Convert to bot
+        # Step 2: Convert to bot (idempotent if already a bot)
         print(f"Converting user to bot...")
         bot_data = {
             "username": username,
@@ -164,8 +164,13 @@ def create_bot(registry: BotRegistry, username: str, display_name: str = None, d
             )
         
         if convert_response.status_code not in [200, 201]:
-            print(f"❌ Error converting to bot: {convert_response.text}")
-            sys.exit(1)
+            # If already a bot, Mattermost returns 400; treat as success
+            body = convert_response.text or ""
+            if convert_response.status_code == 400 and ("already a bot" in body.lower() or "convert_to_bot" in body.lower()):
+                print(f"User '{username}' is already a bot, continuing...")
+            else:
+                print(f"❌ Error converting to bot: {convert_response.status_code} {convert_response.text}")
+                sys.exit(1)
         
         # Step 3: Create token
         print(f"Creating bot token...")
