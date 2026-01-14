@@ -1,6 +1,8 @@
 """Main FastAPI application for Mattermost bot service."""
 
 import logging
+import hashlib
+import time
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -43,8 +45,10 @@ bot: Optional[MattermostBot] = None
 
 # Track last processed post ID per channel per bot
 _last_post_ids = {}  # Format: {bot_username: {channel_id: post_id}}
-# Track post IDs processed by webhooks to avoid duplicate processing in polling
-_webhook_processed_posts = set()  # Set of (bot_username, channel_id, post_id) tuples
+# Track messages processed by webhooks to avoid duplicate processing in polling
+# Format: {(bot_username, channel_id, message_hash): timestamp}
+# We use message_hash because webhooks don't always include post_id
+_webhook_processed_messages = {}  # Dict to track when messages were processed
 
 async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
     """Poll for new DM messages and channel @mentions for a specific service bot."""
@@ -386,15 +390,6 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 if post_id == last_post_id:
                                     continue
                                 
-                                # Skip if this post was already processed by webhook
-                                if (bot_username.lower(), channel_id, post_id) in _webhook_processed_posts:
-                                    logger.debug(f"{bot_username}: Skipping post {post_id[:20]}... (already processed by webhook)")
-                                    # Still update last_post_id to skip it in future polls
-                                    if bot_username not in _last_post_ids:
-                                        _last_post_ids[bot_username] = {}
-                                    _last_post_ids[bot_username][channel_id] = post_id
-                                    continue
-                                
                                 post = post_list.get(post_id, {})
                                 post_user_id = post.get("user_id")
                                 message = post.get("message", "").strip()
@@ -413,6 +408,22 @@ async def poll_dm_messages_for_bot(bot_username: str, bot_token: str):
                                 # Skip rate limit messages
                                 if message.startswith("⚠️") or "Rate limit" in message:
                                     continue
+                                
+                                # Check if this message was already processed by webhook (within last 2 minutes)
+                                message_hash = hashlib.md5(f"{channel_id}:{message}".encode()).hexdigest()[:16]
+                                key = (bot_username.lower(), channel_id, message_hash)
+                                if key in _webhook_processed_messages:
+                                    processed_time = _webhook_processed_messages[key]
+                                    if time.time() - processed_time < 120:  # Within last 2 minutes
+                                        logger.info(f"{bot_username}: Skipping message (already processed by webhook {int(time.time() - processed_time)}s ago): {message[:50]}")
+                                        # Still update last_post_id to skip it in future polls
+                                        if bot_username not in _last_post_ids:
+                                            _last_post_ids[bot_username] = {}
+                                        _last_post_ids[bot_username][channel_id] = post_id
+                                        continue
+                                    else:
+                                        # Clean up old entries (older than 2 minutes)
+                                        del _webhook_processed_messages[key]
                                 
                                 logger.info(f"{bot_username}: Processing @mention in channel {channel_id}: {message[:50]}")
                                 
@@ -866,6 +877,15 @@ async def handle_webhook(request: Request):
                         break
             
             if message and bot_username and bot.service_handler:
+                # Check if we've already processed this exact message recently (deduplicate webhooks)
+                message_hash = hashlib.md5(f"{channel_id}:{message}".encode()).hexdigest()[:16]
+                key = (bot_username.lower(), channel_id, message_hash)
+                if key in _webhook_processed_messages:
+                    processed_time = _webhook_processed_messages[key]
+                    if time.time() - processed_time < 60:  # Within last minute
+                        logger.info(f"=== WEBHOOK HANDLER: Skipping duplicate webhook (processed {int(time.time() - processed_time)}s ago) ===")
+                        return {"status": "ok", "text": "Already processed"}
+                
                 # Route directly to service handler for this bot
                 logger.info(f"Routing webhook message to service bot: {bot_username}, channel_id: {channel_id}")
                 try:
@@ -881,11 +901,21 @@ async def handle_webhook(request: Request):
                         logger.info(f"=== WEBHOOK HANDLER: Response text received: {response_text[:100]} ===")
                         logger.info(f"=== WEBHOOK HANDLER: channel_id before check: {channel_id} ===")
                         
-                        # Mark this post as processed by webhook to avoid duplicate processing in polling
-                        post_id = body.get("post_id")
-                        if post_id and bot_username:
-                            _webhook_processed_posts.add((bot_username.lower(), channel_id, post_id))
-                            logger.debug(f"=== WEBHOOK HANDLER: Marked post {post_id[:20]}... as processed by webhook ===")
+                        # Mark this message as processed by webhook to avoid duplicate processing in polling
+                        # Use message hash since webhooks don't always include post_id
+                        if bot_username and channel_id and message:
+                            message_hash = hashlib.md5(f"{channel_id}:{message}".encode()).hexdigest()[:16]
+                            key = (bot_username.lower(), channel_id, message_hash)
+                            _webhook_processed_messages[key] = time.time()
+                            logger.info(f"=== WEBHOOK HANDLER: Marked message as processed (hash: {message_hash}) ===")
+                            
+                            # Also try to get post_id if available and update last_post_id
+                            post_id = body.get("post_id") or body.get("data", {}).get("post", {}).get("id")
+                            if post_id and bot_username:
+                                if bot_username not in _last_post_ids:
+                                    _last_post_ids[bot_username] = {}
+                                _last_post_ids[bot_username][channel_id] = post_id
+                                logger.debug(f"=== WEBHOOK HANDLER: Updated last_post_id to {post_id[:20]}... ===")
                         
                         # Post the response manually using the bot API
                         # Mattermost outgoing webhooks don't always auto-post responses
