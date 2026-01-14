@@ -3,7 +3,7 @@
 import logging
 import hashlib
 import time
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict
@@ -957,7 +957,9 @@ async def handle_webhook(request: Request):
                             if post_success:
                                 logger.info(f"=== WEBHOOK HANDLER: Webhook response posted successfully as {bot_username} to channel {channel_id} ===")
                                 # Return early to prevent duplicate posting in the code below
-                                return {"status": "ok", "text": ""}
+                                # IMPORTANT: For outgoing webhooks, any non-empty response body can be auto-posted
+                                # by Mattermost as the webhook creator (often rpg-bot). Return an empty body.
+                                return Response(status_code=200, content="")
                             else:
                                 logger.error(f"=== WEBHOOK HANDLER: Failed to post webhook response (post_message returned False) ===")
                                 # Fallback: return response for Mattermost to post
@@ -972,8 +974,8 @@ async def handle_webhook(request: Request):
                                 "text": response_text,
                                 "username": bot_username
                             }
-                        # Return empty response since we posted manually
-                        return {"text": ""}
+                        # Safety: if we ever reach here after manual posting, do not return a body
+                        return Response(status_code=200, content="")
                     else:
                         response = None
                 except Exception as e:
@@ -1022,13 +1024,12 @@ async def handle_webhook(request: Request):
             logger.info("Returning webhook response for Mattermost to post automatically")
             return response
         
-        # Only post response here if it wasn't already posted by the webhook handler above
-        # Check if this was an outgoing webhook that we already handled
+        # Only post response here if it wasn't already posted by the webhook handler above.
+        # IMPORTANT: For outgoing webhooks, return an empty body to prevent Mattermost auto-posting.
         is_outgoing_webhook = "trigger_word" in body
         if is_outgoing_webhook:
-            # Outgoing webhooks are already handled above, don't post again
-            logger.debug("Skipping duplicate post for outgoing webhook (already handled)")
-            return {"status": "ok"}
+            logger.debug("Outgoing webhook handled; returning empty body to prevent auto-post")
+            return Response(status_code=200, content="")
         
         if response:
             # Post response back to Mattermost (for other webhook types)
