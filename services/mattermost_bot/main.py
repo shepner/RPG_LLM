@@ -877,14 +877,29 @@ async def handle_webhook(request: Request):
                         break
             
             if message and bot_username and bot.service_handler:
-                # Check if we've already processed this exact message recently (deduplicate webhooks)
+                # Mark this message as processed IMMEDIATELY to prevent race condition with polling
+                # Do this BEFORE processing to ensure polling sees it as processed
                 message_hash = hashlib.md5(f"{channel_id}:{message}".encode()).hexdigest()[:16]
                 key = (bot_username.lower(), channel_id, message_hash)
+                
+                # Check if already processed (deduplicate webhooks)
                 if key in _webhook_processed_messages:
                     processed_time = _webhook_processed_messages[key]
                     if time.time() - processed_time < 60:  # Within last minute
                         logger.info(f"=== WEBHOOK HANDLER: Skipping duplicate webhook (processed {int(time.time() - processed_time)}s ago) ===")
                         return {"status": "ok", "text": "Already processed"}
+                
+                # Mark as processing NOW (before calling service handler)
+                _webhook_processed_messages[key] = time.time()
+                logger.info(f"=== WEBHOOK HANDLER: Marked message as processing (hash: {message_hash}) IMMEDIATELY ===")
+                
+                # Also update last_post_id IMMEDIATELY if available
+                post_id = body.get("post_id") or body.get("data", {}).get("post", {}).get("id")
+                if post_id and bot_username:
+                    if bot_username not in _last_post_ids:
+                        _last_post_ids[bot_username] = {}
+                    _last_post_ids[bot_username][channel_id] = post_id
+                    logger.info(f"=== WEBHOOK HANDLER: Updated last_post_id to {post_id[:20]}... IMMEDIATELY ===")
                 
                 # Route directly to service handler for this bot
                 logger.info(f"Routing webhook message to service bot: {bot_username}, channel_id: {channel_id}")
@@ -900,22 +915,6 @@ async def handle_webhook(request: Request):
                     if response_text:
                         logger.info(f"=== WEBHOOK HANDLER: Response text received: {response_text[:100]} ===")
                         logger.info(f"=== WEBHOOK HANDLER: channel_id before check: {channel_id} ===")
-                        
-                        # Mark this message as processed by webhook to avoid duplicate processing in polling
-                        # Use message hash since webhooks don't always include post_id
-                        if bot_username and channel_id and message:
-                            message_hash = hashlib.md5(f"{channel_id}:{message}".encode()).hexdigest()[:16]
-                            key = (bot_username.lower(), channel_id, message_hash)
-                            _webhook_processed_messages[key] = time.time()
-                            logger.info(f"=== WEBHOOK HANDLER: Marked message as processed (hash: {message_hash}) ===")
-                            
-                            # Also try to get post_id if available and update last_post_id
-                            post_id = body.get("post_id") or body.get("data", {}).get("post", {}).get("id")
-                            if post_id and bot_username:
-                                if bot_username not in _last_post_ids:
-                                    _last_post_ids[bot_username] = {}
-                                _last_post_ids[bot_username][channel_id] = post_id
-                                logger.debug(f"=== WEBHOOK HANDLER: Updated last_post_id to {post_id[:20]}... ===")
                         
                         # Post the response manually using the bot API
                         # Mattermost outgoing webhooks don't always auto-post responses
