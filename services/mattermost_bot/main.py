@@ -83,22 +83,54 @@ async def poll_channel_messages_for_collab(primary_token: str):
     logger.info("Starting channel collaboration poller")
     await asyncio.sleep(2)
 
+    # Tokens we can use to enumerate channels / read posts (private channels require membership)
+    token_by_name = {
+        "primary": primary_token,
+        "gaia": Config.get_bot_token("gaia"),
+        "thoth": Config.get_bot_token("thoth"),
+        "maat": Config.get_bot_token("maat"),
+    }
+    token_by_name = {k: v for k, v in token_by_name.items() if v}
+
     async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
-        me = await client.get(f"{api_url}/users/me", headers=headers)
-        if me.status_code != 200:
-            logger.error(f"Channel collab: cannot auth primary token: {me.status_code} {me.text[:200]}")
+        # Resolve user IDs per token once
+        user_id_by_name: dict[str, str] = {}
+        for name, tok in token_by_name.items():
+            r = await client.get(f"{api_url}/users/me", headers={"Authorization": f"Bearer {tok}"})
+            if r.status_code == 200:
+                user_id_by_name[name] = r.json().get("id")
+            else:
+                logger.warning(f"Channel collab: cannot auth token '{name}': {r.status_code} {r.text[:120]}")
+
+        if "primary" not in user_id_by_name:
+            logger.error("Channel collab: cannot start (no valid primary token)")
             return
-        primary_user_id = me.json().get("id")
 
         while True:
             await asyncio.sleep(max(1.0, Config.CHANNEL_COLLAB_POLL_SECONDS))
 
-            chans = await client.get(f"{api_url}/users/{primary_user_id}/channels", headers=headers)
-            if chans.status_code != 200:
-                logger.warning(f"Channel collab: cannot list channels: {chans.status_code} {chans.text[:120]}")
-                continue
+            # Union channels visible to any bot token (private channels require membership)
+            channel_map: dict[str, dict] = {}  # channel_id -> channel dict
+            channel_reader_token: dict[str, str] = {}  # channel_id -> token to read posts
 
-            channels = [c for c in chans.json() if c.get("type") in ["O", "P"]]
+            for name, uid in user_id_by_name.items():
+                tok = token_by_name[name]
+                chans = await client.get(
+                    f"{api_url}/users/{uid}/channels",
+                    headers={"Authorization": f"Bearer {tok}"},
+                )
+                if chans.status_code != 200:
+                    continue
+                for c in chans.json():
+                    if c.get("type") not in ["O", "P"]:
+                        continue
+                    cid = c.get("id")
+                    if not cid:
+                        continue
+                    channel_map[cid] = c
+                    channel_reader_token.setdefault(cid, tok)
+
+            channels = list(channel_map.values())
             now_ms = int(time.time() * 1000)
 
             for c in channels:
@@ -110,9 +142,10 @@ async def poll_channel_messages_for_collab(primary_token: str):
                 if since is None:
                     since = now_ms - 5000  # small warm start
 
+                read_token = channel_reader_token.get(channel_id, primary_token)
                 posts_resp = await client.get(
                     f"{api_url}/channels/{channel_id}/posts",
-                    headers=headers,
+                    headers={"Authorization": f"Bearer {read_token}"},
                     params={"since": since},
                 )
                 if posts_resp.status_code != 200:
@@ -141,7 +174,7 @@ async def poll_channel_messages_for_collab(primary_token: str):
                     if cached and time.time() - cached[1] < 300:
                         sender_username = cached[0]
                     else:
-                        u = await client.get(f"{api_url}/users/{user_id}", headers=headers)
+                        u = await client.get(f"{api_url}/users/{user_id}", headers={"Authorization": f"Bearer {read_token}"})
                         sender_username = (u.json().get("username") or "unknown").lower() if u.status_code == 200 else "unknown"
                         user_cache[user_id] = (sender_username, time.time())
 
@@ -162,6 +195,12 @@ async def poll_channel_messages_for_collab(primary_token: str):
                         base_prob = Config.CHANNEL_COLLAB_BOT_TO_BOT_PROB if sender_is_bot else Config.CHANNEL_COLLAB_BASE_RESPONSE_PROB
                         lower = msg.lower()
 
+                        # Explicit "everyone" invites all bots to respond (still subject to cooldown)
+                        if any(k in lower for k in ["everyone", "everybody", "all bots", "all of you"]) and any(
+                            k in lower for k in ["reply", "respond", "say", "answer"]
+                        ):
+                            responders = service_bots[:]  # invite all
+                        else:
                         preferred = None
                         if any(k in lower for k in ["rule", "rules", "modifier", "dice", "roll", "dc"]):
                             preferred = "maat"
