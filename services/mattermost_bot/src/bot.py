@@ -30,9 +30,13 @@ class MattermostBot:
             # Parse URL to extract components
             from urllib.parse import urlparse
             parsed = urlparse(Config.MATTERMOST_URL)
+            hostname = parsed.hostname or "mattermost"
+            # If hostname is localhost, use 'mattermost' for Docker networking
+            if hostname in ["localhost", "127.0.0.1"]:
+                hostname = "mattermost"
             
             self.driver = Driver({
-                "url": parsed.hostname or "mattermost",
+                "url": hostname,
                 "token": Config.MATTERMOST_BOT_TOKEN,
                 "scheme": parsed.scheme or "http",
                 "port": parsed.port or 8065,
@@ -284,16 +288,12 @@ class MattermostBot:
         try:
             import httpx
             from urllib.parse import urlparse
-            import os
-            import sys
-            from pathlib import Path
             
-            # For now, always use rpg-bot token since it has system_admin permissions and works reliably
-            # Individual bot tokens have connection issues in Docker environment
-            # TODO: Fix connection issues with individual bot tokens
-            bot_token = Config.MATTERMOST_BOT_TOKEN
+            # Prefer posting with the requested service bot token so the message shows as that bot.
+            # Fall back to the primary token (usually rpg-bot) if not available.
+            bot_token = Config.get_bot_token(bot_username) if bot_username else Config.get_bot_token()
             if bot_token:
-                logger.info(f"Using rpg-bot token (system_admin permissions) to post message as {bot_username or 'rpg-bot'}")
+                logger.info(f"Posting message using token for {bot_username or Config.MATTERMOST_BOT_USERNAME}")
             
             if not bot_token:
                 logger.warning("Cannot post message - bot token not configured")
