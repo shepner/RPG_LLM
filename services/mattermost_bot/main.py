@@ -1017,6 +1017,14 @@ async def handle_webhook(request: Request):
             logger.info("Returning webhook response for Mattermost to post automatically")
             return response
         
+        # Only post response here if it wasn't already posted by the webhook handler above
+        # Check if this was an outgoing webhook that we already handled
+        is_outgoing_webhook = "trigger_word" in body
+        if is_outgoing_webhook:
+            # Outgoing webhooks are already handled above, don't post again
+            logger.debug("Skipping duplicate post for outgoing webhook (already handled)")
+            return {"status": "ok"}
+        
         if response:
             # Post response back to Mattermost (for other webhook types)
             channel_id = response.get("channel_id") or body.get("channel_id")
