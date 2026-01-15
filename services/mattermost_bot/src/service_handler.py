@@ -17,6 +17,9 @@ _rate_limit_tracker = defaultdict(list)  # service_name -> list of request times
 _RATE_LIMIT_RPM = 4  # Conservative limit: 4 requests/minute (leave 1 buffer)
 _RATE_LIMIT_WINDOW = 60  # 60 second window
 
+# Sentinel token used by services to indicate "do not reply" for channel observation mode
+NO_RESPONSE_SENTINEL = "<NO_RESPONSE>"
+
 
 class ServiceHandler:
     """Handles messages to service bots (Gaia, Thoth, etc.)."""
@@ -84,6 +87,24 @@ class ServiceHandler:
             Service response text, or None if error
         """
         bot_username_lower = bot_username.lower()
+
+        # In channel observation mode, we ask the service to decide whether to respond.
+        # If it decides not to, it should return NO_RESPONSE_SENTINEL exactly.
+        channel_observe = bool(context and context.get("channel_observe"))
+        addressed = bool(context and context.get("addressed"))
+        if channel_observe and not addressed:
+            message = (
+                f"{message}\n\n"
+                f"SYSTEM (channel observation): You are observing a shared channel. "
+                f"Reply ONLY if you have a genuinely helpful, on-topic contribution. "
+                f"If you should stay silent, respond with exactly {NO_RESPONSE_SENTINEL}."
+            )
+        elif channel_observe and addressed:
+            message = (
+                f"{message}\n\n"
+                f"SYSTEM (channel observation): You were explicitly addressed/mentioned. "
+                f"Respond helpfully and concisely."
+            )
         
         if bot_username_lower not in self.SERVICE_MAP:
             logger.warning(f"Unknown service bot: {bot_username}")
@@ -142,6 +163,8 @@ class ServiceHandler:
                         # Worlds service returns response in "response" field
                         response_text = data.get("response")
                         if response_text:
+                            if channel_observe and response_text.strip() == NO_RESPONSE_SENTINEL:
+                                return None
                             return response_text
                         # Fallback to error message if present
                         error_msg = data.get("error")
@@ -190,6 +213,8 @@ class ServiceHandler:
                         # Game Master service returns response in "response" field
                         response_text = data.get("response")
                         if response_text:
+                            if channel_observe and response_text.strip() == NO_RESPONSE_SENTINEL:
+                                return None
                             return response_text
                         # Check for error field if response is None
                         error_msg = data.get("error")
@@ -236,6 +261,8 @@ class ServiceHandler:
                         # Rules Engine service returns response in "response" field
                         response_text = data.get("response")
                         if response_text:
+                            if channel_observe and response_text.strip() == NO_RESPONSE_SENTINEL:
+                                return None
                             return response_text
                         # Check for error field if response is None
                         error_msg = data.get("error")

@@ -190,61 +190,16 @@ async def poll_channel_messages_for_collab(primary_token: str):
                     mentioned_bots = [b for b in service_bots if b in mentions]
 
                     responders: list[str] = []
-                    forced_reply: str | None = None
-                    everyone_invite = False
                     if mentioned_bots:
-                        responders = mentioned_bots[: Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST]
+                        responders = mentioned_bots
                     else:
+                        # For non-mentioned channel messages, all bots *observe* the message, but we
+                        # only *ask* a bot to consider responding with some probability to limit API calls.
                         base_prob = Config.CHANNEL_COLLAB_BOT_TO_BOT_PROB if sender_is_bot else Config.CHANNEL_COLLAB_BASE_RESPONSE_PROB
-                        lower = msg.lower()
-
-                        # Explicit "everyone" invites all bots to respond (still subject to cooldown)
-                        if any(k in lower for k in ["everyone", "everybody", "all bots", "all of you"]) and any(
-                            k in lower for k in ["reply", "respond", "say", "answer"]
-                        ):
-                            responders = service_bots[:]  # invite all
-                            everyone_invite = True
-                            # Deterministic patterns so bots can comply without spending LLM calls
-                            # - "reply with 'X'" → reply exactly X
-                            # - "reply with their name" → reply bot's username
-                            import re
-                            if "reply with their name" in lower or "reply with your name" in lower:
-                                forced_reply = "__BOT_NAME__"
-                            else:
-                                # Support straight + curly quotes and also unquoted single-word replies
-                                # Examples:
-                                # - reply with "hello"?
-                                # - reply with ‘hello’
-                                # - reply with hello
-                                m = re.search(r"reply\s+with\s+[\"'“”‘’]([^\"'“”‘’]+)[\"'“”‘’]", msg, flags=re.IGNORECASE)
-                                if m:
-                                    forced_reply = m.group(1).strip()
-                                else:
-                                    m2 = re.search(r"reply\s+with\s+([a-z0-9_-]{1,32})\b", lower)
-                                    if m2:
-                                        forced_reply = m2.group(1).strip()
-                                    elif "hello" in lower:
-                                        forced_reply = "hello"
-                            logger.info(
-                                f"Channel collab: everyone-invite detected in channel {channel_id} "
-                                f"(forced_reply={'name' if forced_reply=='__BOT_NAME__' else (forced_reply or 'none')})"
-                            )
-                        else:
-                            preferred = None
-                            if any(k in lower for k in ["rule", "rules", "modifier", "dice", "roll", "dc"]):
-                                preferred = "maat"
-                            elif any(k in lower for k in ["world", "lore", "setting", "map", "physics", "canon"]):
-                                preferred = "gaia"
-                            elif any(k in lower for k in ["story", "scene", "npc", "plot", "quest", "narrative"]):
-                                preferred = "thoth"
-                            elif "?" in lower:
-                                preferred = random.choice(service_bots)
-
-                            if preferred and random.random() < min(0.6, base_prob * 3):
-                                responders.append(preferred)
-                            if len(responders) < Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST and random.random() < base_prob:
-                                other = random.choice([b for b in service_bots if b not in responders])
-                                responders.append(other)
+                        responders = [b for b in service_bots if random.random() < base_prob]
+                        # Ensure at least one bot occasionally considers responding
+                        if not responders and random.random() < base_prob:
+                            responders = [random.choice(service_bots)]
 
                     root_id = post.get("root_id") or post_id
                     final_responders: list[str] = []
@@ -256,28 +211,28 @@ async def poll_channel_messages_for_collab(primary_token: str):
                             continue
                         final_responders.append(bname)
 
-                    # If this was an explicit everyone-invite, allow all bots to reply (still filtered by cooldown above)
-                    reply_limit = len(final_responders) if everyone_invite else Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST
+                    # Mentions can invite multiple bots; otherwise we cap replies per post.
+                    reply_limit = len(final_responders) if mentioned_bots else Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST
 
                     for bname in final_responders[:reply_limit]:
                         try:
-                            if forced_reply is not None:
-                                response_text = bname if forced_reply == "__BOT_NAME__" else forced_reply
-                            else:
-                                response_text = await bot.service_handler.handle_service_message(
-                                    bot_username=bname,
-                                    message=msg,
-                                    mattermost_user_id=user_id,
-                                    mattermost_username=sender_username,
-                                    context={"channel_id": channel_id, "channel_name": c.get("name"), "sender": sender_username},
-                                )
+                            response_text = await bot.service_handler.handle_service_message(
+                                bot_username=bname,
+                                message=msg,
+                                mattermost_user_id=user_id,
+                                mattermost_username=sender_username,
+                                context={
+                                    "channel_observe": True,
+                                    "addressed": bname in mentioned_bots,
+                                    "channel_id": channel_id,
+                                    "channel_name": c.get("name"),
+                                    "sender": sender_username,
+                                },
+                            )
                             if not response_text:
                                 continue
-                            # For explicit everyone-invites we post top-level (not threaded), because
-                            # Mattermost can hide thread replies in the main timeline.
-                            reply_root_id = None if everyone_invite else (
-                                post_id if Config.CHANNEL_COLLAB_REPLY_IN_THREAD else None
-                            )
+                            # Threading is optional; no special-casing for quoted text.
+                            reply_root_id = post_id if Config.CHANNEL_COLLAB_REPLY_IN_THREAD else None
 
                             await bot.post_message(
                                 channel_id=channel_id,
