@@ -224,6 +224,11 @@ Answer the GM's question about world state, logical consistency, physics validat
         
         # Gaia should be neutral by default (not especially deterministic nor creative).
         gaia_temperature = float(os.getenv("GAIA_TEMPERATURE", "0.7"))
+        if isinstance(request.context, dict) and request.context.get("llm_temperature") is not None:
+            try:
+                gaia_temperature = float(request.context.get("llm_temperature"))
+            except Exception:
+                pass
         response = await llm_provider.generate(
             prompt=prompt,
             system_prompt=system_prompt,

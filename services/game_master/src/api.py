@@ -168,6 +168,11 @@ Answer the GM's question about narrative, story, scenes, or game master responsi
         
         # Thoth should be extremely creative by default.
         thoth_temperature = float(os.getenv("THOTH_TEMPERATURE", "1.2"))
+        if isinstance(request.context, dict) and request.context.get("llm_temperature") is not None:
+            try:
+                thoth_temperature = float(request.context.get("llm_temperature"))
+            except Exception:
+                pass
         response = await gm_engine.llm_provider.generate(
             prompt=prompt,
             system_prompt=system_prompt,

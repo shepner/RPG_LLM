@@ -107,7 +107,20 @@ async def poll_channel_messages_for_collab(primary_token: str):
             return
 
         while True:
-            await asyncio.sleep(max(1.0, Config.CHANNEL_COLLAB_POLL_SECONDS))
+            # Runtime overrides (no restart needed)
+            from src.runtime_settings import RuntimeSettings
+            rs = RuntimeSettings().get()
+            cc = rs.get("channel_collab", {}) if isinstance(rs, dict) else {}
+            temps = rs.get("bot_temperatures", {}) if isinstance(rs, dict) else {}
+
+            base_prob_override = cc.get("base_response_prob")
+            bot_to_bot_prob_override = cc.get("bot_to_bot_prob")
+            max_replies_override = cc.get("max_bot_replies_per_post")
+            cooldown_override = cc.get("bot_cooldown_seconds")
+            reply_in_thread_override = cc.get("reply_in_thread")
+            allow_bot_to_bot_override = cc.get("allow_bot_to_bot")
+
+            await asyncio.sleep(max(1.0, float(cc.get("poll_seconds", Config.CHANNEL_COLLAB_POLL_SECONDS))))
 
             # Union channels visible to any bot token (private channels require membership)
             channel_map: dict[str, dict] = {}  # channel_id -> channel dict
@@ -180,7 +193,8 @@ async def poll_channel_messages_for_collab(primary_token: str):
                         user_cache[user_id] = (sender_username, time.time())
 
                     sender_is_bot = sender_username in known_bot_usernames
-                    if sender_is_bot and not Config.CHANNEL_COLLAB_ALLOW_BOT_TO_BOT:
+                    allow_bot_to_bot = bool(allow_bot_to_bot_override) if allow_bot_to_bot_override is not None else Config.CHANNEL_COLLAB_ALLOW_BOT_TO_BOT
+                    if sender_is_bot and not allow_bot_to_bot:
                         processed_posts.add(post_id)
                         continue
 
@@ -195,7 +209,10 @@ async def poll_channel_messages_for_collab(primary_token: str):
                     else:
                         # For non-mentioned channel messages, all bots *observe* the message, but we
                         # only *ask* a bot to consider responding with some probability to limit API calls.
-                        base_prob = Config.CHANNEL_COLLAB_BOT_TO_BOT_PROB if sender_is_bot else Config.CHANNEL_COLLAB_BASE_RESPONSE_PROB
+                        base_prob_default = Config.CHANNEL_COLLAB_BOT_TO_BOT_PROB if sender_is_bot else Config.CHANNEL_COLLAB_BASE_RESPONSE_PROB
+                        base_prob = bot_to_bot_prob_override if sender_is_bot and bot_to_bot_prob_override is not None else (
+                            base_prob_override if (not sender_is_bot and base_prob_override is not None) else base_prob_default
+                        )
                         responders = [b for b in service_bots if random.random() < base_prob]
                         # Ensure at least one bot occasionally considers responding
                         if not responders and random.random() < base_prob:
@@ -207,15 +224,18 @@ async def poll_channel_messages_for_collab(primary_token: str):
                         if sender_username == bname:
                             continue
                         ck = (bname, channel_id, root_id)
-                        if time.time() - last_bot_response_at.get(ck, 0.0) < Config.CHANNEL_COLLAB_BOT_COOLDOWN_SECONDS:
+                        cooldown = float(cooldown_override) if cooldown_override is not None else Config.CHANNEL_COLLAB_BOT_COOLDOWN_SECONDS
+                        if time.time() - last_bot_response_at.get(ck, 0.0) < cooldown:
                             continue
                         final_responders.append(bname)
 
                     # Mentions can invite multiple bots; otherwise we cap replies per post.
-                    reply_limit = len(final_responders) if mentioned_bots else Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST
+                    max_replies = int(max_replies_override) if max_replies_override is not None else Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST
+                    reply_limit = len(final_responders) if mentioned_bots else max_replies
 
                     for bname in final_responders[:reply_limit]:
                         try:
+                            temp = temps.get(bname) if isinstance(temps, dict) else None
                             response_text = await bot.service_handler.handle_service_message(
                                 bot_username=bname,
                                 message=msg,
@@ -224,6 +244,7 @@ async def poll_channel_messages_for_collab(primary_token: str):
                                 context={
                                     "channel_observe": True,
                                     "addressed": bname in mentioned_bots,
+                                    "llm_temperature": temp,
                                     "channel_id": channel_id,
                                     "channel_name": c.get("name"),
                                     "sender": sender_username,
@@ -232,7 +253,8 @@ async def poll_channel_messages_for_collab(primary_token: str):
                             if not response_text:
                                 continue
                             # Threading is optional; no special-casing for quoted text.
-                            reply_root_id = post_id if Config.CHANNEL_COLLAB_REPLY_IN_THREAD else None
+                            reply_in_thread = bool(reply_in_thread_override) if reply_in_thread_override is not None else Config.CHANNEL_COLLAB_REPLY_IN_THREAD
+                            reply_root_id = post_id if reply_in_thread else None
 
                             await bot.post_message(
                                 channel_id=channel_id,

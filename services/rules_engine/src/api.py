@@ -249,6 +249,11 @@ Answer the GM's question about the rules. Be specific, cite relevant rules when 
         # Query LLM
         # Ma'at should be extremely deterministic by default.
         maat_temperature = float(os.getenv("MAAT_TEMPERATURE", "0.0"))
+        if isinstance(request.context, dict) and request.context.get("llm_temperature") is not None:
+            try:
+                maat_temperature = float(request.context.get("llm_temperature"))
+            except Exception:
+                pass
         response = await resolver.llm_provider.generate(
             prompt=prompt,
             system_prompt=system_prompt,
