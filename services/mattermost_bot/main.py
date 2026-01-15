@@ -191,6 +191,7 @@ async def poll_channel_messages_for_collab(primary_token: str):
 
                     responders: list[str] = []
                     forced_reply: str | None = None
+                    everyone_invite = False
                     if mentioned_bots:
                         responders = mentioned_bots[: Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST]
                     else:
@@ -202,15 +203,28 @@ async def poll_channel_messages_for_collab(primary_token: str):
                             k in lower for k in ["reply", "respond", "say", "answer"]
                         ):
                             responders = service_bots[:]  # invite all
+                            everyone_invite = True
                             # Deterministic patterns so bots can comply without spending LLM calls
                             # - "reply with 'X'" → reply exactly X
                             # - "reply with their name" → reply bot's username
                             import re
-                            m = re.search(r"reply\\s+with\\s+[\"']([^\"']+)[\"']", lower)
-                            if m:
-                                forced_reply = m.group(1)
-                            elif "reply with their name" in lower or "reply with your name" in lower:
+                            if "reply with their name" in lower or "reply with your name" in lower:
                                 forced_reply = "__BOT_NAME__"
+                            else:
+                                # Support straight + curly quotes and also unquoted single-word replies
+                                # Examples:
+                                # - reply with "hello"?
+                                # - reply with ‘hello’
+                                # - reply with hello
+                                m = re.search(r"reply\s+with\s+[\"'“”‘’]([^\"'“”‘’]+)[\"'“”‘’]", msg, flags=re.IGNORECASE)
+                                if m:
+                                    forced_reply = m.group(1).strip()
+                                else:
+                                    m2 = re.search(r"reply\s+with\s+([a-z0-9_-]{1,32})\b", lower)
+                                    if m2:
+                                        forced_reply = m2.group(1).strip()
+                                    elif "hello" in lower:
+                                        forced_reply = "hello"
                             logger.info(
                                 f"Channel collab: everyone-invite detected in channel {channel_id} "
                                 f"(forced_reply={'name' if forced_reply=='__BOT_NAME__' else (forced_reply or 'none')})"
@@ -243,7 +257,7 @@ async def poll_channel_messages_for_collab(primary_token: str):
                         final_responders.append(bname)
 
                     # If this was an explicit everyone-invite, allow all bots to reply (still filtered by cooldown above)
-                    reply_limit = len(final_responders) if forced_reply is not None else Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST
+                    reply_limit = len(final_responders) if everyone_invite else Config.CHANNEL_COLLAB_MAX_BOT_REPLIES_PER_POST
 
                     for bname in final_responders[:reply_limit]:
                         try:
@@ -261,7 +275,7 @@ async def poll_channel_messages_for_collab(primary_token: str):
                                 continue
                             # For explicit everyone-invites we post top-level (not threaded), because
                             # Mattermost can hide thread replies in the main timeline.
-                            reply_root_id = None if forced_reply is not None else (
+                            reply_root_id = None if everyone_invite else (
                                 post_id if Config.CHANNEL_COLLAB_REPLY_IN_THREAD else None
                             )
 
