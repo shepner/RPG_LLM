@@ -211,6 +211,10 @@ async def poll_channel_messages_for_collab(primary_token: str):
                                 forced_reply = m.group(1)
                             elif "reply with their name" in lower or "reply with your name" in lower:
                                 forced_reply = "__BOT_NAME__"
+                            logger.info(
+                                f"Channel collab: everyone-invite detected in channel {channel_id} "
+                                f"(forced_reply={'name' if forced_reply=='__BOT_NAME__' else (forced_reply or 'none')})"
+                            )
                         else:
                             preferred = None
                             if any(k in lower for k in ["rule", "rules", "modifier", "dice", "roll", "dc"]):
@@ -255,11 +259,17 @@ async def poll_channel_messages_for_collab(primary_token: str):
                                 )
                             if not response_text:
                                 continue
+                            # For explicit everyone-invites we post top-level (not threaded), because
+                            # Mattermost can hide thread replies in the main timeline.
+                            reply_root_id = None if forced_reply is not None else (
+                                post_id if Config.CHANNEL_COLLAB_REPLY_IN_THREAD else None
+                            )
+
                             await bot.post_message(
                                 channel_id=channel_id,
                                 text=response_text,
                                 bot_username=bname,
-                                root_id=(post_id if Config.CHANNEL_COLLAB_REPLY_IN_THREAD else None),
+                                root_id=reply_root_id,
                             )
                             last_bot_response_at[(bname, channel_id, root_id)] = time.time()
                         except Exception as e:
